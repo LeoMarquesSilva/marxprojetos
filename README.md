@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Briefing Studio
 
-## Getting Started
+Sistema de gestão de briefings para criação de sites e landing pages.
 
-First, run the development server:
+## Funcionalidades
+
+- **Painel admin** com login via Supabase Auth
+- **Templates prontos**: Site institucional, Landing page, Redesign
+- **Personalização** de perguntas por projeto
+- **Link único** para o cliente (`/b/{token}`)
+- **Upload de arquivos** (logo, materiais visuais)
+- **Organização** de respostas por seção no painel
+- **Geração automática de perguntas com IA** (nicho + tipo de produto)
+
+## Setup
+
+### 1. Variáveis de ambiente
+
+Copie `.env.local.example` para `.env.local` e preencha:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.local.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Obtenha as chaves em: [Supabase Dashboard](https://supabase.com/dashboard/project/ywbvybaeakptbaobrcte/settings/api)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `NEXT_PUBLIC_SUPABASE_URL` — URL do projeto
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — chave anon/public
+- `SUPABASE_SERVICE_ROLE_KEY` — service role (apenas server-side, para uploads)
+- `NEXT_PUBLIC_APP_URL` — URL pública do app (ex: `http://localhost:3000`)
+- `OPENAI_API_KEY` (ou `NEXT_OPENAI_API_KEY`) — chave da API para gerar perguntas por IA
+- `OPENAI_MODEL` — opcional (padrão: `gpt-4o-mini`)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 2. Criar usuário admin
 
-## Learn More
+No Supabase Dashboard → Authentication → Users → Add user
 
-To learn more about Next.js, take a look at the following resources:
+Use o e-mail e senha que você usará para login.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 3. Rodar localmente
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm install
+npm run dev
+```
 
-## Deploy on Vercel
+Acesse:
+- Painel: http://localhost:3000/dashboard
+- Login: http://localhost:3000/login
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 4. Fluxo de uso
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Faça login no painel
+2. Clique em **Novo briefing**
+3. Escolha template, preencha dados do cliente, personalize perguntas
+4. Copie o link gerado e envie ao cliente
+5. Quando o cliente responder, veja tudo organizado em **Projetos**
+
+## Banco de dados
+
+O schema já foi aplicado no Supabase `creator-site`:
+
+- `briefing_templates` — templates com perguntas
+- `projects` — briefings enviados (com token único)
+- `briefing_submissions` — respostas dos clientes
+- `briefing_files` — arquivos enviados
+- Storage bucket `briefing-files`
+
+## Deploy
+
+Recomendado: Vercel. Configure as mesmas variáveis de ambiente e defina `NEXT_PUBLIC_APP_URL` com a URL de produção.

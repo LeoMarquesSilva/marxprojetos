@@ -36,6 +36,12 @@ yarn-error.log*
 # vercel
 .vercel
 
+# brand source assets (não necessários para a aplicação; o app usa public/brand/)
+/INSYT/
+
+# arquivos temporários de scripts/seed
+.tmp-*
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
