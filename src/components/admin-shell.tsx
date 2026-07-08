@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, LogOut, Plus, Sparkles, Pin, PinOff } from "lucide-react";
+import { Globe, LayoutDashboard, LogOut, Plus, Sparkles, Pin, PinOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BrandLogo } from "@/components/brand-logo";
 import { cn } from "@/lib/utils";
@@ -11,6 +11,7 @@ import { signOut } from "@/app/actions/auth";
 
 const nav = [
   { href: "/dashboard", label: "Briefings", icon: LayoutDashboard },
+  { href: "/sites", label: "Sites", icon: Globe },
   { href: "/projects/new", label: "Novo briefing", icon: Plus },
 ];
 

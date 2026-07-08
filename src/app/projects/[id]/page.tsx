@@ -2,10 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ArrowLeft, FileText } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, FileText, Globe } from "lucide-react";
 import { AdminShell } from "@/components/admin-shell";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { StatusBadge } from "@/components/status-badge";
+import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -85,6 +86,44 @@ export default async function ProjectPage({
             <CopyLinkButton token={project.token} />
           </CardContent>
         </Card>
+
+        <Link href={`/sites/${project.id}`} className="block">
+          <Card className="insyt-card border-none shadow-none transition-colors hover:bg-[var(--insyt-canvas-alt)]/50">
+            <CardContent className="flex items-center justify-between gap-4 py-5">
+              <div className="flex items-center gap-3">
+                <span className="flex size-10 items-center justify-center rounded-xl bg-[var(--insyt-canvas)] text-[var(--insyt-slate)]">
+                  <Globe className="size-4.5" />
+                </span>
+                <div>
+                  <p className="font-semibold text-[var(--insyt-black)]">
+                    Revisão do site
+                  </p>
+                  <p className="text-sm text-[var(--insyt-muted)]">
+                    {project.review_enabled
+                      ? "Gerencie o link e os comentários do cliente"
+                      : "Vincule um site já construído a este briefing"}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {project.review_enabled ? (
+                  <Badge
+                    className={
+                      project.review_approved_at
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-[#fff4f0] text-[var(--insyt-primary-dark)]"
+                    }
+                  >
+                    {project.review_approved_at ? "Aprovado" : "Ativo"}
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary">Não vinculado</Badge>
+                )}
+                <ArrowUpRight className="size-4 text-[var(--insyt-muted)]" />
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
 
         <div className="grid gap-6 lg:grid-cols-3">
           <Card className="insyt-card border-none shadow-none lg:col-span-1 lg:sticky lg:top-8 lg:h-fit">

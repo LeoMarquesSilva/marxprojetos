@@ -62,6 +62,30 @@ export type Project = {
   submitted_at: string | null;
   created_at: string;
   updated_at: string;
+  review_token: string | null;
+  review_site_path: string | null;
+  review_enabled: boolean;
+  review_enabled_at: string | null;
+  review_approved_at: string | null;
+};
+
+export type SiteCommentStatus = "open" | "resolved";
+
+export type SiteComment = {
+  id: string;
+  project_id: string;
+  page_path: string;
+  x_pct: number;
+  y_pct: number;
+  width_pct: number;
+  height_pct: number;
+  viewport_width: number;
+  comment: string;
+  author_name: string | null;
+  author_email: string | null;
+  status: SiteCommentStatus;
+  created_at: string;
+  resolved_at: string | null;
 };
 
 export type BriefingSubmission = {

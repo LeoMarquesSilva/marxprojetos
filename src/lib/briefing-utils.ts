@@ -27,6 +27,10 @@ export function getBriefingLink(token: string) {
   return `${getAppUrl()}/b/${token}`;
 }
 
+export function getReviewLink(token: string) {
+  return `${getAppUrl()}/r/${token}`;
+}
+
 export function formatAnswer(value: unknown): string {
   if (value === null || value === undefined || value === "") return "—";
   if (Array.isArray(value)) return value.join(", ");
