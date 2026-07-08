@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ChevronUp,
   CheckCircle2,
+  HelpCircle,
   Loader2,
   MessageSquare,
   MessageSquarePlus,
@@ -27,6 +28,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { BrandLogo } from "@/components/brand-logo";
+import { SiteReviewTour } from "@/components/site-review-tour";
 import { addReviewComment, approveReview } from "@/app/actions/review";
 import type { SiteComment } from "@/types/briefing";
 
@@ -106,6 +108,7 @@ export function SiteReviewViewer({
   const [authorName, setAuthorName] = useState("");
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [controlsCollapsed, setControlsCollapsed] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [isApproving, startApproveTransition] = useTransition();
 
@@ -113,6 +116,25 @@ export function SiteReviewViewer({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const modeRef = useRef(mode);
   const commentsRef = useRef(comments);
+
+  const tourSeenKey = `insyt-review-tour-seen-${token}`;
+
+  useEffect(() => {
+    // Reading localStorage must happen post-mount (SSR has no window), so
+    // this can't be a lazy useState initializer without a hydration mismatch.
+    if (!window.localStorage.getItem(tourSeenKey)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTourOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function handleTourOpenChange(open: boolean) {
+    setTourOpen(open);
+    if (!open) {
+      window.localStorage.setItem(tourSeenKey, "true");
+    }
+  }
 
   useEffect(() => {
     modeRef.current = mode;
@@ -491,21 +513,34 @@ export function SiteReviewViewer({
               <div className="hidden flex-1 sm:block" />
             )}
 
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setCommentsOpen(true)}
-            >
-              <MessageSquare className="size-4" />
-              <span className="hidden sm:inline">Comentários</span>
-              <Badge variant="secondary" className="ml-1">
-                {comments.length}
-              </Badge>
-            </Button>
+            <div className="flex items-center gap-1.5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                title="Como funciona a revisão"
+                onClick={() => setTourOpen(true)}
+              >
+                <HelpCircle className="size-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setCommentsOpen(true)}
+              >
+                <MessageSquare className="size-4" />
+                <span className="hidden sm:inline">Comentários</span>
+                <Badge variant="secondary" className="ml-1">
+                  {comments.length}
+                </Badge>
+              </Button>
+            </div>
           </div>
         </>
       )}
+
+      <SiteReviewTour open={tourOpen} onOpenChange={handleTourOpenChange} />
 
       <div ref={wrapperRef} className="relative min-h-0 flex-1 bg-white">
         <iframe
