@@ -205,8 +205,9 @@ Requisitos:
 6) NÃO use upload de arquivo. Para coletar logo, imagens, PDFs ou qualquer material de marca, peça um LINK do Google Drive usando o tipo "url" (ex.: "Link do Google Drive com o logo e materiais visuais").
 7) IDs devem ser curtos, sem espaços, em snake_case.
 8) Perguntas devem ser objetivas e úteis para criação de site/LP.
-9) SEMPRE inclua um campo do tipo "links" (id "referencias_visuais", seção "Visual") para o cliente colar sites/LPs de referência visual que admira.
-10) Não inclua markdown, comentários ou texto fora do JSON.
+9) Se o cliente for um negócio de serviços/profissional (ex.: advocacia, clínica, consultoria, contabilidade, agência), SEMPRE inclua uma pergunta sobre as áreas de atuação / especialidades / serviços oferecidos (id sugerido "areas_atuacao").
+10) SEMPRE inclua um campo do tipo "links" (id "referencias_visuais", seção "Visual") para o cliente colar sites/LPs de referência visual que admira.
+11) Não inclua markdown, comentários ou texto fora do JSON.
 `;
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
