@@ -28,9 +28,13 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { BrandLogo } from "@/components/brand-logo";
-import { SiteReviewTour } from "@/components/site-review-tour";
+import { SiteReviewTour, type TourTarget } from "@/components/site-review-tour";
 import { addReviewComment, approveReview } from "@/app/actions/review";
+import { cn } from "@/lib/utils";
 import type { SiteComment } from "@/types/briefing";
+
+const TOUR_HIGHLIGHT =
+  "relative z-50 ring-2 ring-[var(--insyt-primary)] ring-offset-2 animate-pulse";
 
 type Mode = "view" | "comment";
 
@@ -109,6 +113,7 @@ export function SiteReviewViewer({
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [controlsCollapsed, setControlsCollapsed] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
+  const [tourTarget, setTourTarget] = useState<TourTarget>(null);
   const [isPending, startTransition] = useTransition();
   const [isApproving, startApproveTransition] = useTransition();
 
@@ -125,6 +130,7 @@ export function SiteReviewViewer({
     if (!window.localStorage.getItem(tourSeenKey)) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setTourOpen(true);
+      setControlsCollapsed(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -134,6 +140,11 @@ export function SiteReviewViewer({
     if (!open) {
       window.localStorage.setItem(tourSeenKey, "true");
     }
+  }
+
+  function openTour() {
+    setControlsCollapsed(false);
+    setTourOpen(true);
   }
 
   useEffect(() => {
@@ -473,6 +484,7 @@ export function SiteReviewViewer({
                 size="icon-sm"
                 title="Recolher controles"
                 onClick={() => setControlsCollapsed(true)}
+                className={cn(tourTarget === "collapse" && TOUR_HIGHLIGHT)}
               >
                 <ChevronUp className="size-4" />
               </Button>
@@ -485,6 +497,7 @@ export function SiteReviewViewer({
               variant={mode === "comment" ? "default" : "outline"}
               size="sm"
               onClick={() => setMode((m) => (m === "comment" ? "view" : "comment"))}
+              className={cn(tourTarget === "add-comment" && TOUR_HIGHLIGHT)}
             >
               {mode === "comment" ? (
                 <>
@@ -519,7 +532,7 @@ export function SiteReviewViewer({
                 variant="ghost"
                 size="icon-sm"
                 title="Como funciona a revisão"
-                onClick={() => setTourOpen(true)}
+                onClick={openTour}
               >
                 <HelpCircle className="size-4" />
               </Button>
@@ -528,6 +541,7 @@ export function SiteReviewViewer({
                 variant="outline"
                 size="sm"
                 onClick={() => setCommentsOpen(true)}
+                className={cn(tourTarget === "comments" && TOUR_HIGHLIGHT)}
               >
                 <MessageSquare className="size-4" />
                 <span className="hidden sm:inline">Comentários</span>
@@ -540,7 +554,11 @@ export function SiteReviewViewer({
         </>
       )}
 
-      <SiteReviewTour open={tourOpen} onOpenChange={handleTourOpenChange} />
+      <SiteReviewTour
+        open={tourOpen}
+        onOpenChange={handleTourOpenChange}
+        onTargetChange={setTourTarget}
+      />
 
       <div ref={wrapperRef} className="relative min-h-0 flex-1 bg-white">
         <iframe

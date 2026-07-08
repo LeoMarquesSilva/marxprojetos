@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CheckCircle2,
+  ChevronsUp,
   MessageSquare,
   MessageSquarePlus,
   MousePointerClick,
@@ -17,44 +18,69 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const STEPS = [
+export type TourTarget = "add-comment" | "collapse" | "comments" | null;
+
+const STEPS: {
+  icon: typeof MessageSquarePlus;
+  title: string;
+  description: string;
+  target: TourTarget;
+}[] = [
   {
     icon: MessageSquarePlus,
     title: "Bem-vindo(a) à revisão do site!",
     description:
       "Aqui você vê o site já construído e pode nos dizer exatamente o que quer ajustar. Vamos te mostrar como funciona em poucos passos.",
+    target: null,
   },
   {
     icon: MousePointerClick,
     title: "Marque o que quiser mudar",
     description:
       "Clique em \"Adicionar comentário\", depois clique em qualquer ponto do site — ou arraste para marcar uma área inteira — e escreva o ajuste desejado.",
+    target: "add-comment",
+  },
+  {
+    icon: ChevronsUp,
+    title: "Veja o site inteiro",
+    description:
+      "Se essa barra de cima atrapalhar a visualização, clique aqui para recolhê-la. O site ocupa a tela toda e um botão fica disponível para trazer a barra de volta.",
+    target: "collapse",
   },
   {
     icon: MessageSquare,
     title: "Acompanhe seus comentários",
     description:
       "O botão \"Comentários\" mostra tudo que você já marcou, com a data de cada um.",
+    target: "comments",
   },
   {
     icon: CheckCircle2,
     title: "Está tudo certo?",
     description:
       "Se não precisar de nenhum ajuste, abra os comentários e clique em \"Aprovar, sem ajustes\".",
+    target: "comments",
   },
 ];
 
 export function SiteReviewTour({
   open,
   onOpenChange,
+  onTargetChange,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onTargetChange: (target: TourTarget) => void;
 }) {
   const [step, setStep] = useState(0);
   const isLast = step === STEPS.length - 1;
   const current = STEPS[step];
   const Icon = current.icon;
+
+  useEffect(() => {
+    onTargetChange(open ? current.target : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, step]);
 
   function handleOpenChange(next: boolean) {
     if (!next) setStep(0);
