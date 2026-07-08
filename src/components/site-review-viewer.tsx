@@ -33,8 +33,7 @@ import { addReviewComment, approveReview } from "@/app/actions/review";
 import { cn } from "@/lib/utils";
 import type { SiteComment } from "@/types/briefing";
 
-const TOUR_HIGHLIGHT =
-  "relative z-50 ring-2 ring-[var(--insyt-primary)] ring-offset-2 animate-pulse";
+const TOUR_TARGET_ACTIVE = "relative z-[201]";
 
 type Mode = "view" | "comment";
 
@@ -145,6 +144,12 @@ export function SiteReviewViewer({
   function openTour() {
     setControlsCollapsed(false);
     setTourOpen(true);
+  }
+
+  function handleTourApproveStep(active: boolean) {
+    if (active) {
+      setCommentsOpen(true);
+    }
   }
 
   useEffect(() => {
@@ -483,8 +488,9 @@ export function SiteReviewViewer({
                 variant="ghost"
                 size="icon-sm"
                 title="Recolher controles"
+                data-tour-target="collapse"
                 onClick={() => setControlsCollapsed(true)}
-                className={cn(tourTarget === "collapse" && TOUR_HIGHLIGHT)}
+                className={cn(tourTarget === "collapse" && TOUR_TARGET_ACTIVE)}
               >
                 <ChevronUp className="size-4" />
               </Button>
@@ -496,8 +502,9 @@ export function SiteReviewViewer({
               type="button"
               variant={mode === "comment" ? "default" : "outline"}
               size="sm"
+              data-tour-target="add-comment"
               onClick={() => setMode((m) => (m === "comment" ? "view" : "comment"))}
-              className={cn(tourTarget === "add-comment" && TOUR_HIGHLIGHT)}
+              className={cn(tourTarget === "add-comment" && TOUR_TARGET_ACTIVE)}
             >
               {mode === "comment" ? (
                 <>
@@ -540,8 +547,9 @@ export function SiteReviewViewer({
                 type="button"
                 variant="outline"
                 size="sm"
+                data-tour-target="comments"
                 onClick={() => setCommentsOpen(true)}
-                className={cn(tourTarget === "comments" && TOUR_HIGHLIGHT)}
+                className={cn(tourTarget === "comments" && TOUR_TARGET_ACTIVE)}
               >
                 <MessageSquare className="size-4" />
                 <span className="hidden sm:inline">Comentários</span>
@@ -558,6 +566,7 @@ export function SiteReviewViewer({
         open={tourOpen}
         onOpenChange={handleTourOpenChange}
         onTargetChange={setTourTarget}
+        onApproveStep={handleTourApproveStep}
       />
 
       <div ref={wrapperRef} className="relative min-h-0 flex-1 bg-white">
@@ -645,8 +654,10 @@ export function SiteReviewViewer({
                 {!approvedAt ? (
                   <Button
                     type="button"
+                    data-tour-target="approve"
                     onClick={handleApprove}
                     disabled={isApproving}
+                    className={cn(tourTarget === "approve" && TOUR_TARGET_ACTIVE)}
                   >
                     {isApproving ? (
                       <Loader2 className="size-4 animate-spin" />
@@ -705,7 +716,8 @@ export function SiteReviewViewer({
               <Button
                 type="button"
                 variant="outline"
-                className="w-full"
+                data-tour-target="approve"
+                className={cn("w-full", tourTarget === "approve" && TOUR_TARGET_ACTIVE)}
                 onClick={handleApprove}
                 disabled={isApproving}
               >
