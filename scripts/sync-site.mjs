@@ -44,8 +44,52 @@ cpSync(src, dest, { recursive: true });
 // site nested under /sites/<slug>/. Rewrite root-absolute references in the
 // copied HTML/CSS so assets resolve correctly, without touching the Astro
 // project itself.
+//
+// Astro's default "directory" build format means page routes have no file
+// extension (e.g. href="/sobre" -> dist/sobre/index.html). Next's public/
+// folder only serves exact file paths, it won't resolve a directory to its
+// index.html the way a normal static host does. So page-route links (no
+// extension) get "/index.html" appended in addition to the slug prefix;
+// asset links (have an extension) are only prefixed.
 const prefix = `/sites/${slugArg}`;
 let rewritten = 0;
+
+function rewritePageOrAssetPath(rawPath) {
+  const match = rawPath.match(/^([^?#]*)([?#].*)?$/);
+  const path = match[1];
+  const suffix = match[2] ?? "";
+  const withoutTrailingSlash = path.endsWith("/") ? path.slice(0, -1) : path;
+  const lastSegment = withoutTrailingSlash.split("/").pop() ?? "";
+  const isAsset = lastSegment.includes(".");
+
+  if (isAsset) return `${prefix}/${path}${suffix}`;
+  return withoutTrailingSlash
+    ? `${prefix}/${withoutTrailingSlash}/index.html${suffix}`
+    : `${prefix}/index.html${suffix}`;
+}
+
+// Client-side redirects (e.g. a lead form doing
+// `window.location.href = "/obrigado"` after a successful submit) end up as
+// plain JS string literals, often inlined directly into the page HTML by
+// Astro and sometimes staged through a const first (`const l="/obrigado"`),
+// so matching the assignment shape isn't reliable. Instead, rewrite any
+// quoted string that exactly matches a route we know exists in this build
+// (computed from the top-level page directories below) — narrow enough to
+// avoid touching unrelated strings that happen to start with "/".
+function rewriteKnownRouteLiterals(content, knownRoutes) {
+  if (knownRoutes.length === 0) return content;
+  const alternation = knownRoutes
+    .map((r) => r.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
+  const pattern = new RegExp(`(['"])\\/(${alternation})\\/?\\1`, "g");
+  return content.replace(pattern, (_m, quote, route) => `${quote}${rewritePageOrAssetPath(route)}${quote}`);
+}
+
+// Top-level page routes that exist in this build (e.g. "sobre", "contato"),
+// used to safely rewrite bare JS string literals that reference them.
+const knownRoutes = readdirSync(dest)
+  .filter((entry) => statSync(join(dest, entry)).isDirectory())
+  .filter((entry) => existsSync(join(dest, entry, "index.html")));
 
 function walk(dir) {
   for (const entry of readdirSync(dir)) {
@@ -54,18 +98,32 @@ function walk(dir) {
       walk(full);
       continue;
     }
-    if (![".html", ".css"].includes(extname(full))) continue;
+    const ext = extname(full);
+    if (![".html", ".css", ".js"].includes(ext)) continue;
 
     const original = readFileSync(full, "utf8");
-    const updated = original
-      .replace(/(href|src)="\/(?!\/)([^"]*)"/g, (_m, attr, path) => `${attr}="${prefix}/${path}"`)
-      .replace(/srcset="([^"]*)"/g, (_m, value) =>
-        `srcset="${value
-          .split(",")
-          .map((part) => part.replace(/^(\s*)\/(?!\/)/, `$1${prefix}/`))
-          .join(",")}"`,
-      )
-      .replace(/url\((['"]?)\/(?!\/)([^'")]*)\1\)/g, (_m, quote, path) => `url(${quote}${prefix}/${path}${quote})`);
+    let updated = original;
+
+    if (ext === ".html" || ext === ".css") {
+      updated = updated
+        .replace(
+          /(href|src)="\/(?!\/)([^"]*)"/g,
+          (_m, attr, path) => `${attr}="${rewritePageOrAssetPath(path)}"`,
+        )
+        .replace(/srcset="([^"]*)"/g, (_m, value) =>
+          `srcset="${value
+            .split(",")
+            .map((part) =>
+              part.replace(/^(\s*)\/(?!\/)([^\s]*)/, (_p, lead, p) => `${lead}${prefix}/${p}`),
+            )
+            .join(",")}"`,
+        )
+        .replace(/url\((['"]?)\/(?!\/)([^'")]*)\1\)/g, (_m, quote, path) => `url(${quote}${prefix}/${path}${quote})`);
+    }
+
+    if (ext === ".html" || ext === ".js") {
+      updated = rewriteKnownRouteLiterals(updated, knownRoutes);
+    }
 
     if (updated !== original) {
       writeFileSync(full, updated, "utf8");
