@@ -179,10 +179,15 @@ export function SiteReviewTour({
   }, [open, current.target, onTargetChange, onApproveStep]);
 
   useEffect(() => {
+    // Portal rendering must wait for mount (no document.body during SSR).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
 
   useEffect(() => {
+    // Reads real DOM layout (getBoundingClientRect) to position the
+    // spotlight/tooltip, so it can only run after mount/paint.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     updateLayout();
 
     if (!open) return;
