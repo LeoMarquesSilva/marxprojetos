@@ -2,23 +2,33 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
+import { UserPlus } from "lucide-react";
 import {
   DndContext,
+  DragOverlay,
   PointerSensor,
   useDroppable,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CrmClientCard, CrmClientCardStatic } from "@/components/crm-client-card";
 import { CrmNewClientDialog } from "@/components/crm-new-client-dialog";
 import { updateCrmClientStage } from "@/app/actions/crm";
-import { STAGE_COLUMNS, STAGE_LABELS, type CrmClient, type CrmStage } from "@/types/crm";
+import {
+  STAGE_ACCENT,
+  STAGE_COLUMNS,
+  STAGE_LABELS,
+  type CrmClient,
+  type CrmStage,
+} from "@/types/crm";
 
 export function CrmBoard({ initialClients }: { initialClients: CrmClient[] }) {
   const [clients, setClients] = useState(initialClients);
   const [mounted, setMounted] = useState(false);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   const sensors = useSensors(
@@ -52,7 +62,12 @@ export function CrmBoard({ initialClients }: { initialClients: CrmClient[] }) {
     });
   }
 
+  function handleDragStart(event: DragStartEvent) {
+    setActiveId(String(event.active.id));
+  }
+
   function handleDragEnd(event: DragEndEvent) {
+    setActiveId(null);
     const { active, over } = event;
     if (!over) return;
 
@@ -69,6 +84,8 @@ export function CrmBoard({ initialClients }: { initialClients: CrmClient[] }) {
     moveClient(activeId, destStage);
   }
 
+  const activeClient = activeId ? clients.find((c) => c.id === activeId) : undefined;
+
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
@@ -76,7 +93,13 @@ export function CrmBoard({ initialClients }: { initialClients: CrmClient[] }) {
       </div>
 
       {mounted ? (
-        <DndContext id="crm-board" sensors={sensors} onDragEnd={handleDragEnd}>
+        <DndContext
+          id="crm-board"
+          sensors={sensors}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragCancel={() => setActiveId(null)}
+        >
           <div className="grid gap-4 lg:grid-cols-5">
             {STAGE_COLUMNS.map((stage) => (
               <CrmColumn
@@ -87,6 +110,14 @@ export function CrmBoard({ initialClients }: { initialClients: CrmClient[] }) {
               />
             ))}
           </div>
+
+          <DragOverlay>
+            {activeClient ? (
+              <div className="rotate-2 scale-105 shadow-2xl">
+                <CrmClientCardStatic client={activeClient} onMove={() => {}} />
+              </div>
+            ) : null}
+          </DragOverlay>
         </DndContext>
       ) : (
         <div className="grid gap-4 lg:grid-cols-5">
@@ -104,6 +135,29 @@ export function CrmBoard({ initialClients }: { initialClients: CrmClient[] }) {
   );
 }
 
+function ColumnHeader({ stage, count }: { stage: CrmStage; count: number }) {
+  return (
+    <div className="flex items-center justify-between px-1">
+      <div className="flex items-center gap-2">
+        <span className={`size-1.5 rounded-full ${STAGE_ACCENT[stage].dot}`} />
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--insyt-slate)]">
+          {STAGE_LABELS[stage]}
+        </h3>
+      </div>
+      <span className="text-xs text-[var(--insyt-muted)]">{count}</span>
+    </div>
+  );
+}
+
+function EmptyColumn() {
+  return (
+    <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-[var(--insyt-border)] px-3 py-8 text-center">
+      <UserPlus className="size-5 text-[var(--insyt-muted)]" />
+      <p className="text-xs text-[var(--insyt-muted)]">Arraste um cliente para cá</p>
+    </div>
+  );
+}
+
 function CrmColumnStatic({
   stage,
   clients,
@@ -115,12 +169,7 @@ function CrmColumnStatic({
 }) {
   return (
     <div className="flex min-h-[200px] flex-col gap-3 rounded-2xl border border-[var(--insyt-border)] bg-[var(--insyt-canvas)] p-3">
-      <div className="flex items-center justify-between px-1">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--insyt-slate)]">
-          {STAGE_LABELS[stage]}
-        </h3>
-        <span className="text-xs text-[var(--insyt-muted)]">{clients.length}</span>
-      </div>
+      <ColumnHeader stage={stage} count={clients.length} />
       <div className="flex flex-1 flex-col gap-2">
         {clients.map((client) => (
           <CrmClientCardStatic
@@ -129,11 +178,7 @@ function CrmColumnStatic({
             onMove={(s) => onMove(client.id, s)}
           />
         ))}
-        {clients.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-[var(--insyt-border)] px-3 py-6 text-center text-xs text-[var(--insyt-muted)]">
-            Arraste um cliente para cá
-          </p>
-        ) : null}
+        {clients.length === 0 ? <EmptyColumn /> : null}
       </div>
     </div>
   );
@@ -157,30 +202,22 @@ function CrmColumn({
         isOver ? "bg-[var(--insyt-canvas-alt)]" : ""
       }`}
     >
-      <div className="flex items-center justify-between px-1">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--insyt-slate)]">
-          {STAGE_LABELS[stage]}
-        </h3>
-        <span className="text-xs text-[var(--insyt-muted)]">{clients.length}</span>
-      </div>
+      <ColumnHeader stage={stage} count={clients.length} />
 
       <SortableContext
         items={clients.map((c) => c.id)}
         strategy={verticalListSortingStrategy}
       >
         <div className="flex flex-1 flex-col gap-2">
-          {clients.map((client) => (
+          {clients.map((client, index) => (
             <CrmClientCard
               key={client.id}
               client={client}
+              index={index}
               onMove={(s) => onMove(client.id, s)}
             />
           ))}
-          {clients.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-[var(--insyt-border)] px-3 py-6 text-center text-xs text-[var(--insyt-muted)]">
-              Arraste um cliente para cá
-            </p>
-          ) : null}
+          {clients.length === 0 ? <EmptyColumn /> : null}
         </div>
       </SortableContext>
     </div>

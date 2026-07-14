@@ -74,7 +74,7 @@ export function CrmNotes({
           {notes.map((note) => (
             <div
               key={note.id}
-              className="rounded-xl border border-[var(--insyt-border)] bg-[var(--insyt-canvas)] p-3"
+              className="rounded-xl border-l-2 border-[var(--insyt-primary)]/30 bg-[var(--insyt-canvas)] p-3 pl-4"
             >
               <p className="text-sm whitespace-pre-wrap text-[var(--insyt-black)]">
                 {note.body}

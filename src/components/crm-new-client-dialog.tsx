@@ -8,14 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { createCrmClient } from "@/app/actions/crm";
 import type { CrmStage } from "@/types/crm";
 
@@ -69,8 +69,8 @@ export function CrmNewClientDialog({ defaultStage }: { defaultStage?: CrmStage }
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger
         render={
           <Button type="button">
             <Plus className="size-4" />
@@ -78,47 +78,41 @@ export function CrmNewClientDialog({ defaultStage }: { defaultStage?: CrmStage }
           </Button>
         }
       />
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Novo cliente</DialogTitle>
-          <DialogDescription>
+      <SheetContent side="right" className="sm:max-w-lg">
+        <SheetHeader>
+          <SheetTitle>Novo cliente</SheetTitle>
+          <SheetDescription>
             Cadastre um lead ou cliente, mesmo antes de enviar um briefing.
-          </DialogDescription>
-        </DialogHeader>
+          </SheetDescription>
+        </SheetHeader>
 
-        <div className="space-y-3">
-          <div className="space-y-2">
-            <Label htmlFor="crm-name">Nome *</Label>
-            <Input id="crm-name" value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
+        <div className="flex-1 space-y-8 overflow-y-auto px-4 pb-4">
+          <div className="space-y-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--insyt-muted)]">
+              Sobre o cliente
+            </p>
             <div className="space-y-2">
-              <Label htmlFor="crm-company">Empresa</Label>
-              <Input
-                id="crm-company"
-                value={company}
-                onChange={(e) => setCompany(e.target.value)}
-              />
+              <Label htmlFor="crm-name">Nome *</Label>
+              <Input id="crm-name" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="crm-source">Origem</Label>
-              <Input
-                id="crm-source"
-                placeholder="WhatsApp, indicação..."
-                value={source}
-                onChange={(e) => setSource(e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="crm-email">E-mail</Label>
-              <Input
-                id="crm-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="crm-company">Empresa</Label>
+                <Input
+                  id="crm-company"
+                  value={company}
+                  onChange={(e) => setCompany(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="crm-email">E-mail</Label>
+                <Input
+                  id="crm-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="crm-phone">Telefone</Label>
@@ -129,26 +123,43 @@ export function CrmNewClientDialog({ defaultStage }: { defaultStage?: CrmStage }
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="crm-value">Valor estimado (R$)</Label>
-            <Input
-              id="crm-value"
-              type="number"
-              min="0"
-              step="0.01"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-            />
+
+          <div className="space-y-4 border-t border-[var(--insyt-border)] pt-6">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--insyt-muted)]">
+              Negócio
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="crm-source">Origem</Label>
+                <Input
+                  id="crm-source"
+                  placeholder="WhatsApp, indicação..."
+                  value={source}
+                  onChange={(e) => setSource(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="crm-value">Valor estimado (R$)</Label>
+                <Input
+                  id="crm-value"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={value}
+                  onChange={(e) => setValue(e.target.value)}
+                />
+              </div>
+            </div>
           </div>
         </div>
 
-        <DialogFooter>
+        <SheetFooter>
           <Button type="button" onClick={handleSubmit} disabled={isPending}>
             {isPending ? <Loader2 className="size-4 animate-spin" /> : null}
             Adicionar
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }

@@ -85,18 +85,18 @@ export function CrmTasks({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-col gap-2 sm:flex-row">
+      <div className="flex flex-col gap-2 rounded-2xl bg-[var(--insyt-canvas)] p-2 sm:flex-row">
         <Input
           placeholder="Nova tarefa (ex: ligar amanhã)"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className="flex-1"
+          className="flex-1 border-transparent bg-white"
         />
         <Input
           type="date"
           value={dueDate}
           onChange={(e) => setDueDate(e.target.value)}
-          className="sm:w-40"
+          className="border-transparent bg-white sm:w-40"
         />
         <Button type="button" onClick={handleAdd} disabled={isPending}>
           {isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
@@ -106,11 +106,11 @@ export function CrmTasks({
       {tasks.length === 0 ? (
         <p className="text-sm text-[var(--insyt-muted)]">Nenhuma tarefa ainda.</p>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {[...pending, ...done].map((task) => (
             <div
               key={task.id}
-              className="flex items-center gap-3 rounded-xl border border-[var(--insyt-border)] bg-[var(--insyt-canvas)] p-3"
+              className="group flex items-center gap-3 rounded-xl p-3 transition-colors hover:bg-[var(--insyt-canvas)]"
             >
               <Checkbox
                 checked={task.done}
@@ -136,6 +136,7 @@ export function CrmTasks({
                 type="button"
                 variant="ghost"
                 size="icon-sm"
+                className="opacity-0 transition-opacity group-hover:opacity-100"
                 onClick={() => handleDelete(task.id)}
               >
                 <Trash2 className="size-4" />

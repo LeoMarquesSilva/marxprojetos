@@ -21,6 +21,17 @@ export const STAGE_COLUMNS: CrmStage[] = [
   "perdido",
 ];
 
+export const STAGE_ACCENT: Record<
+  CrmStage,
+  { dot: string; pillBg: string; pillText: string }
+> = {
+  lead: { dot: "bg-slate-400", pillBg: "bg-slate-50", pillText: "text-slate-600" },
+  contato_feito: { dot: "bg-blue-400", pillBg: "bg-blue-50", pillText: "text-blue-700" },
+  proposta_enviada: { dot: "bg-amber-400", pillBg: "bg-amber-50", pillText: "text-amber-700" },
+  fechado: { dot: "bg-emerald-400", pillBg: "bg-emerald-50", pillText: "text-emerald-700" },
+  perdido: { dot: "bg-rose-400", pillBg: "bg-rose-50", pillText: "text-rose-700" },
+};
+
 export type CrmClient = {
   id: string;
   owner_id: string;
