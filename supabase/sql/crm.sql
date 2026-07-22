@@ -14,9 +14,12 @@ create table if not exists crm_clients (
     check (stage in ('lead','contato_feito','proposta_enviada','fechado','perdido')),
   value numeric,
   project_id uuid references projects(id) on delete set null,
+  lost_reason text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table crm_clients add column if not exists lost_reason text;
 
 alter table crm_clients enable row level security;
 

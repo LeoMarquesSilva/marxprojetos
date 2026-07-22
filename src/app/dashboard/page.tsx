@@ -1,7 +1,16 @@
 import Link from "next/link";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ArrowUpRight, ClipboardCheck, Clock3, LayoutDashboard, Plus } from "lucide-react";
+import {
+  ArrowUpRight,
+  CheckCircle2,
+  ClipboardCheck,
+  Clock3,
+  LayoutDashboard,
+  Plus,
+  Users,
+  Wallet,
+} from "lucide-react";
 import type { ComponentType } from "react";
 import { AdminShell } from "@/components/admin-shell";
 import { AdminPageHeader } from "@/components/admin-page-header";
@@ -16,17 +25,24 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getProjects } from "@/app/actions/projects";
+import { getCrmClients } from "@/app/actions/crm";
 import { createClient } from "@/lib/supabase/server";
 import type { ProjectStatus } from "@/types/briefing";
 import { cn } from "@/lib/utils";
 import { displayNameFromEmail, getTimeGreeting } from "@/lib/greeting";
+
+const currencyFormatter = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+  maximumFractionDigits: 0,
+});
 
 export default async function DashboardPage() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const projects = await getProjects();
+  const [projects, crmClients] = await Promise.all([getProjects(), getCrmClients()]);
 
   const stats = {
     total: projects.length,
@@ -39,6 +55,15 @@ export default async function DashboardPage() {
     stats.total > 0 ? Math.round((stats.submitted / stats.total) * 100) : 0;
   const today = format(new Date(), "dd MMM yyyy", { locale: ptBR });
   const userName = displayNameFromEmail(user?.email);
+
+  const crmStats = {
+    active: crmClients.filter((c) => c.stage !== "fechado" && c.stage !== "perdido")
+      .length,
+    openValue: crmClients
+      .filter((c) => c.stage !== "fechado" && c.stage !== "perdido")
+      .reduce((sum, c) => sum + (c.value ?? 0), 0),
+    closed: crmClients.filter((c) => c.stage === "fechado").length,
+  };
 
   return (
     <AdminShell userEmail={user?.email}>
@@ -92,6 +117,28 @@ export default async function DashboardPage() {
               value={`${responseRate}%`}
               icon={ArrowUpRight}
             />
+          </div>
+        </div>
+
+        {/* CRM summary */}
+        <div>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-xl font-bold tracking-tight text-[var(--insyt-black)]">CRM</h2>
+            <Link
+              href="/crm"
+              className="text-sm font-medium text-[var(--insyt-primary)] hover:underline"
+            >
+              Ver pipeline completo
+            </Link>
+          </div>
+          <div className="grid gap-6 md:grid-cols-3">
+            <StatCard label="Leads ativos" value={crmStats.active} icon={Users} />
+            <StatCard
+              label="Pipeline em aberto"
+              value={currencyFormatter.format(crmStats.openValue)}
+              icon={Wallet}
+            />
+            <StatCard label="Clientes fechados" value={crmStats.closed} icon={CheckCircle2} />
           </div>
         </div>
 

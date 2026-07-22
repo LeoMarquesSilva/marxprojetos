@@ -19,7 +19,7 @@ import {
 import { createCrmClient } from "@/app/actions/crm";
 import type { CrmStage } from "@/types/crm";
 
-export function CrmNewClientDialog({ defaultStage }: { defaultStage?: CrmStage }) {
+export function CrmNewClientSheet({ defaultStage }: { defaultStage?: CrmStage }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");

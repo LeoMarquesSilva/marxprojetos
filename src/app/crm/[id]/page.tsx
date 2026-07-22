@@ -9,6 +9,7 @@ import { CrmLinkBriefing } from "@/components/crm-link-briefing";
 import { CrmTasks } from "@/components/crm-tasks";
 import { CrmNotes } from "@/components/crm-notes";
 import { CrmDeleteClientButton } from "@/components/crm-delete-client-button";
+import { CrmEditClientSheet } from "@/components/crm-edit-client-sheet";
 import {
   Card,
   CardContent,
@@ -67,9 +68,26 @@ export default async function CrmClientPage({
 
           <div className="flex items-center gap-2">
             <CrmStageSelect clientId={client.id} currentStage={client.stage} />
+            <CrmEditClientSheet client={client} />
             <CrmDeleteClientButton clientId={client.id} />
           </div>
         </div>
+
+        {client.stage === "perdido" ? (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {client.lost_reason ? (
+              <p>
+                <span className="font-semibold">Motivo da perda:</span> {client.lost_reason}
+              </p>
+            ) : (
+              <p>
+                Este cliente foi marcado como perdido. Considere registrar o motivo em{" "}
+                <span className="font-semibold">Editar</span> para ajudar a entender o
+                pipeline no futuro.
+              </p>
+            )}
+          </div>
+        ) : null}
 
         <div className="grid gap-6 lg:grid-cols-3">
           <Card className="insyt-card border-none shadow-none lg:col-span-1 lg:sticky lg:top-8 lg:h-fit">

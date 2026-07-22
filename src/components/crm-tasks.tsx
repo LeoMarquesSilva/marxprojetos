@@ -82,6 +82,8 @@ export function CrmTasks({
 
   const pending = tasks.filter((t) => !t.done);
   const done = tasks.filter((t) => t.done);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
 
   return (
     <div className="space-y-3">
@@ -107,42 +109,56 @@ export function CrmTasks({
         <p className="text-sm text-[var(--insyt-muted)]">Nenhuma tarefa ainda.</p>
       ) : (
         <div className="space-y-1.5">
-          {[...pending, ...done].map((task) => (
-            <div
-              key={task.id}
-              className="group flex items-center gap-3 rounded-xl p-3 transition-colors hover:bg-[var(--insyt-canvas)]"
-            >
-              <Checkbox
-                checked={task.done}
-                onCheckedChange={() => handleToggle(task)}
-              />
-              <div className="flex-1">
-                <p
-                  className={`text-sm ${
-                    task.done
-                      ? "text-[var(--insyt-muted)] line-through"
-                      : "text-[var(--insyt-black)]"
-                  }`}
-                >
-                  {task.title}
-                </p>
-                {task.due_date ? (
-                  <p className="text-xs text-[var(--insyt-muted)]">
-                    {format(new Date(task.due_date), "d MMM yyyy", { locale: ptBR })}
-                  </p>
-                ) : null}
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="opacity-0 transition-opacity group-hover:opacity-100"
-                onClick={() => handleDelete(task.id)}
+          {[...pending, ...done].map((task) => {
+            const isOverdue =
+              !task.done && task.due_date && new Date(task.due_date) < startOfToday;
+
+            return (
+              <div
+                key={task.id}
+                className="group flex items-center gap-3 rounded-xl p-3 transition-colors hover:bg-[var(--insyt-canvas)]"
               >
-                <Trash2 className="size-4" />
-              </Button>
-            </div>
-          ))}
+                <Checkbox
+                  checked={task.done}
+                  onCheckedChange={() => handleToggle(task)}
+                />
+                <div className="flex-1">
+                  <p
+                    className={`text-sm ${
+                      task.done
+                        ? "text-[var(--insyt-muted)] line-through"
+                        : "text-[var(--insyt-black)]"
+                    }`}
+                  >
+                    {task.title}
+                  </p>
+                  {task.due_date ? (
+                    <p
+                      className={`flex items-center gap-1.5 text-xs ${
+                        isOverdue ? "font-medium text-rose-600" : "text-[var(--insyt-muted)]"
+                      }`}
+                    >
+                      {format(new Date(task.due_date), "d MMM yyyy", { locale: ptBR })}
+                      {isOverdue ? (
+                        <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-700">
+                          Atrasada
+                        </span>
+                      ) : null}
+                    </p>
+                  ) : null}
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="opacity-0 transition-opacity group-hover:opacity-100"
+                  onClick={() => handleDelete(task.id)}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

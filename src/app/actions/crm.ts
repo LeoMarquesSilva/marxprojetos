@@ -105,6 +105,7 @@ type UpdateCrmClientInput = {
   phone?: string | null;
   source?: string | null;
   value?: number | null;
+  lost_reason?: string | null;
 };
 
 export async function updateCrmClient(id: string, input: UpdateCrmClientInput) {

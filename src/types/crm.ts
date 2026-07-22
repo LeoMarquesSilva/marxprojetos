@@ -43,6 +43,7 @@ export type CrmClient = {
   stage: CrmStage;
   value: number | null;
   project_id: string | null;
+  lost_reason: string | null;
   created_at: string;
   updated_at: string;
 };

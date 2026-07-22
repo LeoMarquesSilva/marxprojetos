@@ -15,7 +15,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CrmClientCard, CrmClientCardStatic } from "@/components/crm-client-card";
-import { CrmNewClientDialog } from "@/components/crm-new-client-dialog";
+import { CrmNewClientSheet } from "@/components/crm-new-client-sheet";
 import { updateCrmClientStage } from "@/app/actions/crm";
 import {
   STAGE_ACCENT,
@@ -89,7 +89,7 @@ export function CrmBoard({ initialClients }: { initialClients: CrmClient[] }) {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <CrmNewClientDialog />
+        <CrmNewClientSheet />
       </div>
 
       {mounted ? (
