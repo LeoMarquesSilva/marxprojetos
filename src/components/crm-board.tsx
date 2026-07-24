@@ -100,7 +100,7 @@ export function CrmBoard({ initialClients }: { initialClients: CrmClient[] }) {
           onDragEnd={handleDragEnd}
           onDragCancel={() => setActiveId(null)}
         >
-          <div className="grid gap-4 lg:grid-cols-5">
+          <div className="flex gap-4 overflow-x-auto pb-4">
             {STAGE_COLUMNS.map((stage) => (
               <CrmColumn
                 key={stage}
@@ -113,14 +113,14 @@ export function CrmBoard({ initialClients }: { initialClients: CrmClient[] }) {
 
           <DragOverlay>
             {activeClient ? (
-              <div className="rotate-2 scale-105 shadow-2xl">
+              <div className="w-80 rotate-2 scale-105 shadow-2xl">
                 <CrmClientCardStatic client={activeClient} onMove={() => {}} />
               </div>
             ) : null}
           </DragOverlay>
         </DndContext>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-5">
+        <div className="flex gap-4 overflow-x-auto pb-4">
           {STAGE_COLUMNS.map((stage) => (
             <CrmColumnStatic
               key={stage}
@@ -168,9 +168,9 @@ function CrmColumnStatic({
   onMove: (clientId: string, stage: CrmStage) => void;
 }) {
   return (
-    <div className="flex min-h-[200px] flex-col gap-3 rounded-2xl border border-[var(--insyt-border)] bg-[var(--insyt-canvas)] p-3">
+    <div className="flex min-h-[240px] w-80 shrink-0 flex-col gap-3 rounded-2xl border border-[var(--insyt-border)] bg-[var(--insyt-canvas)] p-4">
       <ColumnHeader stage={stage} count={clients.length} />
-      <div className="flex flex-1 flex-col gap-2">
+      <div className="flex flex-1 flex-col gap-3">
         {clients.map((client) => (
           <CrmClientCardStatic
             key={client.id}
@@ -198,7 +198,7 @@ function CrmColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`flex min-h-[200px] flex-col gap-3 rounded-2xl border border-[var(--insyt-border)] bg-[var(--insyt-canvas)] p-3 transition-colors ${
+      className={`flex min-h-[240px] w-80 shrink-0 flex-col gap-3 rounded-2xl border border-[var(--insyt-border)] bg-[var(--insyt-canvas)] p-4 transition-colors ${
         isOver ? "bg-[var(--insyt-canvas-alt)]" : ""
       }`}
     >
@@ -208,7 +208,7 @@ function CrmColumn({
         items={clients.map((c) => c.id)}
         strategy={verticalListSortingStrategy}
       >
-        <div className="flex flex-1 flex-col gap-2">
+        <div className="flex flex-1 flex-col gap-3">
           {clients.map((client, index) => (
             <CrmClientCard
               key={client.id}

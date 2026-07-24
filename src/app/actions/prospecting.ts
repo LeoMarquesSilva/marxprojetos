@@ -323,6 +323,28 @@ export async function updateProspectStatus(id: string, status: ProspectStatus) {
     .eq("id", id);
 
   if (error) return { error: error.message };
+
+  // A partir do primeiro contato de verdade, o lead já merece um lugar no
+  // pipeline do CRM — não faz sentido esperar um clique manual em "Enviar ao
+  // CRM". Best-effort: uma falha aqui não deve reverter a troca de status.
+  if (status === "contatado" || status === "respondeu") {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user) {
+      const { data: prospect } = await supabase
+        .from("prospects")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (prospect && !prospect.crm_client_id) {
+        await promoteProspectToCrm(supabase, user.id, prospect as Prospect);
+      }
+    }
+  }
+
   revalidatePath("/prospeccao");
   return { success: true };
 }
@@ -447,6 +469,38 @@ Regras:
   return { message };
 }
 
+// Compartilhado entre o botão manual "Enviar ao CRM" e a promoção automática
+// ao marcar um lead como contatado/respondeu.
+async function promoteProspectToCrm(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  prospect: Prospect,
+) {
+  const { data: client, error: insertError } = await supabase
+    .from("crm_clients")
+    .insert({
+      owner_id: userId,
+      name: prospect.name,
+      phone: prospect.phone,
+      email: prospect.email,
+      source: "Prospecção",
+      stage: "lead",
+    })
+    .select("id")
+    .single();
+
+  if (insertError) return { error: insertError.message };
+
+  const { error: linkError } = await supabase
+    .from("prospects")
+    .update({ crm_client_id: client.id, updated_at: new Date().toISOString() })
+    .eq("id", prospect.id);
+
+  if (linkError) return { error: linkError.message };
+
+  return { crmClientId: client.id as string };
+}
+
 export async function promoteToCrm(id: string) {
   const supabase = await createClient();
   const {
@@ -467,31 +521,12 @@ export async function promoteToCrm(id: string) {
     return { error: "Este lead já foi enviado ao CRM." };
   }
 
-  const { data: client, error: insertError } = await supabase
-    .from("crm_clients")
-    .insert({
-      owner_id: user.id,
-      name: prospect.name,
-      phone: prospect.phone,
-      email: prospect.email,
-      source: "Prospecção",
-      stage: "lead",
-    })
-    .select("id")
-    .single();
-
-  if (insertError) return { error: insertError.message };
-
-  const { error: linkError } = await supabase
-    .from("prospects")
-    .update({ crm_client_id: client.id, updated_at: new Date().toISOString() })
-    .eq("id", id);
-
-  if (linkError) return { error: linkError.message };
+  const result = await promoteProspectToCrm(supabase, user.id, prospect as Prospect);
+  if ("error" in result) return result;
 
   revalidatePath("/crm");
   revalidatePath("/prospeccao");
-  return { crmClientId: client.id as string };
+  return result;
 }
 
 // Import de CSV (ex: export do dashboard do LocalProspects) sem gastar

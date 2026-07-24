@@ -36,19 +36,19 @@ function CrmClientCardContent({
 }) {
   return (
     <>
-      <div className="flex items-start gap-2.5">
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--insyt-canvas-alt)] text-[11px] font-bold text-[var(--insyt-primary)]">
+      <div className="flex items-start gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--insyt-canvas-alt)] text-xs font-bold text-[var(--insyt-primary)]">
           {initialsOf(client.name)}
         </span>
         <div className="min-w-0 flex-1">
           <Link
             href={`/crm/${client.id}`}
-            className="block truncate text-sm font-semibold text-[var(--insyt-black)] hover:text-[var(--insyt-primary)]"
+            className="block truncate text-base font-semibold text-[var(--insyt-black)] hover:text-[var(--insyt-primary)]"
           >
             {client.name}
           </Link>
           {client.company ? (
-            <p className="truncate text-xs text-[var(--insyt-muted)]">{client.company}</p>
+            <p className="truncate text-sm text-[var(--insyt-muted)]">{client.company}</p>
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
@@ -76,14 +76,14 @@ function CrmClientCardContent({
       </div>
 
       {client.value || client.project_id ? (
-        <div className="ml-[42px] flex flex-wrap items-center gap-1.5">
+        <div className="ml-[52px] flex flex-wrap items-center gap-1.5">
           {client.value ? (
-            <span className="rounded-full bg-[#fff4f0] px-2 py-0.5 text-[11px] font-semibold text-[var(--insyt-primary-dark)]">
+            <span className="rounded-full bg-[#fff4f0] px-2.5 py-1 text-xs font-semibold text-[var(--insyt-primary-dark)]">
               {currencyFormatter.format(client.value)}
             </span>
           ) : null}
           {client.project_id ? (
-            <span className="flex items-center gap-1 rounded-full bg-[var(--insyt-canvas-alt)] px-2 py-0.5 text-[10px] font-medium text-[var(--insyt-slate)]">
+            <span className="flex items-center gap-1 rounded-full bg-[var(--insyt-canvas-alt)] px-2.5 py-1 text-xs font-medium text-[var(--insyt-slate)]">
               <FileText className="size-3" />
               Briefing
             </span>
@@ -107,7 +107,7 @@ export function CrmClientCardStatic({
   onMove: (stage: CrmStage) => void;
 }) {
   return (
-    <div className="insyt-card flex flex-col gap-2 p-3">
+    <div className="insyt-card flex flex-col gap-3 p-4">
       <CrmClientCardContent client={client} onMove={onMove} />
     </div>
   );
@@ -138,7 +138,7 @@ export function CrmClientCard({
       animate={{ opacity: isDragging ? 0.4 : 1, y: 0 }}
       transition={{ duration: 0.18, delay: Math.min(index, 6) * 0.03, ease: "easeOut" }}
       whileHover={isDragging ? undefined : { y: -2 }}
-      className="insyt-card group flex flex-col gap-2 p-3 transition-shadow hover:shadow-lg"
+      className="insyt-card group flex flex-col gap-3 p-4 transition-shadow hover:shadow-lg"
     >
       <CrmClientCardContent
         client={client}
