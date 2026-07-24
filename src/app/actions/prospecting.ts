@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { fillTemplate, normalizeBrPhone } from "@/lib/phone";
+import { inferWebsiteFromRow, parseCsv, slugify } from "@/lib/csv";
 import {
   DEFAULT_PROSPECTING_TEMPLATE,
   type Prospect,
@@ -489,4 +490,92 @@ export async function promoteToCrm(id: string) {
   revalidatePath("/crm");
   revalidatePath("/prospeccao");
   return { crmClientId: client.id as string };
+}
+
+// Import de CSV (ex: export do dashboard do LocalProspects) sem gastar
+// créditos da API de busca. Sem place_id real, o id de dedupe é derivado do
+// nome + telefone (ou endereço/índice como fallback) — estável entre imports
+// do mesmo arquivo, mas específico dessa origem (por isso o prefixo "csv:").
+export async function importProspectsCsv(csvText: string, niche: string, city: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/login");
+
+  const trimmedNiche = niche.trim();
+  const trimmedCity = city.trim();
+  if (!trimmedNiche || !trimmedCity) {
+    return { error: "Informe o nicho e a cidade do arquivo." };
+  }
+
+  const parsedRows = parseCsv(csvText);
+  if (parsedRows.length === 0) {
+    return { error: "Não encontrei linhas válidas nesse CSV." };
+  }
+
+  const rows = parsedRows
+    .map((r, index) => {
+      const name = r.business_name || r.name || "";
+      if (!name) return null;
+
+      const rawPhone = r.phone || null;
+      const { e164, isMobile } = rawPhone
+        ? normalizeBrPhone(rawPhone)
+        : { e164: null, isMobile: false };
+      const website = inferWebsiteFromRow(r);
+      const phoneDigits = rawPhone ? rawPhone.replace(/\D/g, "") : "";
+      const idBase = phoneDigits || slugify(r.address || "") || String(index);
+
+      return {
+        owner_id: user.id,
+        google_place_id: `csv:${slugify(name)}-${idBase}`,
+        name,
+        phone: rawPhone,
+        phone_e164: e164,
+        is_mobile: isMobile,
+        website,
+        address: r.address || null,
+        rating: null,
+        rating_count: null,
+        google_maps_uri: null,
+        niche: trimmedNiche,
+        city: trimmedCity,
+        email: r.email || null,
+        enrich_job_id: null,
+        updated_at: new Date().toISOString(),
+      };
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null);
+
+  if (rows.length === 0) {
+    return { error: "Nenhuma linha com nome de negócio válida encontrada." };
+  }
+
+  // O upsert falha se o mesmo google_place_id aparecer 2x no mesmo lote
+  // ("ON CONFLICT DO UPDATE command cannot affect row a second time") — o
+  // CSV real tem negócios duplicados (mesmo telefone, endereços diferentes).
+  const dedupedRows = [...new Map(rows.map((r) => [r.google_place_id, r])).values()];
+
+  const { data: existing } = await supabase
+    .from("prospects")
+    .select("google_place_id")
+    .in(
+      "google_place_id",
+      dedupedRows.map((r) => r.google_place_id),
+    );
+
+  const existingIds = new Set((existing ?? []).map((e) => e.google_place_id));
+  const imported = dedupedRows.filter((r) => !existingIds.has(r.google_place_id)).length;
+  const noSite = dedupedRows.filter((r) => !r.website).length;
+
+  const { error } = await supabase
+    .from("prospects")
+    .upsert(dedupedRows, { onConflict: "owner_id,google_place_id" });
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/prospeccao");
+  return { imported, total: dedupedRows.length, noSite };
 }
