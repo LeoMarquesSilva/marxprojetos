@@ -27,6 +27,8 @@ export async function getProspectingTemplate() {
   const { data, error } = await supabase
     .from("prospecting_settings")
     .select("template")
+    .order("updated_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (error) throw new Error(error.message);
