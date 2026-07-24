@@ -67,6 +67,9 @@ export type Project = {
   review_enabled: boolean;
   review_enabled_at: string | null;
   review_approved_at: string | null;
+  portfolio_published: boolean;
+  portfolio_description: string | null;
+  portfolio_cover_url: string | null;
 };
 
 export type SiteCommentStatus = "open" | "resolved";

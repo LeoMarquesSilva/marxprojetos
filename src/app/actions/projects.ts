@@ -57,6 +57,7 @@ type CreateProjectInput = {
   clientCompany?: string;
   welcomeMessage?: string;
   questions: BriefingQuestion[];
+  crmClientId?: string | null;
 };
 
 export async function createProject(input: CreateProjectInput) {
@@ -85,7 +86,28 @@ export async function createProject(input: CreateProjectInput) {
 
   if (error) return { error: error.message };
 
+  // Mantém o CRM sincronizado com todo briefing criado: vincula ao cliente
+  // escolhido, ou cria um lead novo se o nome digitado não bate com ninguém
+  // existente. Best-effort — uma falha aqui não deve travar a criação do
+  // projeto, que já foi persistido com sucesso.
+  if (input.crmClientId) {
+    await supabase
+      .from("crm_clients")
+      .update({ project_id: data.id, updated_at: new Date().toISOString() })
+      .eq("id", input.crmClientId);
+  } else if (input.clientName?.trim()) {
+    await supabase.from("crm_clients").insert({
+      owner_id: user.id,
+      name: input.clientName.trim(),
+      company: input.clientCompany?.trim() || null,
+      email: input.clientEmail?.trim() || null,
+      stage: "lead",
+      project_id: data.id,
+    });
+  }
+
   revalidatePath("/dashboard");
+  revalidatePath("/crm");
   redirect(`/projects/${data.id}`);
 }
 

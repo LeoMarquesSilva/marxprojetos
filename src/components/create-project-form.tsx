@@ -15,9 +15,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@/components/ui/combobox";
 import { createProject } from "@/app/actions/projects";
 import { generateBriefingQuestionsWithAI } from "@/app/actions/ai";
 import type { BriefingQuestion, BriefingTemplate } from "@/types/briefing";
+import type { CrmClient } from "@/types/crm";
 
 const QUESTION_TYPE_LABELS: Record<string, string> = {
   text: "Texto curto",
@@ -33,10 +41,16 @@ const QUESTION_TYPE_LABELS: Record<string, string> = {
 
 export function CreateProjectForm({
   templates,
+  crmClients,
 }: {
   templates: BriefingTemplate[];
+  crmClients: CrmClient[];
 }) {
   const [templateId, setTemplateId] = useState(templates[0]?.id ?? "");
+  const [selectedClient, setSelectedClient] = useState<CrmClient | null>(null);
+  const [clientName, setClientName] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
+  const [clientCompany, setClientCompany] = useState("");
   const [questions, setQuestions] = useState<BriefingQuestion[]>(
     templates[0]?.questions ?? [],
   );
@@ -79,16 +93,26 @@ export function CreateProjectForm({
     applyQuestions(template?.questions ?? []);
   }
 
+  function handleClientSelect(client: CrmClient | null) {
+    setSelectedClient(client);
+    if (client) {
+      setClientName(client.name);
+      setClientEmail(client.email ?? "");
+      setClientCompany(client.company ?? "");
+    }
+  }
+
   function handleSubmit(formData: FormData) {
     startTransition(async () => {
       await createProject({
         title: String(formData.get("title")),
         templateId,
-        clientName: String(formData.get("client_name") || ""),
-        clientEmail: String(formData.get("client_email") || ""),
-        clientCompany: String(formData.get("client_company") || ""),
+        clientName,
+        clientEmail,
+        clientCompany,
         welcomeMessage: String(formData.get("welcome_message") || ""),
         questions,
+        crmClientId: selectedClient?.id ?? null,
       });
     });
   }
@@ -253,17 +277,61 @@ export function CreateProjectForm({
               <p className="text-sm text-[var(--insyt-muted)] mt-2">{selected.description}</p>
             ) : null}
           </div>
+          <div className="space-y-3 sm:col-span-2">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-slate)]">
+              Cliente do CRM
+            </Label>
+            <Combobox
+              items={crmClients}
+              value={selectedClient}
+              onValueChange={handleClientSelect}
+              itemToStringLabel={(c: CrmClient) => c.name}
+            >
+              <ComboboxInput placeholder="Buscar cliente já cadastrado..." />
+              <ComboboxContent emptyMessage="Nenhum cliente encontrado — preencha os dados abaixo e um novo será criado no CRM.">
+                <ComboboxList>
+                  {(client: CrmClient) => (
+                    <ComboboxItem key={client.id} value={client}>
+                      {client.name}
+                      {client.company ? ` — ${client.company}` : ""}
+                    </ComboboxItem>
+                  )}
+                </ComboboxList>
+              </ComboboxContent>
+            </Combobox>
+            <p className="text-xs text-[var(--insyt-muted)]">
+              {selectedClient
+                ? "Este briefing será vinculado ao cliente selecionado no CRM."
+                : "Se o nome abaixo não corresponder a ninguém do CRM, um cliente novo será criado automaticamente."}
+            </p>
+          </div>
           <div className="space-y-3">
             <Label htmlFor="client_name" className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-slate)]">Nome do cliente</Label>
-            <Input id="client_name" name="client_name" />
+            <Input
+              id="client_name"
+              value={clientName}
+              onChange={(e) => {
+                setClientName(e.target.value);
+                setSelectedClient(null);
+              }}
+            />
           </div>
           <div className="space-y-3">
             <Label htmlFor="client_email" className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-slate)]">E-mail do cliente</Label>
-            <Input id="client_email" name="client_email" type="email" />
+            <Input
+              id="client_email"
+              type="email"
+              value={clientEmail}
+              onChange={(e) => setClientEmail(e.target.value)}
+            />
           </div>
           <div className="space-y-3 sm:col-span-2">
             <Label htmlFor="client_company" className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-slate)]">Empresa</Label>
-            <Input id="client_company" name="client_company" />
+            <Input
+              id="client_company"
+              value={clientCompany}
+              onChange={(e) => setClientCompany(e.target.value)}
+            />
           </div>
           <div className="space-y-3 sm:col-span-2">
             <Label htmlFor="welcome_message" className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-slate)]">Mensagem de boas-vindas</Label>

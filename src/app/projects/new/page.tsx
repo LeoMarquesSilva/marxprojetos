@@ -5,6 +5,7 @@ import { AdminShell } from "@/components/admin-shell";
 import { AdminPageHeader } from "@/components/admin-page-header";
 import { CreateProjectForm } from "@/components/create-project-form";
 import { getTemplates } from "@/app/actions/projects";
+import { getCrmClients } from "@/app/actions/crm";
 import { createClient } from "@/lib/supabase/server";
 import type { BriefingTemplate } from "@/types/briefing";
 
@@ -13,7 +14,10 @@ export default async function NewProjectPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const templates = (await getTemplates()) as BriefingTemplate[];
+  const [templates, crmClients] = await Promise.all([
+    getTemplates() as Promise<BriefingTemplate[]>,
+    getCrmClients(),
+  ]);
   const today = format(new Date(), "dd MMM yyyy", { locale: ptBR });
 
   return (
@@ -30,7 +34,7 @@ export default async function NewProjectPage() {
           ]}
         />
         <div className="mt-8">
-          <CreateProjectForm templates={templates} />
+          <CreateProjectForm templates={templates} crmClients={crmClients} />
         </div>
       </div>
     </AdminShell>

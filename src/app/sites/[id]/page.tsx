@@ -6,6 +6,7 @@ import { ArrowLeft, CheckCircle2, FileText } from "lucide-react";
 import { AdminShell } from "@/components/admin-shell";
 import { CopyReviewLinkButton } from "@/components/copy-review-link-button";
 import { SiteReviewSettings } from "@/components/site-review-settings";
+import { PortfolioSettings } from "@/components/portfolio-settings";
 import { ProjectReviewComments } from "@/components/project-review-comments";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -103,6 +104,18 @@ export default async function SiteDetailPage({
             ) : (
               <SiteReviewSettings projectId={project.id} />
             )}
+          </CardContent>
+        </Card>
+
+        <Card className="insyt-card border-none shadow-none">
+          <CardHeader>
+            <CardTitle>Portfólio</CardTitle>
+            <CardDescription>
+              Mostre este projeto no link público de portfólio da INSYT.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <PortfolioSettings project={project} />
           </CardContent>
         </Card>
 
