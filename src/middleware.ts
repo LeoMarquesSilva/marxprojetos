@@ -34,7 +34,8 @@ export async function middleware(request: NextRequest) {
   const isAdminRoute =
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/projects") ||
-    pathname.startsWith("/crm");
+    pathname.startsWith("/crm") ||
+    pathname.startsWith("/prospeccao");
 
   if (isAdminRoute && !user) {
     const url = request.nextUrl.clone();
@@ -52,5 +53,11 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/projects/:path*", "/crm/:path*", "/login"],
+  matcher: [
+    "/dashboard/:path*",
+    "/projects/:path*",
+    "/crm/:path*",
+    "/prospeccao/:path*",
+    "/login",
+  ],
 };

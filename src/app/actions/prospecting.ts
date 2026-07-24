@@ -1,0 +1,489 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { fillTemplate, normalizeBrPhone } from "@/lib/phone";
+import {
+  DEFAULT_PROSPECTING_TEMPLATE,
+  type Prospect,
+  type ProspectStatus,
+} from "@/types/prospecting";
+
+export async function getProspects() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("prospects")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return data as Prospect[];
+}
+
+export async function getProspectingTemplate() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("prospecting_settings")
+    .select("template")
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return data?.template ?? DEFAULT_PROSPECTING_TEMPLATE;
+}
+
+export async function saveProspectingTemplate(template: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/login");
+
+  const { error } = await supabase.from("prospecting_settings").upsert(
+    {
+      owner_id: user.id,
+      template,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "owner_id" },
+  );
+
+  if (error) return { error: error.message };
+  revalidatePath("/prospeccao");
+  return { success: true };
+}
+
+const LP_BASE = "https://localprospects.ai/api/v1";
+
+type LpBusiness = {
+  id?: string;
+  place_id?: string;
+  cid?: string;
+  name?: string;
+  phone?: string;
+  website?: string;
+  address?: string;
+  rating?: number;
+  reviews?: number;
+  gbp_url?: string;
+};
+
+type LpEnrichedBusiness = LpBusiness & {
+  email?: string | null;
+  phone_type?: string | null;
+  mobile_number?: string | null;
+  contact?: { address?: string | null };
+  reputation?: { rating?: number | null; reviews?: number | null };
+};
+
+function lpKey() {
+  return process.env.LOCALPROSPECTS_API_KEY;
+}
+
+function lpBusinessId(b: LpBusiness) {
+  return b.place_id || b.cid || b.id || null;
+}
+
+export async function searchPlaces(niche: string, city: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/login");
+
+  const trimmedNiche = niche.trim();
+  const trimmedCity = city.trim();
+  if (!trimmedNiche || !trimmedCity) {
+    return { error: "Informe o nicho e a cidade." };
+  }
+
+  const apiKey = lpKey();
+  if (!apiKey) {
+    return {
+      error:
+        "Configure LOCALPROSPECTS_API_KEY no ambiente (.env local e variáveis do Vercel).",
+    };
+  }
+
+  // 1) Resolve a cidade para um location_code (não consome créditos).
+  const locResponse = await fetch(
+    `${LP_BASE}/locations?q=${encodeURIComponent(trimmedCity)}`,
+    { headers: { "x-api-key": apiKey } },
+  );
+
+  if (!locResponse.ok) {
+    const text = await locResponse.text();
+    return { error: `Falha ao buscar a cidade (${locResponse.status}): ${text}` };
+  }
+
+  const locJson = (await locResponse.json()) as {
+    locations?: { location_code: number; full_name: string }[];
+  };
+  const location = locJson.locations?.[0];
+  if (!location) {
+    return { error: `Cidade "${trimmedCity}" não encontrada. Tente outro nome.` };
+  }
+
+  // 2) Busca os negócios (retorna listagem bruta + job de enriquecimento).
+  const searchResponse = await fetch(`${LP_BASE}/search`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+    },
+    body: JSON.stringify({
+      keyword: trimmedNiche,
+      location_code: location.location_code,
+    }),
+  });
+
+  if (!searchResponse.ok) {
+    const text = await searchResponse.text();
+    return { error: `Falha na busca (${searchResponse.status}): ${text}` };
+  }
+
+  const searchJson = (await searchResponse.json()) as {
+    job_id?: string;
+    businesses?: LpBusiness[];
+  };
+
+  const businesses = searchJson.businesses ?? [];
+  if (businesses.length === 0) {
+    return { imported: 0, total: 0 };
+  }
+
+  // status e custom_message ficam de fora de propósito: no upsert em conflito,
+  // colunas omitidas são preservadas — não podem ser sobrescritas por re-busca.
+  const rows = businesses
+    .filter((b) => lpBusinessId(b) && b.name)
+    .map((b) => {
+      const rawPhone = b.phone || null;
+      const { e164, isMobile } = rawPhone
+        ? normalizeBrPhone(rawPhone)
+        : { e164: null, isMobile: false };
+
+      return {
+        owner_id: user.id,
+        google_place_id: lpBusinessId(b)!,
+        name: b.name!,
+        phone: rawPhone,
+        phone_e164: e164,
+        is_mobile: isMobile,
+        website: b.website ?? null,
+        address: b.address ?? null,
+        rating: b.rating ?? null,
+        rating_count: b.reviews ?? null,
+        google_maps_uri: b.gbp_url ?? null,
+        niche: trimmedNiche,
+        city: trimmedCity,
+        enrich_job_id: searchJson.job_id ?? null,
+        updated_at: new Date().toISOString(),
+      };
+    });
+
+  const { data: existing } = await supabase
+    .from("prospects")
+    .select("google_place_id")
+    .in(
+      "google_place_id",
+      rows.map((r) => r.google_place_id),
+    );
+
+  const existingIds = new Set((existing ?? []).map((e) => e.google_place_id));
+  const imported = rows.filter((r) => !existingIds.has(r.google_place_id)).length;
+
+  const { error } = await supabase
+    .from("prospects")
+    .upsert(rows, { onConflict: "owner_id,google_place_id" });
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/prospeccao");
+  return { imported, total: rows.length };
+}
+
+// Aplica o enriquecimento assíncrono do LocalProspects (email, tipo de
+// telefone, celular) aos leads cujo job já terminou. enrich_job_id = null
+// marca o lead como "enriquecimento aplicado".
+export async function refreshEnrichment() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/login");
+
+  const apiKey = lpKey();
+  if (!apiKey) {
+    return {
+      error:
+        "Configure LOCALPROSPECTS_API_KEY no ambiente (.env local e variáveis do Vercel).",
+    };
+  }
+
+  const { data: pending, error: pendingError } = await supabase
+    .from("prospects")
+    .select("id, google_place_id, enrich_job_id")
+    .not("enrich_job_id", "is", null);
+
+  if (pendingError) return { error: pendingError.message };
+  if (!pending || pending.length === 0) {
+    return { updated: 0, pendingJobs: 0 };
+  }
+
+  const jobIds = [...new Set(pending.map((p) => p.enrich_job_id as string))];
+  let updated = 0;
+  let pendingJobs = 0;
+
+  for (const jobId of jobIds) {
+    const statusResponse = await fetch(`${LP_BASE}/job/${jobId}`, {
+      headers: { "x-api-key": apiKey },
+    });
+
+    if (!statusResponse.ok) {
+      // Job desconhecido/expirado: desmarca para não travar o botão pra sempre.
+      await supabase
+        .from("prospects")
+        .update({ enrich_job_id: null })
+        .eq("enrich_job_id", jobId);
+      continue;
+    }
+
+    const status = (await statusResponse.json()) as { status?: string };
+    if (status.status !== "completed") {
+      pendingJobs++;
+      continue;
+    }
+
+    const resultsResponse = await fetch(`${LP_BASE}/job/${jobId}/results`, {
+      headers: { "x-api-key": apiKey },
+    });
+
+    if (!resultsResponse.ok) {
+      pendingJobs++;
+      continue;
+    }
+
+    const resultsJson = (await resultsResponse.json()) as {
+      businesses?: LpEnrichedBusiness[];
+    };
+
+    for (const b of resultsJson.businesses ?? []) {
+      const businessId = lpBusinessId(b);
+      if (!businessId) continue;
+
+      const bestPhone = b.mobile_number || b.phone || null;
+      const normalized = bestPhone
+        ? normalizeBrPhone(bestPhone)
+        : { e164: null, isMobile: false };
+      const isMobile = b.mobile_number
+        ? true
+        : b.phone_type === "mobile" || normalized.isMobile;
+
+      const { error: updateError } = await supabase
+        .from("prospects")
+        .update({
+          email: b.email ?? null,
+          phone: b.phone ?? bestPhone,
+          phone_e164: normalized.e164,
+          is_mobile: isMobile,
+          website: b.website ?? null,
+          enrich_job_id: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("google_place_id", businessId);
+
+      if (!updateError) updated++;
+    }
+
+    // Limpa o job também em leads que não vieram nos resultados (falhas).
+    await supabase
+      .from("prospects")
+      .update({ enrich_job_id: null })
+      .eq("enrich_job_id", jobId);
+  }
+
+  revalidatePath("/prospeccao");
+  return { updated, pendingJobs };
+}
+
+export async function updateProspectStatus(id: string, status: ProspectStatus) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("prospects")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", id);
+
+  if (error) return { error: error.message };
+  revalidatePath("/prospeccao");
+  return { success: true };
+}
+
+export async function updateProspectMessage(id: string, message: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("prospects")
+    .update({ custom_message: message || null, updated_at: new Date().toISOString() })
+    .eq("id", id);
+
+  if (error) return { error: error.message };
+  revalidatePath("/prospeccao");
+  return { success: true };
+}
+
+export async function deleteProspect(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("prospects").delete().eq("id", id);
+
+  if (error) return { error: error.message };
+  revalidatePath("/prospeccao");
+  return { success: true };
+}
+
+export async function personalizeMessage(id: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Sessão expirada. Faça login novamente." };
+  }
+
+  const apiKey =
+    process.env.OPENAI_API_KEY ||
+    process.env.NEXT_OPENAI_API_KEY ||
+    process.env.OPENAI_KEY;
+
+  if (!apiKey) {
+    return { error: "Configure OPENAI_API_KEY (ou NEXT_OPENAI_API_KEY) no ambiente." };
+  }
+
+  const { data: prospect, error: prospectError } = await supabase
+    .from("prospects")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (prospectError) return { error: prospectError.message };
+  if (!prospect) return { error: "Lead não encontrado." };
+
+  const template = await getProspectingTemplate();
+  const baseMessage = fillTemplate(template, {
+    nome: prospect.name,
+    cidade: prospect.city,
+    hasSite: Boolean(prospect.website),
+  });
+
+  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+
+  const prompt = `
+Escreva uma mensagem curta e natural de prospecção via WhatsApp, em português do Brasil.
+
+Contexto do lead:
+- Nome do negócio: ${prospect.name}
+- Nicho: ${prospect.niche}
+- Cidade: ${prospect.city}
+- Site: ${prospect.website ? `já tem site (${prospect.website})` : "não tem site próprio"}
+${prospect.rating ? `- Avaliação no Google: ${prospect.rating} (${prospect.rating_count ?? 0} avaliações)` : ""}
+
+Use a mensagem abaixo como referência de tom e oferta (quem envia é uma agência que cria sites e sistemas):
+
+---
+${baseMessage}
+---
+
+Regras:
+1) Máximo ~500 caracteres.
+2) Sem markdown, sem emojis em excesso (no máximo 1), sem assinatura formal.
+3) Personalize com um detalhe real do contexto (nicho, cidade, avaliação ou ausência de site).
+4) Termine com uma pergunta leve que convide resposta.
+5) Retorne APENAS o texto da mensagem, nada mais.
+`;
+
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0.7,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    return { error: `Falha na geração da mensagem (${response.status}): ${text}` };
+  }
+
+  const json = (await response.json()) as {
+    choices?: { message?: { content?: string } }[];
+  };
+  const message = json.choices?.[0]?.message?.content?.trim();
+
+  if (!message) {
+    return { error: "A IA não retornou uma mensagem. Tente novamente." };
+  }
+
+  const { error: saveError } = await supabase
+    .from("prospects")
+    .update({ custom_message: message, updated_at: new Date().toISOString() })
+    .eq("id", id);
+
+  if (saveError) return { error: saveError.message };
+
+  revalidatePath("/prospeccao");
+  return { message };
+}
+
+export async function promoteToCrm(id: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/login");
+
+  const { data: prospect, error: prospectError } = await supabase
+    .from("prospects")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (prospectError) return { error: prospectError.message };
+  if (!prospect) return { error: "Lead não encontrado." };
+  if (prospect.crm_client_id) {
+    return { error: "Este lead já foi enviado ao CRM." };
+  }
+
+  const { data: client, error: insertError } = await supabase
+    .from("crm_clients")
+    .insert({
+      owner_id: user.id,
+      name: prospect.name,
+      phone: prospect.phone,
+      email: prospect.email,
+      source: "Prospecção",
+      stage: "lead",
+    })
+    .select("id")
+    .single();
+
+  if (insertError) return { error: insertError.message };
+
+  const { error: linkError } = await supabase
+    .from("prospects")
+    .update({ crm_client_id: client.id, updated_at: new Date().toISOString() })
+    .eq("id", id);
+
+  if (linkError) return { error: linkError.message };
+
+  revalidatePath("/crm");
+  revalidatePath("/prospeccao");
+  return { crmClientId: client.id as string };
+}
