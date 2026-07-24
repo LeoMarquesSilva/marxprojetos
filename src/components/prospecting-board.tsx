@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -54,6 +54,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@/components/ui/combobox";
+import { BR_STATES, fetchCitiesForState } from "@/lib/br-states";
 import { ProspectingTemplateSheet } from "@/components/prospecting-template-sheet";
 import { ProspectingMessageSheet } from "@/components/prospecting-message-sheet";
 import {
@@ -80,7 +88,12 @@ export function ProspectingBoard({
   template: string;
 }) {
   const [niche, setNiche] = useState("");
-  const [city, setCity] = useState("");
+  const [stateUf, setStateUf] = useState<string>("");
+  const [city, setCity] = useState<string | null>(null);
+  const [cities, setCities] = useState<string[]>([]);
+  const [loadingCities, setLoadingCities] = useState(false);
+  const citiesCache = useRef<Record<string, string[]>>({});
+  const latestUf = useRef<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("todos");
   const [onlyNoSite, setOnlyNoSite] = useState(false);
   const [messageProspect, setMessageProspect] = useState<Prospect | null>(null);
@@ -91,6 +104,41 @@ export function ProspectingBoard({
 
   const prospects = initialProspects;
   const hasPendingEnrichment = prospects.some((p) => p.enrich_job_id);
+
+  function handleStateChange(value: string | null) {
+    const uf = value ?? "";
+    setStateUf(uf);
+    setCity(null);
+
+    if (!uf) {
+      setCities([]);
+      return;
+    }
+
+    const cached = citiesCache.current[uf];
+    if (cached) {
+      setCities(cached);
+      return;
+    }
+
+    setCities([]);
+    setLoadingCities(true);
+    latestUf.current = uf;
+    fetchCitiesForState(uf)
+      .then((list) => {
+        citiesCache.current[uf] = list;
+        // Ignora respostas de um estado que o usuário já trocou.
+        if (latestUf.current === uf) setCities(list);
+      })
+      .catch(() => {
+        if (latestUf.current === uf) {
+          toast.error("Não consegui carregar as cidades. Tente de novo.");
+        }
+      })
+      .finally(() => {
+        if (latestUf.current === uf) setLoadingCities(false);
+      });
+  }
 
   const stats = useMemo(
     () => ({
@@ -112,13 +160,14 @@ export function ProspectingBoard({
   );
 
   function handleSearch() {
-    if (!niche.trim() || !city.trim()) {
-      toast.error("Informe o nicho e a cidade.");
+    const stateName = BR_STATES.find((s) => s.uf === stateUf)?.name;
+    if (!niche.trim() || !city || !stateName) {
+      toast.error("Informe o nicho, o estado e a cidade.");
       return;
     }
 
     startSearchTransition(async () => {
-      const result = await searchPlaces(niche, city);
+      const result = await searchPlaces(niche, city, stateName);
       if (result.error) {
         toast.error(result.error);
         return;
@@ -203,7 +252,7 @@ export function ProspectingBoard({
     <div className="space-y-6">
       {/* Busca */}
       <div className="insyt-card p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
           <div className="flex-1 space-y-2">
             <Label htmlFor="prospect-niche">Nicho</Label>
             <Input
@@ -213,17 +262,52 @@ export function ProspectingBoard({
               onChange={(e) => setNiche(e.target.value)}
             />
           </div>
+          <div className="w-full space-y-2 lg:w-48">
+            <Label>Estado</Label>
+            <Select value={stateUf || null} onValueChange={handleStateChange}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecionar...">
+                  {(value: string | null) =>
+                    BR_STATES.find((s) => s.uf === value)?.name ?? "Selecionar..."
+                  }
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {BR_STATES.map((s) => (
+                  <SelectItem key={s.uf} value={s.uf}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="flex-1 space-y-2">
-            <Label htmlFor="prospect-city">Cidade / região</Label>
-            <Input
-              id="prospect-city"
-              placeholder="Ex: Campinas, SP"
+            <Label>Cidade</Label>
+            <Combobox
+              items={cities}
               value={city}
-              onChange={(e) => setCity(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleSearch();
-              }}
-            />
+              onValueChange={(v) => setCity(v)}
+              disabled={!stateUf || loadingCities}
+            >
+              <ComboboxInput
+                placeholder={
+                  !stateUf
+                    ? "Escolha o estado primeiro"
+                    : loadingCities
+                      ? "Carregando cidades..."
+                      : "Digite para buscar a cidade"
+                }
+              />
+              <ComboboxContent emptyMessage="Nenhuma cidade encontrada.">
+                <ComboboxList>
+                  {(item: string) => (
+                    <ComboboxItem key={item} value={item}>
+                      {item}
+                    </ComboboxItem>
+                  )}
+                </ComboboxList>
+              </ComboboxContent>
+            </Combobox>
           </div>
           <div className="flex gap-2">
             <Button type="button" onClick={handleSearch} disabled={isSearching}>

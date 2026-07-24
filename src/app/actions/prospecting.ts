@@ -85,7 +85,7 @@ function lpBusinessId(b: LpBusiness) {
   return b.place_id || b.cid || b.id || null;
 }
 
-export async function searchPlaces(niche: string, city: string) {
+export async function searchPlaces(niche: string, city: string, state?: string) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -108,8 +108,10 @@ export async function searchPlaces(niche: string, city: string) {
   }
 
   // 1) Resolve a cidade para um location_code (não consome créditos).
+  // O estado desambigua cidades homônimas (ex: 15 "Bom Jesus" pelo país).
+  const locQuery = state ? `${trimmedCity}, ${state.trim()}` : trimmedCity;
   const locResponse = await fetch(
-    `${LP_BASE}/locations?q=${encodeURIComponent(trimmedCity)}`,
+    `${LP_BASE}/locations?q=${encodeURIComponent(locQuery)}`,
     { headers: { "x-api-key": apiKey } },
   );
 
@@ -119,9 +121,10 @@ export async function searchPlaces(niche: string, city: string) {
   }
 
   const locJson = (await locResponse.json()) as {
-    locations?: { location_code: number; full_name: string }[];
+    locations?: { location_code: number; full_name: string; country?: string }[];
   };
-  const location = locJson.locations?.[0];
+  const location =
+    locJson.locations?.find((l) => l.country === "BR") ?? locJson.locations?.[0];
   if (!location) {
     return { error: `Cidade "${trimmedCity}" não encontrada. Tente outro nome.` };
   }

@@ -169,7 +169,7 @@ export function CreateProjectForm({
               value={niche}
               onChange={(e) => setNiche(e.target.value)}
               placeholder="Ex: clínica estética, imobiliária, advocacia..."
-              className="h-12 rounded-xl bg-[var(--insyt-canvas)] border-transparent focus-visible:bg-white transition-colors duration-300"
+             
             />
           </div>
           <div className="space-y-3">
@@ -179,7 +179,7 @@ export function CreateProjectForm({
               value={productType}
               onChange={(e) => setProductType(e.target.value)}
               placeholder="Ex: landing page de captação, site institucional..."
-              className="h-12 rounded-xl bg-[var(--insyt-canvas)] border-transparent focus-visible:bg-white transition-colors duration-300"
+             
             />
           </div>
           <div className="space-y-3">
@@ -189,7 +189,7 @@ export function CreateProjectForm({
               value={goal}
               onChange={(e) => setGoal(e.target.value)}
               placeholder="Ex: gerar leads, agendamento no WhatsApp..."
-              className="h-12 rounded-xl bg-[var(--insyt-canvas)] border-transparent focus-visible:bg-white transition-colors duration-300"
+             
             />
           </div>
           <div className="space-y-3">
@@ -199,7 +199,7 @@ export function CreateProjectForm({
               value={tone}
               onChange={(e) => setTone(e.target.value)}
               placeholder="Ex: premium, direto, técnico, humanizado..."
-              className="h-12 rounded-xl bg-[var(--insyt-canvas)] border-transparent focus-visible:bg-white transition-colors duration-300"
+             
             />
           </div>
           <div className="sm:col-span-2 mt-2">
@@ -232,7 +232,7 @@ export function CreateProjectForm({
               name="title"
               required
               placeholder="Ex: Site institucional — Clínica Saúde+"
-              className="h-12 rounded-xl bg-[var(--insyt-canvas)] border-transparent focus-visible:bg-white transition-colors duration-300"
+             
             />
           </div>
           <div className="space-y-3 sm:col-span-2">
@@ -255,15 +255,15 @@ export function CreateProjectForm({
           </div>
           <div className="space-y-3">
             <Label htmlFor="client_name" className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-slate)]">Nome do cliente</Label>
-            <Input id="client_name" name="client_name" className="h-12 rounded-xl bg-[var(--insyt-canvas)] border-transparent focus-visible:bg-white transition-colors duration-300" />
+            <Input id="client_name" name="client_name" />
           </div>
           <div className="space-y-3">
             <Label htmlFor="client_email" className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-slate)]">E-mail do cliente</Label>
-            <Input id="client_email" name="client_email" type="email" className="h-12 rounded-xl bg-[var(--insyt-canvas)] border-transparent focus-visible:bg-white transition-colors duration-300" />
+            <Input id="client_email" name="client_email" type="email" />
           </div>
           <div className="space-y-3 sm:col-span-2">
             <Label htmlFor="client_company" className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-slate)]">Empresa</Label>
-            <Input id="client_company" name="client_company" className="h-12 rounded-xl bg-[var(--insyt-canvas)] border-transparent focus-visible:bg-white transition-colors duration-300" />
+            <Input id="client_company" name="client_company" />
           </div>
           <div className="space-y-3 sm:col-span-2">
             <Label htmlFor="welcome_message" className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-slate)]">Mensagem de boas-vindas</Label>
