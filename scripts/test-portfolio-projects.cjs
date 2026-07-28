@@ -7,6 +7,15 @@ const ts = require("typescript");
 
 const modulePath = path.resolve("src/lib/portfolio-projects.ts");
 const source = fs.readFileSync(modulePath, "utf8");
+const pageSource = fs.readFileSync(
+  path.resolve("src/app/portfolio/page.tsx"),
+  "utf8",
+);
+
+assert.match(pageSource, /buildPortfolioProjectCards/);
+assert.match(pageSource, /PortfolioProjectCardView/);
+assert.doesNotMatch(pageSource, /function SimplePortfolioProject/);
+
 const compiled = ts.transpileModule(source, {
   compilerOptions: {
     module: ts.ModuleKind.CommonJS,
