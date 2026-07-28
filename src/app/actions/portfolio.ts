@@ -46,6 +46,18 @@ export type PortfolioExternalAdminItem = PortfolioExternalProject & {
   created_at: string;
 };
 
+export type PortfolioSiteSettings = {
+  about_enabled: boolean;
+  about_name: string | null;
+  about_role: string | null;
+  about_bio: string | null;
+  about_photo_url: string | null;
+  about_linkedin_url: string | null;
+  whatsapp_number: string | null;
+  whatsapp_message: string | null;
+  cta_label: string | null;
+};
+
 export type PortfolioAdminItem = Pick<
   Project,
   | "id"
@@ -83,6 +95,15 @@ export async function getPublicPortfolioCases(): Promise<PortfolioCaseRecord[]> 
 
   if (error) throw new Error(error.message);
   return (data ?? []) as PortfolioCaseRecord[];
+}
+
+export async function getPublicSiteSettings(): Promise<PortfolioSiteSettings | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_portfolio_site_settings");
+
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as PortfolioSiteSettings[];
+  return rows[0] ?? null;
 }
 
 export async function getPublicExternalProjects(): Promise<
@@ -409,6 +430,98 @@ export async function moveExternalProject(id: string, direction: "up" | "down") 
       .eq("id", item.id);
     if (error) return { error: error.message };
   }
+
+  revalidatePortfolio();
+  return { success: true };
+}
+
+export async function getSiteSettings(): Promise<PortfolioSiteSettings | null> {
+  const { supabase, user } = await requireUser();
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from("portfolio_site_settings")
+    .select(
+      "about_enabled, about_name, about_role, about_bio, about_photo_url, about_linkedin_url, whatsapp_number, whatsapp_message, cta_label",
+    )
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return (data as PortfolioSiteSettings | null) ?? null;
+}
+
+export async function updateSiteSettings(input: {
+  aboutEnabled: boolean;
+  aboutName: string;
+  aboutRole: string;
+  aboutBio: string;
+  aboutPhotoUrl: string;
+  aboutLinkedinUrl: string;
+  whatsappNumber: string;
+  whatsappMessage: string;
+  ctaLabel: string;
+}) {
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "Sessão expirada. Faça login novamente." };
+
+  // Links vão para uma página pública: recusa esquemas que não sejam http(s).
+  for (const [value, label] of [
+    [input.aboutLinkedinUrl, "do LinkedIn"],
+    [input.aboutPhotoUrl, "da foto"],
+  ] as const) {
+    const trimmed = value.trim();
+    if (!trimmed) continue;
+    if (label === "da foto" && trimmed.startsWith("/")) continue;
+    try {
+      const parsed = new URL(trimmed);
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        return { error: `O endereço ${label} precisa começar com http:// ou https://.` };
+      }
+    } catch {
+      return { error: `O endereço ${label} não é uma URL válida.` };
+    }
+  }
+
+  const digits = input.whatsappNumber.replace(/\D/g, "");
+  if (digits && digits.length < 12) {
+    return {
+      error:
+        "Informe o WhatsApp com DDI e DDD (ex: 5535988754584) ou deixe vazio.",
+    };
+  }
+
+  const payload = {
+    about_enabled: input.aboutEnabled,
+    about_name: input.aboutName.trim() || null,
+    about_role: input.aboutRole.trim() || null,
+    about_bio: input.aboutBio.trim() || null,
+    about_photo_url: input.aboutPhotoUrl.trim() || null,
+    about_linkedin_url: input.aboutLinkedinUrl.trim() || null,
+    whatsapp_number: digits || null,
+    whatsapp_message: input.whatsappMessage.trim() || null,
+    cta_label: input.ctaLabel.trim() || null,
+    updated_at: new Date().toISOString(),
+  };
+
+  // Singleton por owner: cria na primeira gravação, atualiza depois.
+  const { data: existing } = await supabase
+    .from("portfolio_site_settings")
+    .select("owner_id")
+    .limit(1)
+    .maybeSingle();
+
+  const { error } = existing
+    ? await supabase
+        .from("portfolio_site_settings")
+        .update(payload)
+        .eq("owner_id", existing.owner_id)
+    : await supabase
+        .from("portfolio_site_settings")
+        .insert({ ...payload, owner_id: user.id });
+
+  if (error) return { error: error.message };
 
   revalidatePortfolio();
   return { success: true };

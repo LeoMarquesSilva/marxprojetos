@@ -4,6 +4,7 @@ import {
   ArrowUpRight,
   CheckCircle2,
   Layers3,
+  MessageCircle,
   MousePointer2,
   Sparkles,
 } from "lucide-react";
@@ -15,7 +16,9 @@ import {
   getPublicExternalProjects,
   getPublicPortfolio,
   getPublicPortfolioCases,
+  getPublicSiteSettings,
 } from "@/app/actions/portfolio";
+import { buildWaMeUrl } from "@/lib/phone";
 import {
   buildPortfolioPresentation,
 } from "@/lib/portfolio-cases";
@@ -35,10 +38,11 @@ export const metadata: Metadata = {
 };
 
 export default async function PortfolioPage() {
-  const [items, cases, externalProjects] = await Promise.all([
+  const [items, cases, externalProjects, settings] = await Promise.all([
     getPublicPortfolio(),
     getPublicPortfolioCases(),
     getPublicExternalProjects(),
+    getPublicSiteSettings(),
   ]);
   const presentation = buildPortfolioPresentation(items, cases);
   const projectCards = buildPortfolioProjectCards(
@@ -47,8 +51,22 @@ export default async function PortfolioPage() {
   );
   const hasPortfolioContent =
     presentation.cases.length > 0 || projectCards.length > 0;
+
+  // WhatsApp com mensagem pronta converte melhor que formulário no Brasil, e
+  // a mensagem já contextualizada ("vi seu portfólio") evita o lead ter que
+  // explicar de onde veio.
+  const whatsappUrl = settings?.whatsapp_number
+    ? buildWaMeUrl(
+        settings.whatsapp_number,
+        settings.whatsapp_message ?? undefined,
+      )
+    : null;
+  const ctaLabel = settings?.cta_label?.trim() || "Solicitar orçamento";
   const contactUrl =
-    process.env.NEXT_PUBLIC_PORTFOLIO_CONTACT_URL?.trim() || null;
+    whatsappUrl ?? process.env.NEXT_PUBLIC_PORTFOLIO_CONTACT_URL?.trim() ?? null;
+  const showAbout = Boolean(
+    settings?.about_enabled && (settings?.about_name || settings?.about_bio),
+  );
 
   return (
     <div className="min-h-screen overflow-hidden bg-[#f4f0e8] text-[#11100f] selection:bg-[var(--insyt-primary)] selection:text-white">
@@ -72,14 +90,19 @@ export default async function PortfolioPage() {
             <a className="transition-colors hover:text-white" href="#processo">
               Processo
             </a>
+            {showAbout ? (
+              <a className="transition-colors hover:text-white" href="#sobre">
+                Sobre
+              </a>
+            ) : null}
             {contactUrl ? (
               <a
                 className="text-white"
                 href={contactUrl}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
               >
-                Conversar <ArrowUpRight className="ml-1 inline size-3" />
+                {ctaLabel} <ArrowUpRight className="ml-1 inline size-3" />
               </a>
             ) : null}
           </div>
@@ -220,22 +243,110 @@ export default async function PortfolioPage() {
           </div>
         </section>
 
+        {showAbout ? (
+          <section
+            id="sobre"
+            className="px-5 py-24 sm:px-10 lg:px-16 lg:py-32"
+          >
+            <div className="mx-auto max-w-7xl">
+              <div className="grid gap-12 border-t border-black/15 pt-14 lg:grid-cols-[0.85fr_1.15fr]">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--insyt-primary)]">
+                    Quem faz
+                  </p>
+                  <div className="mt-7 flex items-center gap-5">
+                    {settings?.about_photo_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={settings.about_photo_url}
+                        alt={`Foto de ${settings.about_name ?? "responsável"}`}
+                        className="size-20 shrink-0 rounded-full object-cover"
+                      />
+                    ) : (
+                      <span className="flex size-20 shrink-0 items-center justify-center rounded-full bg-[#e3ddd1] text-2xl font-bold text-[var(--insyt-primary)]">
+                        {(settings?.about_name ?? "IN")
+                          .split(/\s+/)
+                          .slice(0, 2)
+                          .map((part) => part[0])
+                          .join("")
+                          .toUpperCase()}
+                      </span>
+                    )}
+                    <div className="min-w-0">
+                      <h2 className="text-3xl font-bold leading-none tracking-[-0.04em] sm:text-4xl">
+                        {settings?.about_name}
+                      </h2>
+                      {settings?.about_role ? (
+                        <p className="mt-2 text-sm leading-relaxed text-black/55">
+                          {settings.about_role}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="lg:pt-14">
+                  {settings?.about_bio ? (
+                    <p className="text-pretty text-lg leading-relaxed text-black/60">
+                      {settings.about_bio}
+                    </p>
+                  ) : null}
+
+                  <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
+                    {settings?.about_linkedin_url ? (
+                      <a
+                        href={settings.about_linkedin_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 border-b border-black pb-1 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--insyt-primary)]"
+                      >
+                        Ver perfil no LinkedIn
+                        <ArrowUpRight className="size-3.5" />
+                      </a>
+                    ) : null}
+                    {whatsappUrl ? (
+                      <a
+                        href={whatsappUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 text-sm font-semibold text-black/50 transition-colors hover:text-[var(--insyt-primary)]"
+                      >
+                        <MessageCircle className="size-4" />
+                        Falar direto no WhatsApp
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
         <section className="bg-[var(--insyt-primary)] px-5 py-20 text-white sm:px-10 lg:px-16 lg:py-28">
           <div className="mx-auto flex max-w-7xl flex-col gap-10 lg:flex-row lg:items-end lg:justify-between">
-            <h2 className="max-w-4xl text-5xl font-bold leading-[0.9] tracking-[-0.055em] sm:text-7xl">
-              Seu próximo projeto pode começar aqui.
-            </h2>
+            <div className="max-w-4xl">
+              <h2 className="text-5xl font-bold leading-[0.9] tracking-[-0.055em] sm:text-7xl">
+                Seu próximo projeto pode começar aqui.
+              </h2>
+              {whatsappUrl ? (
+                <p className="mt-6 max-w-xl text-lg leading-relaxed text-white/75">
+                  Me chame no WhatsApp e conte o que seu escritório precisa. Eu
+                  respondo pessoalmente.
+                </p>
+              ) : null}
+            </div>
             {contactUrl ? (
               <a
                 href={contactUrl}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 className={cn(
                   buttonVariants({ size: "lg" }),
-                  "w-fit bg-white text-black shadow-none hover:bg-[#11100f] hover:text-white",
+                  "w-fit shrink-0 bg-white text-black shadow-none hover:bg-[#11100f] hover:text-white",
                 )}
               >
-                Falar com a INSYT
+                {whatsappUrl ? <MessageCircle className="size-4" /> : null}
+                {ctaLabel}
                 <ArrowUpRight className="size-4" />
               </a>
             ) : (

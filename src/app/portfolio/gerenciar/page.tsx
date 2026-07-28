@@ -5,11 +5,13 @@ import { AdminPageHeader } from "@/components/admin-page-header";
 import { PortfolioManager } from "@/components/portfolio-manager";
 import { PortfolioCaseEditor } from "@/components/portfolio-case-editor";
 import { PortfolioExternalManager } from "@/components/portfolio-external-manager";
+import { PortfolioSiteSettingsEditor } from "@/components/portfolio-site-settings-editor";
 import { buttonVariants } from "@/components/ui/button";
 import {
   getExternalProjects,
   getPortfolioCases,
   getPortfolioProjects,
+  getSiteSettings,
 } from "@/app/actions/portfolio";
 import { createClient } from "@/lib/supabase/server";
 
@@ -18,10 +20,11 @@ export default async function ManagePortfolioPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const [projects, cases, externalProjects] = await Promise.all([
+  const [projects, cases, externalProjects, siteSettings] = await Promise.all([
     getPortfolioProjects(),
     getPortfolioCases(),
     getExternalProjects(),
+    getSiteSettings(),
   ]);
 
   // Quantos projetos publicados cada case tem hoje — um case sem projeto
@@ -68,6 +71,8 @@ export default async function ManagePortfolioPage() {
         />
 
         <PortfolioExternalManager projects={externalProjects} />
+
+        <PortfolioSiteSettingsEditor settings={siteSettings} />
       </div>
     </AdminShell>
   );
