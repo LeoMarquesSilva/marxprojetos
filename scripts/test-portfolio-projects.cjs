@@ -54,6 +54,30 @@ try {
     ["Bismarchi | Pires", "Beatriz Bertho Advocacia", "Confiara"],
   );
   assert.deepEqual(
+    cards.slice(1).map((card) => card.title),
+    [
+      "Site Institucional — Bismarchi | Pires",
+      "Landing Page — Beatriz Bertho Advocacia",
+      "Site Institucional — Confiara",
+    ],
+  );
+  assert.deepEqual(
+    cards.slice(1).map((card) => card.description),
+    [
+      "Um site institucional robusto para apresentar a atuação em reestruturação empresarial e gestão de crises, reunindo áreas jurídicas, equipe e reconhecimentos em uma experiência de autoridade.",
+      "Uma landing page de advocacia preventiva em Direito Médico que transforma riscos complexos em uma jornada clara de serviços, método, credenciais e contato.",
+      "Um site institucional estruturado para apresentar a marca, seus serviços e caminhos de contato em uma navegação direta, clara e responsiva.",
+    ],
+  );
+  assert.deepEqual(
+    cards.slice(1).map((card) => card.imageAlt),
+    [
+      "Hero do site Bismarchi Pires, com posicionamento em gestão estratégica empresarial e advocacia de alta complexidade",
+      "Hero da landing page Beatriz Bertho Advocacia, sobre prevenção de riscos jurídicos para médicos e clínicas",
+      "Hero do site institucional Confiara, com apresentação da marca, proposta de valor e chamada principal",
+    ],
+  );
+  assert.deepEqual(
     cards.slice(1).map((card) => card.href),
     [
       "https://www.bismarchipires.com.br/",
