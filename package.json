@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:portfolio": "node scripts/test-portfolio-cases.cjs && node scripts/test-portfolio-projects.cjs && node scripts/test-portfolio-case-study.cjs",
+    "test:portfolio": "node scripts/test-portfolio-cases.cjs && node scripts/test-portfolio-projects.cjs && node scripts/test-portfolio-case-study.cjs && node scripts/test-portfolio-project-card.cjs",
     "portfolio:covers": "node scripts/capture-portfolio-covers.mjs pereira-garcia-site pereira-garcia",
     "sync-site": "node scripts/sync-site.mjs"
   },
