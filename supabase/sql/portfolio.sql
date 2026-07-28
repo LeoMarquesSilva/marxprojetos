@@ -11,7 +11,7 @@ alter table projects
   add column if not exists portfolio_description text,
   add column if not exists portfolio_cover_url text;
 
-create or replace function list_portfolio_projects()
+create or replace function public.list_portfolio_projects()
 returns table (
   id uuid,
   title text,
@@ -22,7 +22,10 @@ returns table (
   site_path text,
   created_at timestamptz
 )
-language sql security definer set search_path = public as $$
+language sql
+security definer
+set search_path = ''
+as $$
   select
     p.id,
     p.title,
@@ -32,9 +35,13 @@ language sql security definer set search_path = public as $$
     p.portfolio_cover_url,
     case when p.review_enabled then p.review_site_path else null end as site_path,
     p.created_at
-  from projects p
+  from public.projects p
   where p.portfolio_published = true
   order by p.created_at desc;
 $$;
 
-grant execute on function list_portfolio_projects() to anon;
+-- Funções recebem EXECUTE de PUBLIC por padrão no Postgres. Revogamos
+-- explicitamente e liberamos apenas os papéis usados pelo app.
+revoke execute on function public.list_portfolio_projects() from public;
+revoke execute on function public.list_portfolio_projects() from anon, authenticated;
+grant execute on function public.list_portfolio_projects() to anon, authenticated;

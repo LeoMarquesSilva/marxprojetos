@@ -1,7 +1,9 @@
-import type { PortfolioItem } from "@/app/actions/portfolio";
+import type {
+  PortfolioCaseRecord,
+  PortfolioItem,
+} from "@/app/actions/portfolio";
 
 export type PortfolioChapterConfig = {
-  sitePath: string;
   eyebrow: string;
   objective: string;
   solution: string;
@@ -9,20 +11,16 @@ export type PortfolioChapterConfig = {
   imageAlt: string;
 };
 
-export type PortfolioCaseConfig = {
-  id: string;
-  client: string;
-  summary: string;
-  services: string[];
-  chapters: PortfolioChapterConfig[];
-};
-
 export type PortfolioCaseChapter = {
   project: PortfolioItem;
   config: PortfolioChapterConfig;
 };
 
-export type PortfolioCase = Omit<PortfolioCaseConfig, "chapters"> & {
+export type PortfolioCase = {
+  id: string;
+  client: string;
+  summary: string;
+  services: string[];
   chapters: PortfolioCaseChapter[];
 };
 
@@ -31,89 +29,59 @@ export type PortfolioPresentation = {
   ungroupedItems: PortfolioItem[];
 };
 
-const PORTFOLIO_CASE_CONFIGS: PortfolioCaseConfig[] = [
-  {
-    id: "pereira-garcia",
-    client: "Pereira Garcia Advocacia",
-    summary:
-      "Uma presença digital construída para traduzir mais de quatro décadas de experiência jurídica em autoridade, clareza e novos pontos de contato.",
-    services: ["Estratégia", "Conteúdo", "UX/UI", "Desenvolvimento"],
-    chapters: [
-      {
-        sitePath: "pereira-garcia-site",
-        eyebrow: "Site institucional",
-        objective:
-          "Consolidar a autoridade do escritório e organizar sua atuação para empresas familiares.",
-        solution:
-          "Uma experiência sóbria e editorial, com navegação clara, história, equipe, áreas jurídicas e contato.",
-        deliverables: [
-          "Estratégia de conteúdo",
-          "UX/UI",
-          "Desenvolvimento responsivo",
-          "SEO local",
-          "Páginas institucionais",
-        ],
-        imageAlt:
-          "Hero do site institucional Pereira Garcia Advocacia, com navegação, posicionamento jurídico e chamada para consulta",
-      },
-      {
-        sitePath: "pereira-garcia",
-        eyebrow: "Landing page de Holding",
-        objective:
-          "Transformar um serviço jurídico complexo em uma proposta fácil de entender e agir.",
-        solution:
-          "Uma página focada em conversão, estruturada por benefícios, tipos de holding, método, dúvidas frequentes e formulário de qualificação.",
-        deliverables: [
-          "Arquitetura de conversão",
-          "Copy",
-          "UX/UI",
-          "Formulário de leads",
-          "Integração com WhatsApp",
-          "SEO técnico",
-        ],
-        imageAlt:
-          "Hero da landing page de Holding Familiar da Pereira Garcia, com proposta de valor e formulário de análise inicial",
-      },
-    ],
-  },
-];
+function toChapter(project: PortfolioItem): PortfolioCaseChapter {
+  return {
+    project,
+    config: {
+      eyebrow: project.portfolio_eyebrow ?? "",
+      objective: project.portfolio_objective ?? "",
+      solution: project.portfolio_solution ?? "",
+      deliverables: project.portfolio_deliverables ?? [],
+      imageAlt: project.portfolio_image_alt ?? `Hero do projeto ${project.title}`,
+    },
+  };
+}
 
+// Agrupa os projetos publicados nos cases definidos no banco. Um projeto sem
+// case (ou apontando para um case inexistente) cai em `ungroupedItems` e é
+// exibido como card simples.
 export function buildPortfolioPresentation(
   items: PortfolioItem[],
+  cases: PortfolioCaseRecord[],
 ): PortfolioPresentation {
-  const itemsByPath = new Map(
-    items.flatMap((item) =>
-      item.site_path ? [[item.site_path, item] as const] : [],
-    ),
-  );
-  const groupedIds = new Set<string>();
+  const chaptersByCase = new Map<string, PortfolioCaseChapter[]>();
+  const knownCaseIds = new Set(cases.map((entry) => entry.id));
+  const ungroupedItems: PortfolioItem[] = [];
 
-  const cases = PORTFOLIO_CASE_CONFIGS.flatMap((config) => {
-    const chapters = config.chapters.flatMap((chapterConfig) => {
-      const project = itemsByPath.get(chapterConfig.sitePath);
-      if (!project) return [];
+  for (const item of items) {
+    const caseId = item.portfolio_case_id;
 
-      groupedIds.add(project.id);
-      return [{ project, config: chapterConfig }];
-    });
+    if (caseId && knownCaseIds.has(caseId)) {
+      const chapters = chaptersByCase.get(caseId) ?? [];
+      chapters.push(toChapter(item));
+      chaptersByCase.set(caseId, chapters);
+      continue;
+    }
 
+    ungroupedItems.push(item);
+  }
+
+  const builtCases = cases.flatMap((entry) => {
+    const chapters = chaptersByCase.get(entry.id) ?? [];
     if (chapters.length === 0) return [];
 
     return [
       {
-        id: config.id,
-        client: config.client,
-        summary: config.summary,
-        services: config.services,
+        id: entry.id,
+        client: entry.client,
+        summary: entry.summary ?? "",
+        services: entry.services ?? [],
         chapters,
       },
     ];
   });
 
-  return {
-    cases,
-    ungroupedItems: items.filter((item) => !groupedIds.has(item.id)),
-  };
+  return { cases: builtCases, ungroupedItems };
 }
 
 export function getPortfolioCoverSources(item: PortfolioItem): string[] {

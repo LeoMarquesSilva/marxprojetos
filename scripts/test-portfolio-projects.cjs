@@ -16,6 +16,14 @@ assert.match(pageSource, /buildPortfolioProjectCards/);
 assert.match(pageSource, /PortfolioProjectCardView/);
 assert.doesNotMatch(pageSource, /function SimplePortfolioProject/);
 
+// A página precisa alimentar os cards com os projetos externos do banco.
+assert.match(pageSource, /getPublicExternalProjects/);
+assert.match(pageSource, /getPublicPortfolioCases/);
+
+// O catálogo hardcoded foi migrado para o banco e não pode voltar ao código.
+assert.doesNotMatch(source, /EXTERNAL_PORTFOLIO_PROJECTS/);
+assert.doesNotMatch(source, /bismarchipires\.com\.br/);
+
 const compiled = ts.transpileModule(source, {
   compilerOptions: {
     module: ts.ModuleKind.CommonJS,
@@ -42,68 +50,82 @@ try {
   loadedModule.paths = Module._nodeModulePaths(path.dirname(modulePath));
   loadedModule._compile(compiled, modulePath);
 
-  const cards = loadedModule.exports.buildPortfolioProjectCards([
-    {
-      id: "existing",
-      title: "Projeto interno",
-      client_name: "Cliente interno",
-      client_company: "Empresa interna",
-      portfolio_description: "Descri\u00e7\u00e3o do projeto interno.",
-      portfolio_cover_url: null,
-      site_path: "internal-site",
-      created_at: "2026-07-28T00:00:00.000Z",
-    },
-  ]);
+  const internalItem = {
+    id: "existing",
+    title: "Projeto interno",
+    client_name: "Cliente interno",
+    client_company: "Empresa interna",
+    portfolio_description: "Descrição do projeto interno.",
+    portfolio_cover_url: null,
+    site_path: "internal-site",
+    portfolio_case_id: null,
+    portfolio_eyebrow: null,
+    portfolio_objective: null,
+    portfolio_solution: null,
+    portfolio_deliverables: [],
+    portfolio_image_alt: null,
+    portfolio_sort_order: 0,
+    created_at: "2026-07-28T00:00:00.000Z",
+  };
 
-  assert.equal(cards.length, 4);
+  const externalProjects = [
+    {
+      id: "ext-1",
+      title: "Site Institucional — Bismarchi | Pires",
+      client_label: "Bismarchi | Pires",
+      description: "Um site institucional robusto para apresentar a atuação.",
+      url: "https://www.bismarchipires.com.br/",
+      cover_url: "/portfolio/covers/bismarchi-pires.webp",
+      image_alt: "Hero do site Bismarchi Pires",
+      sort_order: 0,
+    },
+    {
+      id: "ext-2",
+      title: "Site sem link",
+      client_label: "Cliente reservado",
+      description: null,
+      url: null,
+      cover_url: null,
+      image_alt: null,
+      sort_order: 1,
+    },
+  ];
+
+  const cards = loadedModule.exports.buildPortfolioProjectCards(
+    [internalItem],
+    externalProjects,
+  );
+
+  assert.equal(cards.length, 3);
+
+  // Internos vêm primeiro; externos preservam a ordem recebida do banco.
   assert.equal(cards[0].id, "internal:existing");
   assert.equal(cards[0].href, "/sites/internal-site/index.html");
-  assert.deepEqual(
-    cards.slice(1).map((card) => card.clientLabel),
-    ["Bismarchi | Pires", "Beatriz Bertho Advocacia", "Confiara"],
-  );
-  assert.deepEqual(
-    cards.slice(1).map((card) => card.title),
-    [
-      "Site Institucional — Bismarchi | Pires",
-      "Landing Page — Beatriz Bertho Advocacia",
-      "Site Institucional — Confiara",
-    ],
-  );
-  assert.deepEqual(
-    cards.slice(1).map((card) => card.description),
-    [
-      "Um site institucional robusto para apresentar a atuação em reestruturação empresarial e gestão de crises, reunindo áreas jurídicas, equipe e reconhecimentos em uma experiência de autoridade.",
-      "Uma landing page de advocacia preventiva em Direito Médico que transforma riscos complexos em uma jornada clara de serviços, método, credenciais e contato.",
-      "Um site institucional estruturado para apresentar a marca, seus serviços e caminhos de contato em uma navegação direta, clara e responsiva.",
-    ],
-  );
-  assert.deepEqual(
-    cards.slice(1).map((card) => card.imageAlt),
-    [
-      "Hero do site Bismarchi Pires, com posicionamento em gestão estratégica empresarial e advocacia de alta complexidade",
-      "Hero da landing page Beatriz Bertho Advocacia, sobre prevenção de riscos jurídicos para médicos e clínicas",
-      "Hero do site institucional Confiara, com apresentação da marca, proposta de valor e chamada principal",
-    ],
-  );
-  assert.deepEqual(
-    cards.slice(1).map((card) => card.href),
-    [
-      "https://www.bismarchipires.com.br/",
-      "https://beatrizberthoadv.com.br/",
-      "https://www.confiara.com.br/",
-    ],
-  );
-  assert.deepEqual(
-    cards.slice(1).map((card) => card.coverSources[0]),
-    [
-      "/portfolio/covers/bismarchi-pires.webp",
-      "/portfolio/covers/beatriz-bertho.webp",
-      "/portfolio/covers/confiara.webp",
-    ],
-  );
-  assert.ok(cards.slice(1).every((card) => card.description.length > 40));
-  assert.ok(cards.slice(1).every((card) => card.imageAlt.length > 20));
+  assert.equal(cards[0].clientLabel, "Empresa interna");
+
+  assert.equal(cards[1].id, "external:ext-1");
+  assert.equal(cards[1].title, "Site Institucional — Bismarchi | Pires");
+  assert.equal(cards[1].clientLabel, "Bismarchi | Pires");
+  assert.equal(cards[1].href, "https://www.bismarchipires.com.br/");
+  assert.deepEqual(cards[1].coverSources, [
+    "/portfolio/covers/bismarchi-pires.webp",
+  ]);
+  assert.equal(cards[1].imageAlt, "Hero do site Bismarchi Pires");
+
+  // Externo sem URL vira "Case reservado" (href null); sem capa, o componente
+  // cai no gradiente de fallback (coverSources vazio).
+  assert.equal(cards[2].id, "external:ext-2");
+  assert.equal(cards[2].href, null);
+  assert.deepEqual(cards[2].coverSources, []);
+  assert.equal(cards[2].description, null);
+  assert.equal(cards[2].imageAlt, "Capa do projeto Site sem link");
+
+  // Sem projetos externos cadastrados, só os internos aparecem.
+  const internalOnly = loadedModule.exports.buildPortfolioProjectCards([
+    internalItem,
+  ]);
+  assert.equal(internalOnly.length, 1);
+  assert.equal(internalOnly[0].id, "internal:existing");
 
   console.log("Portfolio project tests passed.");
 } finally {

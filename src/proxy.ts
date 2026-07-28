@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -36,6 +36,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/projects") ||
     pathname.startsWith("/crm") ||
     pathname.startsWith("/prospeccao") ||
+    pathname.startsWith("/portfolio/gerenciar") ||
     pathname.startsWith("/configuracoes");
 
   if (isAdminRoute && !user) {
@@ -59,6 +60,7 @@ export const config = {
     "/projects/:path*",
     "/crm/:path*",
     "/prospeccao/:path*",
+    "/portfolio/gerenciar/:path*",
     "/configuracoes/:path*",
     "/login",
   ],

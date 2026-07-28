@@ -11,7 +11,11 @@ import { BrandLogo } from "@/components/brand-logo";
 import { PortfolioCaseStudy } from "@/components/portfolio-case-study";
 import { PortfolioProjectCardView } from "@/components/portfolio-project-card";
 import { buttonVariants } from "@/components/ui/button";
-import { getPublicPortfolio } from "@/app/actions/portfolio";
+import {
+  getPublicExternalProjects,
+  getPublicPortfolio,
+  getPublicPortfolioCases,
+} from "@/app/actions/portfolio";
 import {
   buildPortfolioPresentation,
 } from "@/lib/portfolio-cases";
@@ -31,10 +35,15 @@ export const metadata: Metadata = {
 };
 
 export default async function PortfolioPage() {
-  const items = await getPublicPortfolio();
-  const presentation = buildPortfolioPresentation(items);
+  const [items, cases, externalProjects] = await Promise.all([
+    getPublicPortfolio(),
+    getPublicPortfolioCases(),
+    getPublicExternalProjects(),
+  ]);
+  const presentation = buildPortfolioPresentation(items, cases);
   const projectCards = buildPortfolioProjectCards(
     presentation.ungroupedItems,
+    externalProjects,
   );
   const hasPortfolioContent =
     presentation.cases.length > 0 || projectCards.length > 0;

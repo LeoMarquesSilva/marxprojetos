@@ -70,6 +70,13 @@ export type Project = {
   portfolio_published: boolean;
   portfolio_description: string | null;
   portfolio_cover_url: string | null;
+  portfolio_case_id: string | null;
+  portfolio_eyebrow: string | null;
+  portfolio_objective: string | null;
+  portfolio_solution: string | null;
+  portfolio_deliverables: string[];
+  portfolio_image_alt: string | null;
+  portfolio_sort_order: number;
 };
 
 export type SiteCommentStatus = "open" | "resolved";
