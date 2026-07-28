@@ -7,8 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:portfolio": "node scripts/test-portfolio-cases.cjs && node scripts/test-portfolio-projects.cjs && node scripts/test-portfolio-case-study.cjs && node scripts/test-portfolio-project-card.cjs",
+    "test:portfolio": "node scripts/test-portfolio-cases.cjs && node scripts/test-portfolio-projects.cjs && node scripts/test-portfolio-case-study.cjs && node scripts/test-portfolio-project-card.cjs && node scripts/test-portfolio-cover-targets.mjs",
     "portfolio:covers": "node scripts/capture-portfolio-covers.mjs pereira-garcia-site pereira-garcia",
+    "portfolio:covers:external": "node scripts/capture-portfolio-covers.mjs bismarchi-pires=https://www.bismarchipires.com.br/ beatriz-bertho=https://beatrizberthoadv.com.br/ confiara=https://www.confiara.com.br/",
     "sync-site": "node scripts/sync-site.mjs"
   },
   "dependencies": {
