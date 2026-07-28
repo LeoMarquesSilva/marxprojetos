@@ -20,7 +20,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" className={`${poppins.variable} h-full`}>
+    <html
+      lang="pt-BR"
+      className={`${poppins.variable} h-full`}
+      suppressHydrationWarning
+    >
       <head>
         <link
           href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&display=swap"
