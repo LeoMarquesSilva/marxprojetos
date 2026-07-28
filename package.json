@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:portfolio": "node scripts/test-portfolio-cases.cjs",
+    "portfolio:covers": "node scripts/capture-portfolio-covers.mjs pereira-garcia-site pereira-garcia",
     "sync-site": "node scripts/sync-site.mjs"
   },
   "dependencies": {
@@ -41,6 +42,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
+    "playwright": "1.62.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
