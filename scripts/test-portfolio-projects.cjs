@@ -89,6 +89,17 @@ try {
       image_alt: null,
       sort_order: 1,
     },
+    {
+      id: "ext-3",
+      title: "Plataforma de Compliance NR-1 — Confiara",
+      client_label: "Confiara",
+      description: "Uma plataforma SaaS multiempresa.",
+      url: "https://www.confiara.com.br/",
+      cover_url: "/portfolio/covers/confiara.webp",
+      image_alt: "Hero da plataforma Confiara",
+      highlights: ["Diagnóstico de riscos psicossociais (NR-1)", "Canal de denúncias"],
+      sort_order: 2,
+    },
   ];
 
   const cards = loadedModule.exports.buildPortfolioProjectCards(
@@ -96,12 +107,13 @@ try {
     externalProjects,
   );
 
-  assert.equal(cards.length, 3);
+  assert.equal(cards.length, 4);
 
   // Internos vêm primeiro; externos preservam a ordem recebida do banco.
   assert.equal(cards[0].id, "internal:existing");
   assert.equal(cards[0].href, "/sites/internal-site/index.html");
   assert.equal(cards[0].clientLabel, "Empresa interna");
+  assert.deepEqual(cards[0].highlights, []);
 
   assert.equal(cards[1].id, "external:ext-1");
   assert.equal(cards[1].title, "Site Institucional — Bismarchi | Pires");
@@ -111,6 +123,7 @@ try {
     "/portfolio/covers/bismarchi-pires.webp",
   ]);
   assert.equal(cards[1].imageAlt, "Hero do site Bismarchi Pires");
+  assert.deepEqual(cards[1].highlights, []);
 
   // Externo sem URL vira "Case reservado" (href null); sem capa, o componente
   // cai no gradiente de fallback (coverSources vazio).
@@ -119,6 +132,14 @@ try {
   assert.deepEqual(cards[2].coverSources, []);
   assert.equal(cards[2].description, null);
   assert.equal(cards[2].imageAlt, "Capa do projeto Site sem link");
+  assert.deepEqual(cards[2].highlights, []);
+
+  // Projeto que é mais que um site (um sistema/SaaS) leva diferenciais.
+  assert.equal(cards[3].id, "external:ext-3");
+  assert.deepEqual(cards[3].highlights, [
+    "Diagnóstico de riscos psicossociais (NR-1)",
+    "Canal de denúncias",
+  ]);
 
   // Sem projetos externos cadastrados, só os internos aparecem.
   const internalOnly = loadedModule.exports.buildPortfolioProjectCards([

@@ -38,6 +38,7 @@ export type PortfolioExternalProject = {
   url: string | null;
   cover_url: string | null;
   image_alt: string | null;
+  highlights: string[];
   sort_order: number;
 };
 
@@ -113,7 +114,10 @@ export async function getPublicExternalProjects(): Promise<
   const { data, error } = await supabase.rpc("list_portfolio_external_projects");
 
   if (error) throw new Error(error.message);
-  return (data ?? []) as PortfolioExternalProject[];
+  return ((data ?? []) as PortfolioExternalProject[]).map((project) => ({
+    ...project,
+    highlights: project.highlights ?? [],
+  }));
 }
 
 export async function getPortfolioProjects(): Promise<PortfolioAdminItem[]> {
@@ -167,13 +171,16 @@ export async function getExternalProjects(): Promise<
   const { data, error } = await supabase
     .from("portfolio_external_projects")
     .select(
-      "id, title, client_label, description, url, cover_url, image_alt, published, sort_order, created_at",
+      "id, title, client_label, description, url, cover_url, image_alt, highlights, published, sort_order, created_at",
     )
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
 
   if (error) throw new Error(error.message);
-  return (data ?? []) as PortfolioExternalAdminItem[];
+  return ((data ?? []) as PortfolioExternalAdminItem[]).map((project) => ({
+    ...project,
+    highlights: project.highlights ?? [],
+  }));
 }
 
 export async function updatePortfolioSettings(
@@ -285,6 +292,7 @@ type ExternalProjectInput = {
   url: string;
   coverUrl: string;
   imageAlt: string;
+  highlights: string[];
   published: boolean;
 };
 
@@ -338,6 +346,7 @@ export async function createExternalProject(input: ExternalProjectInput) {
       url: input.url.trim() || null,
       cover_url: input.coverUrl.trim() || null,
       image_alt: input.imageAlt.trim() || null,
+      highlights: input.highlights.map((h) => h.trim()).filter(Boolean),
       published: input.published,
       sort_order: (last?.sort_order ?? -1) + 1,
     })
@@ -369,6 +378,7 @@ export async function updateExternalProject(
       url: input.url.trim() || null,
       cover_url: input.coverUrl.trim() || null,
       image_alt: input.imageAlt.trim() || null,
+      highlights: input.highlights.map((h) => h.trim()).filter(Boolean),
       published: input.published,
       updated_at: new Date().toISOString(),
     })

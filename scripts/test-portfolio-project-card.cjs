@@ -47,6 +47,7 @@ try {
         href: "https://www.bismarchipires.com.br/",
         coverSources: ["/portfolio/covers/bismarchi-pires.webp"],
         imageAlt: "Hero do site Bismarchi Pires",
+        highlights: [],
       },
       index: 0,
     }),
@@ -59,6 +60,7 @@ try {
   assert.match(externalHtml, /rel="noopener noreferrer"/);
   assert.match(externalHtml, /Visitar projeto/);
   assert.match(externalHtml, /Abrir projeto Site Institucional/);
+  assert.doesNotMatch(externalHtml, /aria-label="Diferenciais"/);
 
   const reservedHtml = renderToStaticMarkup(
     React.createElement(loadedModule.exports.PortfolioProjectCardView, {
@@ -70,6 +72,7 @@ try {
         href: null,
         coverSources: ["/portfolio/covers/reserved.webp"],
         imageAlt: "Capa do case reservado",
+        highlights: [],
       },
       index: 1,
     }),
@@ -77,6 +80,32 @@ try {
 
   assert.match(reservedHtml, /Case reservado/);
   assert.doesNotMatch(reservedHtml, /target="_blank"/);
+
+  // Projetos mais substanciais (um sistema/SaaS, não só um site) podem levar
+  // diferenciais em destaque, na mesma linguagem visual das entregas do case.
+  const saasHtml = renderToStaticMarkup(
+    React.createElement(loadedModule.exports.PortfolioProjectCardView, {
+      project: {
+        id: "external:confiara",
+        title: "Plataforma de Compliance NR-1 — Confiara",
+        clientLabel: "Confiara",
+        description: "Uma plataforma SaaS multiempresa.",
+        href: "https://www.confiara.com.br/",
+        coverSources: ["/portfolio/covers/confiara.webp"],
+        imageAlt: "Hero da plataforma Confiara",
+        highlights: [
+          "Diagnóstico de riscos psicossociais (NR-1)",
+          "Canal de denúncias com protocolo rastreável",
+        ],
+      },
+      index: 2,
+    }),
+  );
+
+  assert.match(saasHtml, /aria-label="Diferenciais"/);
+  assert.match(saasHtml, /Diagnóstico de riscos psicossociais \(NR-1\)/);
+  assert.match(saasHtml, /Canal de denúncias com protocolo rastreável/);
+
   console.log("Portfolio project card tests passed.");
 } finally {
   Module._load = originalLoad;

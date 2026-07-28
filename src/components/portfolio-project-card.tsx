@@ -48,6 +48,18 @@ export function PortfolioProjectCardView({
               {project.description}
             </p>
           ) : null}
+          {project.highlights.length > 0 ? (
+            <ul className="mt-6 flex flex-wrap gap-2" aria-label="Diferenciais">
+              {project.highlights.map((highlight) => (
+                <li
+                  key={highlight}
+                  className="rounded-md bg-black/[0.055] px-3 py-2 text-xs font-semibold text-black/60"
+                >
+                  {highlight}
+                </li>
+              ))}
+            </ul>
+          ) : null}
           {project.href ? (
             <a
               href={project.href}

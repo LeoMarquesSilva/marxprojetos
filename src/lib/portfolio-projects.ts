@@ -12,6 +12,7 @@ export type PortfolioProjectCard = {
   href: string | null;
   coverSources: string[];
   imageAlt: string;
+  highlights: string[];
 };
 
 // Une os projetos internos que não fazem parte de um case com os projetos
@@ -28,6 +29,7 @@ export function buildPortfolioProjectCards(
     href: item.site_path ? `/sites/${item.site_path}/index.html` : null,
     coverSources: getPortfolioCoverSources(item),
     imageAlt: item.portfolio_image_alt ?? `Hero do projeto ${item.title}`,
+    highlights: [],
   }));
 
   const externalCards = externalProjects.map((project) => ({
@@ -38,6 +40,7 @@ export function buildPortfolioProjectCards(
     href: project.url,
     coverSources: project.cover_url ? [project.cover_url] : [],
     imageAlt: project.image_alt ?? `Capa do projeto ${project.title}`,
+    highlights: project.highlights ?? [],
   }));
 
   return [...internalCards, ...externalCards];

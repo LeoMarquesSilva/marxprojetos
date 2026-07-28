@@ -87,6 +87,7 @@ export function PortfolioExternalManager({
         url: project.url ?? "",
         coverUrl: project.cover_url ?? "",
         imageAlt: project.image_alt ?? "",
+        highlights: project.highlights ?? [],
         published,
       });
       setBusyId(null);
@@ -325,6 +326,9 @@ function ExternalProjectEditor({
   const [url, setUrl] = useState(project?.url ?? "");
   const [coverUrl, setCoverUrl] = useState(project?.cover_url ?? "");
   const [imageAlt, setImageAlt] = useState(project?.image_alt ?? "");
+  const [highlights, setHighlights] = useState(
+    (project?.highlights ?? []).join("\n"),
+  );
   const [published, setPublished] = useState(project?.published ?? false);
   const [isPending, startTransition] = useTransition();
 
@@ -337,6 +341,7 @@ function ExternalProjectEditor({
         url,
         coverUrl,
         imageAlt,
+        highlights: highlights.split("\n"),
         published,
       };
 
@@ -422,6 +427,22 @@ function ExternalProjectEditor({
           />
           <p className="text-right text-xs text-[var(--insyt-muted)]">
             {description.length}/280
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="external-highlights">Diferenciais</Label>
+          <Textarea
+            id="external-highlights"
+            value={highlights}
+            onChange={(event) => setHighlights(event.target.value)}
+            rows={4}
+            placeholder={"Diagnóstico de riscos psicossociais (NR-1)\nCanal de denúncias com protocolo rastreável"}
+          />
+          <p className="text-xs leading-relaxed text-[var(--insyt-muted)]">
+            Um diferencial por linha. Útil para projetos que são mais que um
+            site — um sistema, um SaaS — e merecem destaque extra. Aparecem
+            como etiquetas abaixo da descrição.
           </p>
         </div>
 
