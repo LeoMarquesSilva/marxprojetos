@@ -26,6 +26,15 @@ assert.match(pageSource, /isLoggedIn \? "Painel" : "Entrar"/);
 // A raiz não pode voltar a mandar visitante direto para o login.
 assert.doesNotMatch(pageSource, /redirect\("\/dashboard"\)/);
 
+// Botão flutuante de WhatsApp, só quando há número cadastrado.
+// Tolerante à formatação: o que importa é estar guardado por whatsappUrl.
+assert.match(pageSource, /whatsappUrl \?\s*\(?\s*<WhatsAppFloatButton/);
+
+// SEO: dados estruturados com escape, e o lockup horizontal no topo/rodapé.
+assert.match(pageSource, /application\/ld\+json/);
+assert.match(pageSource, /replace\(\/<\/g, "\\\\u003c"\)/);
+assert.match(pageSource, /variant="horizontal-light"/);
+
 // O catálogo hardcoded foi migrado para o banco e não pode voltar ao código.
 assert.doesNotMatch(source, /EXTERNAL_PORTFOLIO_PROJECTS/);
 assert.doesNotMatch(source, /bismarchipires\.com\.br/);

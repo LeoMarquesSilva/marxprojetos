@@ -164,7 +164,7 @@ export function AdminShell({
         {/* Mobile Header */}
         <header className="sticky top-0 z-30 border-b border-[var(--insyt-border)] bg-white/90 backdrop-blur-xl lg:hidden">
           <div className="flex items-center justify-between px-6 py-5">
-            <BrandLogo href="/dashboard" showProduct={false} />
+            <BrandLogo href="/dashboard" variant="horizontal" showProduct={false} />
             <form action={signOut}>
               <Button type="submit" variant="ghost" size="sm" className="rounded-full">
                 <LogOut className="size-4" />

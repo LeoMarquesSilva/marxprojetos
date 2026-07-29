@@ -18,4 +18,8 @@ export const insytBrand = {
   },
   logo: "/brand/insyt-logo.svg",
   logoLight: "/brand/insyt-logo-light.svg",
+  // Lockup horizontal: em barras de navegação e rodapés o empilhado fica
+  // pequeno demais para o wordmark ser legível.
+  logoHorizontal: "/brand/insyt-logo-horizontal.svg",
+  logoHorizontalLight: "/brand/insyt-logo-horizontal-light.svg",
 } as const;

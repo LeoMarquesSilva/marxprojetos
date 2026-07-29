@@ -10,6 +10,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
+import { WhatsAppFloatButton } from "@/components/whatsapp-float-button";
 import { PortfolioCaseStudy } from "@/components/portfolio-case-study";
 import { PortfolioProjectCardView } from "@/components/portfolio-project-card";
 import { buttonVariants } from "@/components/ui/button";
@@ -19,7 +20,9 @@ import {
   getPublicPortfolioCases,
   getPublicSiteSettings,
 } from "@/app/actions/portfolio";
+import { insytBrand } from "@/lib/brand";
 import { buildWaMeUrl } from "@/lib/phone";
+import { absoluteUrl } from "@/lib/site-url";
 import { createClient } from "@/lib/supabase/server";
 import {
   buildPortfolioPresentation,
@@ -27,15 +30,41 @@ import {
 import { buildPortfolioProjectCards } from "@/lib/portfolio-projects";
 import { cn } from "@/lib/utils";
 
+// Título e descrição puxam para o nicho de propósito: busca premia
+// especificidade, e é por "advocacia" que o público-alvo procura.
+const SITE_TITLE = "INSYT · Sites e landing pages para escritórios de advocacia";
+const SITE_DESCRIPTION =
+  "Estúdio digital especializado em marketing jurídico. Sites, landing pages e sistemas sob medida para escritórios de advocacia que querem transformar presença digital em novos clientes.";
+
 export const metadata: Metadata = {
-  title: "Portfólio · INSYT",
-  description:
-    "Sites, landing pages e sistemas criados pela INSYT para transformar presença digital em oportunidade de negócio.",
+  title: SITE_TITLE,
+  description: SITE_DESCRIPTION,
+  keywords: [
+    "marketing jurídico",
+    "site para advogados",
+    "site para escritório de advocacia",
+    "landing page advocacia",
+    "presença digital jurídica",
+    "criação de sites",
+  ],
+  alternates: { canonical: "/" },
   openGraph: {
-    title: "Portfólio · INSYT",
-    description:
-      "Uma seleção de experiências digitais criadas para negócios que querem avançar.",
     type: "website",
+    locale: "pt_BR",
+    url: "/",
+    siteName: insytBrand.name,
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, "max-image-preview": "large" },
   },
 };
 
@@ -76,8 +105,56 @@ export default async function PortfolioPage() {
     settings?.about_enabled && (settings?.about_name || settings?.about_bio),
   );
 
+  // Dados estruturados: ajudam o buscador a entender que isto é um
+  // prestador de serviço com responsável identificável, e habilitam
+  // resultados enriquecidos.
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "ProfessionalService",
+    name: insytBrand.name,
+    url: absoluteUrl("/"),
+    description: SITE_DESCRIPTION,
+    areaServed: { "@type": "Country", name: "Brasil" },
+    knowsAbout: [
+      "Marketing jurídico",
+      "Criação de sites",
+      "Landing pages",
+      "Presença digital para escritórios de advocacia",
+    ],
+    ...(settings?.about_name
+      ? {
+          founder: {
+            "@type": "Person",
+            name: settings.about_name,
+            ...(settings.about_role ? { jobTitle: settings.about_role } : {}),
+            ...(settings.about_linkedin_url
+              ? { sameAs: [settings.about_linkedin_url] }
+              : {}),
+          },
+        }
+      : {}),
+    ...(settings?.whatsapp_number
+      ? {
+          contactPoint: {
+            "@type": "ContactPoint",
+            contactType: "sales",
+            telephone: `+${settings.whatsapp_number}`,
+            availableLanguage: "Portuguese",
+          },
+        }
+      : {}),
+  };
+
   return (
     <div className="min-h-screen overflow-hidden bg-[#f4f0e8] text-[#11100f] selection:bg-[var(--insyt-primary)] selection:text-white">
+      {/* O conteúdo vem do banco e é editável pela tela, então escapamos "<"
+          para que nenhum texto consiga fechar a tag e injetar script. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(structuredData).replace(/</g, "\\u003c"),
+        }}
+      />
       <header className="relative min-h-[92svh] overflow-hidden bg-[#11100f] px-5 text-white sm:px-10 lg:px-16">
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.055]"
@@ -90,7 +167,7 @@ export default async function PortfolioPage() {
         <div className="pointer-events-none absolute -right-32 -top-52 size-[38rem] rounded-full bg-[var(--insyt-primary)] opacity-20 blur-[120px]" />
 
         <nav className="relative mx-auto flex max-w-7xl items-center justify-between gap-4 border-b border-white/10 py-6">
-          <BrandLogo href="/" variant="light" showProduct={false} />
+          <BrandLogo href="/" variant="horizontal-light" showProduct={false} />
           <div className="flex items-center gap-5 text-xs font-semibold uppercase tracking-[0.16em] sm:gap-8">
             <div className="hidden items-center gap-8 text-white/55 sm:flex">
               <a className="transition-colors hover:text-white" href="#projetos">
@@ -380,13 +457,98 @@ export default async function PortfolioPage() {
         </section>
       </main>
 
-      <footer className="bg-[#11100f] px-5 py-8 text-white sm:px-10 lg:px-16">
-        <div className="mx-auto flex max-w-7xl flex-col gap-5 border-t border-white/10 pt-8 text-xs text-white/40 sm:flex-row sm:items-center sm:justify-between">
-          <BrandLogo href="/" variant="light" showProduct={false} />
-          <p>Sites, landing pages e sistemas sob medida.</p>
-          <p>© {new Date().getFullYear()} INSYT</p>
+      {/* pb generoso: o botão flutuante fica no canto inferior direito e
+          cobriria a assinatura do rodapé. */}
+      <footer className="bg-[#11100f] px-5 pb-24 pt-16 text-white sm:px-10 lg:px-16">
+        <div className="mx-auto max-w-7xl">
+          <div className="grid gap-12 border-t border-white/10 pt-12 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr]">
+            <div>
+              <BrandLogo href="/" variant="horizontal-light" showProduct={false} />
+              <p className="mt-6 max-w-xs text-sm leading-relaxed text-white/45">
+                Estúdio digital independente. Sites, landing pages e sistemas
+                sob medida para escritórios de advocacia que querem ser
+                lembrados.
+              </p>
+            </div>
+
+            <nav aria-label="Navegação do rodapé">
+              <h2 className="text-xs font-bold uppercase tracking-[0.18em] text-white/35">
+                Navegar
+              </h2>
+              <ul className="mt-6 space-y-4 text-sm text-white/60">
+                <li>
+                  <a className="transition-colors hover:text-white" href="#projetos">
+                    Projetos
+                  </a>
+                </li>
+                <li>
+                  <a className="transition-colors hover:text-white" href="#processo">
+                    Processo
+                  </a>
+                </li>
+                {showAbout ? (
+                  <li>
+                    <a className="transition-colors hover:text-white" href="#sobre">
+                      Sobre
+                    </a>
+                  </li>
+                ) : null}
+              </ul>
+            </nav>
+
+            <div>
+              <h2 className="text-xs font-bold uppercase tracking-[0.18em] text-white/35">
+                Contato
+              </h2>
+              <ul className="mt-6 space-y-4 text-sm text-white/60">
+                {whatsappUrl ? (
+                  <li>
+                    <a
+                      className="inline-flex items-center gap-2 transition-colors hover:text-white"
+                      href={whatsappUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <MessageCircle className="size-4" />
+                      WhatsApp
+                    </a>
+                  </li>
+                ) : null}
+                {settings?.about_linkedin_url ? (
+                  <li>
+                    <a
+                      className="transition-colors hover:text-white"
+                      href={settings.about_linkedin_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      LinkedIn
+                    </a>
+                  </li>
+                ) : null}
+                <li>
+                  <Link
+                    className="transition-colors hover:text-white"
+                    href={isLoggedIn ? "/dashboard" : "/login"}
+                  >
+                    {isLoggedIn ? "Painel" : "Entrar"}
+                  </Link>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="mt-14 flex flex-col gap-3 border-t border-white/10 pt-6 text-xs text-white/35 sm:flex-row sm:items-center sm:justify-between">
+            <p>
+              © {new Date().getFullYear()} {insytBrand.name}. Todos os direitos
+              reservados.
+            </p>
+            <p>Feito no Brasil</p>
+          </div>
         </div>
       </footer>
+
+      {whatsappUrl ? <WhatsAppFloatButton href={whatsappUrl} /> : null}
     </div>
   );
 }

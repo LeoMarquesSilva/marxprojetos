@@ -24,7 +24,7 @@ export default async function LoginPage({
       <section className="relative hidden overflow-hidden bg-[var(--insyt-black)] px-12 py-16 text-white lg:flex lg:flex-col lg:justify-between">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(247,66,17,0.28),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(191,54,22,0.18),transparent_35%)]" />
         <div className="relative">
-          <BrandLogo href="/login" variant="light" showProduct={false} />
+          <BrandLogo href="/" variant="horizontal-light" showProduct={false} />
         </div>
 
         <div className="relative max-w-md space-y-8">
@@ -79,7 +79,12 @@ export default async function LoginPage({
       <section className="insyt-grid-bg flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md space-y-8">
           <div className="text-center lg:hidden">
-            <BrandLogo href="/login" showProduct={false} className="justify-center" />
+            <BrandLogo
+              href="/"
+              variant="horizontal"
+              showProduct={false}
+              className="justify-center"
+            />
             <h1 className="mt-4 text-2xl font-bold tracking-tight text-[var(--insyt-black)]">
               Briefing Studio
             </h1>

@@ -3,6 +3,25 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { insytBrand } from "@/lib/brand";
 
+type BrandLogoVariant = "default" | "light" | "mark" | "horizontal" | "horizontal-light";
+
+// Proporções reais dos arquivos, para o Next reservar o espaço certo e não
+// causar deslocamento de layout enquanto a imagem carrega.
+const LOGO_SPECS = {
+  default: { src: insytBrand.logo, width: 120, height: 92 },
+  light: { src: insytBrand.logoLight, width: 120, height: 92 },
+  mark: { src: insytBrand.logoLight, width: 36, height: 28 },
+  horizontal: { src: insytBrand.logoHorizontal, width: 228, height: 64 },
+  "horizontal-light": {
+    src: insytBrand.logoHorizontalLight,
+    width: 228,
+    height: 64,
+  },
+} as const satisfies Record<
+  BrandLogoVariant,
+  { src: string; width: number; height: number }
+>;
+
 export function BrandLogo({
   className,
   href = "/dashboard",
@@ -12,33 +31,33 @@ export function BrandLogo({
   className?: string;
   href?: string;
   showProduct?: boolean;
-  variant?: "default" | "light" | "mark";
+  variant?: BrandLogoVariant;
 }) {
-  // As variantes "light" e "mark" aparecem sobre fundos escuros (login, sidebar),
-  // por isso usam o logo com o wordmark em branco.
-  const logoSrc =
-    variant === "light" || variant === "mark"
-      ? insytBrand.logoLight
-      : insytBrand.logo;
+  const spec = LOGO_SPECS[variant];
+  const isHorizontal =
+    variant === "horizontal" || variant === "horizontal-light";
+  const isOnDark = variant === "light" || variant === "horizontal-light";
 
   const content =
     variant === "mark" ? (
       <Image
-        src={logoSrc}
-        alt="INSYT"
-        width={36}
-        height={28}
+        src={spec.src}
+        alt={insytBrand.name}
+        width={spec.width}
+        height={spec.height}
         className="h-7 w-auto"
         priority
       />
     ) : (
       <div className={cn("flex items-center gap-3", className)}>
         <Image
-          src={logoSrc}
-          alt="INSYT"
-          width={120}
-          height={32}
-          className="h-8 w-auto"
+          src={spec.src}
+          alt={insytBrand.name}
+          width={spec.width}
+          height={spec.height}
+          // O lockup horizontal é mais largo que alto, então a mesma altura
+          // rende um wordmark bem maior — por isso pode ser mais baixo.
+          className={isHorizontal ? "h-7 w-auto" : "h-8 w-auto"}
           priority
         />
         {showProduct ? (
@@ -46,7 +65,7 @@ export function BrandLogo({
             <p
               className={cn(
                 "text-[11px] font-medium uppercase tracking-[0.18em]",
-                variant === "light" ? "text-white/70" : "text-[var(--insyt-muted)]",
+                isOnDark ? "text-white/70" : "text-[var(--insyt-muted)]",
               )}
             >
               {insytBrand.product}
