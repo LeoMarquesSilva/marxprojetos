@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Poppins } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
+import { SITE_URL } from "@/lib/site-url";
 import "./globals.css";
 
 const poppins = Poppins({
@@ -10,9 +11,10 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-  ),
+  // SITE_URL já valida o valor e cai para localhost se estiver malformado —
+  // nunca chamar `new URL()` direto no env var aqui de novo (ver
+  // src/lib/site-url.ts para o porquê).
+  metadataBase: new URL(SITE_URL),
   title: "Briefing Studio · INSYT",
   description: "Gestão de briefings para sites e landing pages",
 };
