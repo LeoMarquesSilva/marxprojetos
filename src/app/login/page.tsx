@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { signIn } from "@/app/actions/auth";
 import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ArrowRight, ShieldCheck, Sparkles, Zap } from "lucide-react";
+
+// robots.txt já bloqueia /login; noindex reforça caso a URL seja descoberta
+// por link (Disallow impede crawl, mas não impede indexação da URL).
+export const metadata: Metadata = {
+  title: "Entrar · INSYT",
+  robots: { index: false, follow: false },
+};
 
 export default async function LoginPage({
   searchParams,

@@ -24,6 +24,8 @@ export default function robots(): MetadataRoute.Robots {
       ],
     },
     sitemap: absoluteUrl("/sitemap.xml"),
-    host: absoluteUrl("/"),
+    // Sem Host: Google ignora a diretiva, e o redirect apex→www já define
+    // o domínio canônico. Um Host com protocolo/barra (como absoluteUrl
+    // geraria) ainda atrapalha o Yandex.
   };
 }
