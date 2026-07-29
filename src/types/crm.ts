@@ -64,3 +64,22 @@ export type CrmNote = {
   body: string;
   created_at: string;
 };
+
+export type CrmWhatsappMessageStatus =
+  | "pending"
+  | "server_ack"
+  | "delivery_ack"
+  | "read"
+  | "played"
+  | "error";
+
+export type CrmWhatsappMessage = {
+  id: string;
+  remote_jid: string;
+  client_id: string | null;
+  from_me: boolean;
+  conteudo: string | null;
+  status: CrmWhatsappMessageStatus;
+  erro: string | null;
+  created_at: string;
+};

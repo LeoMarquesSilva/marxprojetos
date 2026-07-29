@@ -32,6 +32,21 @@ export function buildWaMeUrl(e164: string, message?: string): string {
   return message ? `${base}?text=${encodeURIComponent(message)}` : base;
 }
 
+// JID = identificador de conversa do WhatsApp (Baileys/Evolution). Contatos
+// individuais usam o sufixo @s.whatsapp.net; grupos usam @g.us — nunca
+// tratamos JID de grupo como número de telefone.
+export function phoneToRemoteJid(e164: string): string {
+  return `${e164}@s.whatsapp.net`;
+}
+
+export function remoteJidToDigits(remoteJid: string): string {
+  return remoteJid.split("@")[0];
+}
+
+export function isGroupJid(remoteJid: string): boolean {
+  return remoteJid.endsWith("@g.us");
+}
+
 export function fillTemplate(
   template: string,
   vars: { nome: string; cidade: string; hasSite: boolean },

@@ -8,6 +8,7 @@ import { CrmStageSelect } from "@/components/crm-stage-select";
 import { CrmLinkBriefing } from "@/components/crm-link-briefing";
 import { CrmTasks } from "@/components/crm-tasks";
 import { CrmNotes } from "@/components/crm-notes";
+import { CrmWhatsappThread } from "@/components/crm-whatsapp-thread";
 import { CrmDeleteClientButton } from "@/components/crm-delete-client-button";
 import { CrmEditClientSheet } from "@/components/crm-edit-client-sheet";
 import {
@@ -19,6 +20,7 @@ import {
 } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { getCrmClient, getLinkableProjects } from "@/app/actions/crm";
+import { getCrmWhatsappThread } from "@/app/actions/crm-whatsapp";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function CrmClientPage({
@@ -38,6 +40,7 @@ export default async function CrmClientPage({
   const linkableProjects = await getLinkableProjects(client.project_id);
   const currentProjectTitle =
     linkableProjects.find((p) => p.id === client.project_id)?.title ?? null;
+  const whatsappThread = await getCrmWhatsappThread(client.id);
 
   return (
     <AdminShell userEmail={user?.email}>
@@ -139,6 +142,22 @@ export default async function CrmClientPage({
                   currentProjectId={client.project_id}
                   currentProjectTitle={currentProjectTitle}
                   linkableProjects={linkableProjects}
+                />
+              </CardContent>
+            </Card>
+
+            <Card className="insyt-card border-none shadow-none">
+              <CardHeader>
+                <CardTitle>WhatsApp</CardTitle>
+                <CardDescription>
+                  Converse com o cliente direto por aqui.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <CrmWhatsappThread
+                  clientId={client.id}
+                  remoteJid={whatsappThread.remoteJid}
+                  initialMessages={whatsappThread.messages}
                 />
               </CardContent>
             </Card>
