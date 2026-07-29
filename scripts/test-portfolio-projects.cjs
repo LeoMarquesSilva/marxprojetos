@@ -7,10 +7,9 @@ const ts = require("typescript");
 
 const modulePath = path.resolve("src/lib/portfolio-projects.ts");
 const source = fs.readFileSync(modulePath, "utf8");
-const pageSource = fs.readFileSync(
-  path.resolve("src/app/portfolio/page.tsx"),
-  "utf8",
-);
+// O portfólio é a página inicial do domínio: o lead que abre o link do
+// e-mail cai direto na prova de trabalho, não numa tela de login.
+const pageSource = fs.readFileSync(path.resolve("src/app/page.tsx"), "utf8");
 
 assert.match(pageSource, /buildPortfolioProjectCards/);
 assert.match(pageSource, /PortfolioProjectCardView/);
@@ -19,6 +18,13 @@ assert.doesNotMatch(pageSource, /function SimplePortfolioProject/);
 // A página precisa alimentar os cards com os projetos externos do banco.
 assert.match(pageSource, /getPublicExternalProjects/);
 assert.match(pageSource, /getPublicPortfolioCases/);
+
+// A porta de serviço fica no topo e troca de rótulo conforme a sessão.
+assert.match(pageSource, /isLoggedIn \? "\/dashboard" : "\/login"/);
+assert.match(pageSource, /isLoggedIn \? "Painel" : "Entrar"/);
+
+// A raiz não pode voltar a mandar visitante direto para o login.
+assert.doesNotMatch(pageSource, /redirect\("\/dashboard"\)/);
 
 // O catálogo hardcoded foi migrado para o banco e não pode voltar ao código.
 assert.doesNotMatch(source, /EXTERNAL_PORTFOLIO_PROJECTS/);

@@ -49,7 +49,7 @@ export default async function ManagePortfolioPage() {
           activeHref="/portfolio/gerenciar"
           actions={
             <Link
-              href="/portfolio"
+              href="/"
               target="_blank"
               className={buttonVariants({
                 variant: "outline",

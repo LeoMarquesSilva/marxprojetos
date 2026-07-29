@@ -78,7 +78,7 @@ export function PortfolioSettings({ project }: { project: Project }) {
 
       {project.portfolio_published ? (
         <a
-          href="/portfolio"
+          href="/"
           target="_blank"
           rel="noopener noreferrer"
           className="block text-sm font-medium text-[var(--insyt-primary)] hover:underline"

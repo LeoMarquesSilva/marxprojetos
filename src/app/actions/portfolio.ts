@@ -207,13 +207,15 @@ export async function updatePortfolioSettings(
 
   revalidatePath(`/sites/${projectId}`);
   revalidatePath("/portfolio/gerenciar");
-  revalidatePath("/portfolio");
+  revalidatePath("/");
   return { success: true };
 }
 
+// O portfólio é a página inicial do domínio, então a rota pública a
+// revalidar é "/".
 function revalidatePortfolio() {
   revalidatePath("/portfolio/gerenciar");
-  revalidatePath("/portfolio");
+  revalidatePath("/");
 }
 
 async function requireUser() {
