@@ -6,9 +6,6 @@ import { isGroupJid, normalizeBrPhone, remoteJidToDigits } from "@/lib/phone";
 // Endpoint chamado pela Evolution API a cada evento (mensagem enviada,
 // recebida, atualização de status). Não tem sessão de usuário — usa o
 // client service-role, então a autorização é só o secret na query string.
-// Diferente do webhook de financeiro-bp, não existe segredo de fallback
-// embutido no código: se WHATSAPP_WEBHOOK_SECRET não estiver configurado,
-// o endpoint recusa tudo, em vez de aceitar um valor conhecido.
 
 type EvolutionMessagePayload = {
   key?: { id?: string; remoteJid?: string; fromMe?: boolean };
@@ -16,6 +13,10 @@ type EvolutionMessagePayload = {
   message?: {
     conversation?: string;
     extendedTextMessage?: { text?: string };
+    reactionMessage?: {
+      key?: { id?: string; remoteJid?: string; fromMe?: boolean };
+      text?: string;
+    };
   };
   status?: string;
   keyId?: string;
@@ -29,9 +30,11 @@ const STATUS_MAP: Record<string, string> = {
   PLAYED: "played",
 };
 
-// O corpo do webhook varia conforme a versão da Evolution: às vezes "data"
-// é um objeto único, às vezes uma lista, às vezes { messages: [...] }.
-// Normalizamos tudo para uma lista antes de processar.
+// Evolution manda às vezes "MESSAGES_UPSERT", às vezes "messages.upsert".
+function normalizeEvent(event?: string): string {
+  return (event ?? "").toLowerCase().replace(/_/g, ".");
+}
+
 function toMessageList(data: unknown): EvolutionMessagePayload[] {
   if (Array.isArray(data)) return data as EvolutionMessagePayload[];
   if (data && typeof data === "object") {
@@ -46,6 +49,7 @@ function toMessageList(data: unknown): EvolutionMessagePayload[] {
 
 function extractText(message: EvolutionMessagePayload["message"]): string | null {
   if (!message) return null;
+  if (message.reactionMessage) return null;
   return message.conversation ?? message.extendedTextMessage?.text ?? null;
 }
 
@@ -65,13 +69,27 @@ export async function POST(request: NextRequest) {
   if (!body) return NextResponse.json({ ok: true });
 
   const supabase = createAdminClient();
+  const event = normalizeEvent(body.event);
 
-  if (body.event === "messages.upsert" || body.event === "send.message") {
+  if (
+    event === "messages.upsert" ||
+    event === "send.message" ||
+    event === "messages.set"
+  ) {
     for (const item of toMessageList(body.data)) {
       const remoteJid = item.key?.remoteJid;
-      // Grupos ficam fora do v1: o vínculo por telefone com crm_clients só
-      // faz sentido para conversas individuais.
       if (!remoteJid || isGroupJid(remoteJid)) continue;
+
+      // Reação: atualiza a mensagem alvo em vez de criar bolha nova.
+      const reaction = item.message?.reactionMessage;
+      if (reaction?.key?.id) {
+        await applyReaction(supabase, {
+          targetProviderId: reaction.key.id,
+          emoji: reaction.text ?? "",
+          fromMe: Boolean(item.key?.fromMe),
+        });
+        continue;
+      }
 
       const fromMe = Boolean(item.key?.fromMe);
       const text = extractText(item.message) ?? "[mensagem sem texto]";
@@ -84,7 +102,7 @@ export async function POST(request: NextRequest) {
 
       const { data: existingChat } = await supabase
         .from("crm_whatsapp_chats")
-        .select("unread_count")
+        .select("unread_count, push_name")
         .eq("remote_jid", remoteJid)
         .maybeSingle();
 
@@ -93,7 +111,7 @@ export async function POST(request: NextRequest) {
           remote_jid: remoteJid,
           client_id: clientId,
           instance: body.instance ?? null,
-          push_name: item.pushName ?? null,
+          push_name: item.pushName ?? existingChat?.push_name ?? null,
           last_message_at: new Date().toISOString(),
           last_message_preview: text.slice(0, 140),
           unread_count: fromMe ? 0 : (existingChat?.unread_count ?? 0) + 1,
@@ -109,7 +127,7 @@ export async function POST(request: NextRequest) {
             client_id: clientId,
             from_me: fromMe,
             conteudo: text,
-            status: "server_ack",
+            status: fromMe ? "server_ack" : "delivery_ack",
             provider_message_id: item.key.id,
           },
           { onConflict: "provider_message_id" },
@@ -118,10 +136,12 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  if (body.event === "messages.update") {
+  if (event === "messages.update") {
     for (const item of toMessageList(body.data)) {
       const providerMessageId = item.key?.id ?? item.keyId;
-      const status = item.status ? STATUS_MAP[item.status] : undefined;
+      const rawStatus = item.status?.toUpperCase?.() ?? item.status;
+      const status =
+        typeof rawStatus === "string" ? STATUS_MAP[rawStatus] : undefined;
       if (providerMessageId && status) {
         await supabase
           .from("crm_whatsapp_mensagens")
@@ -134,11 +154,38 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ ok: true });
 }
 
-// Telefones no CRM vêm de importação de planilha e ficam com formatação
-// variada ("(19) 99717-1414", "551997171-4124" etc.). Comparar substring
-// direto contra o texto salvo falha sempre que há traço/espaço/parênteses
-// no meio dos dígitos que a gente busca — por isso normalizamos os dois
-// lados com a mesma função usada no resto do app antes de comparar.
+async function applyReaction(
+  supabase: SupabaseClient,
+  {
+    targetProviderId,
+    emoji,
+    fromMe,
+  }: { targetProviderId: string; emoji: string; fromMe: boolean },
+) {
+  const { data: message } = await supabase
+    .from("crm_whatsapp_mensagens")
+    .select("id, reactions")
+    .eq("provider_message_id", targetProviderId)
+    .maybeSingle();
+
+  if (!message) return;
+
+  const current = (message.reactions as { emoji: string; fromMe: boolean }[]) ?? [];
+
+  // Texto vazio = remove reação (padrão WhatsApp).
+  const next = emoji
+    ? [
+        ...current.filter((reaction) => reaction.fromMe !== fromMe),
+        { emoji, fromMe },
+      ]
+    : current.filter((reaction) => reaction.fromMe !== fromMe);
+
+  await supabase
+    .from("crm_whatsapp_mensagens")
+    .update({ reactions: next })
+    .eq("id", message.id);
+}
+
 async function matchClientByPhone(
   supabase: SupabaseClient,
   inboundE164: string,

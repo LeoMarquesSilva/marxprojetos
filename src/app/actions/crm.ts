@@ -3,7 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import type { CrmClient, CrmNote, CrmStage, CrmTask } from "@/types/crm";
+import type {
+  CrmBoardClient,
+  CrmClient,
+  CrmClientChatSignal,
+  CrmNote,
+  CrmStage,
+  CrmTask,
+} from "@/types/crm";
 
 export async function getCrmClients() {
   const supabase = await createClient();
@@ -14,6 +21,42 @@ export async function getCrmClients() {
 
   if (error) throw new Error(error.message);
   return data as CrmClient[];
+}
+
+// O board precisa do sinal de conversa junto com o cliente. Buscamos as duas
+// tabelas em paralelo e casamos em memória em vez de usar join do PostgREST:
+// a relação vive em crm_whatsapp_chats.client_id (que pode ser nulo enquanto
+// o número não bate com nenhum cliente), e um embed devolveria array, não o
+// registro único que o card espera.
+export async function getCrmBoardClients(): Promise<CrmBoardClient[]> {
+  const supabase = await createClient();
+
+  const [clientsResult, chatsResult] = await Promise.all([
+    supabase.from("crm_clients").select("*").order("created_at", { ascending: false }),
+    supabase
+      .from("crm_whatsapp_chats")
+      .select("remote_jid, client_id, unread_count, last_message_at, last_message_preview")
+      .not("client_id", "is", null),
+  ]);
+
+  if (clientsResult.error) throw new Error(clientsResult.error.message);
+  if (chatsResult.error) throw new Error(chatsResult.error.message);
+
+  const chatByClient = new Map<string, CrmClientChatSignal>();
+  for (const chat of chatsResult.data ?? []) {
+    if (!chat.client_id) continue;
+    chatByClient.set(chat.client_id, {
+      remoteJid: chat.remote_jid,
+      unreadCount: chat.unread_count ?? 0,
+      lastMessageAt: chat.last_message_at,
+      lastMessagePreview: chat.last_message_preview,
+    });
+  }
+
+  return (clientsResult.data as CrmClient[]).map((client) => ({
+    ...client,
+    chat: chatByClient.get(client.id) ?? null,
+  }));
 }
 
 export async function getCrmClient(id: string) {

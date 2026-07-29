@@ -21,15 +21,42 @@ export const STAGE_COLUMNS: CrmStage[] = [
   "perdido",
 ];
 
+// Identidade visual por estágio — tons sóbrios que convivem com a paleta
+// warm da INSYT (evita azul/âmbar genéricos de template de kanban).
 export const STAGE_ACCENT: Record<
   CrmStage,
-  { dot: string; pillBg: string; pillText: string }
+  { dot: string; pillBg: string; pillText: string; bar: string }
 > = {
-  lead: { dot: "bg-slate-400", pillBg: "bg-slate-50", pillText: "text-slate-600" },
-  contato_feito: { dot: "bg-blue-400", pillBg: "bg-blue-50", pillText: "text-blue-700" },
-  proposta_enviada: { dot: "bg-amber-400", pillBg: "bg-amber-50", pillText: "text-amber-700" },
-  fechado: { dot: "bg-emerald-400", pillBg: "bg-emerald-50", pillText: "text-emerald-700" },
-  perdido: { dot: "bg-rose-400", pillBg: "bg-rose-50", pillText: "text-rose-700" },
+  lead: {
+    dot: "bg-[var(--insyt-muted)]",
+    pillBg: "bg-[var(--insyt-canvas-alt)]",
+    pillText: "text-[var(--insyt-slate)]",
+    bar: "bg-[var(--insyt-muted)]",
+  },
+  contato_feito: {
+    dot: "bg-[var(--insyt-slate)]",
+    pillBg: "bg-[var(--insyt-canvas)]",
+    pillText: "text-[var(--insyt-black)]",
+    bar: "bg-[var(--insyt-slate)]",
+  },
+  proposta_enviada: {
+    dot: "bg-[var(--insyt-primary)]",
+    pillBg: "bg-[var(--accent)]",
+    pillText: "text-[var(--insyt-primary-dark)]",
+    bar: "bg-[var(--insyt-primary)]",
+  },
+  fechado: {
+    dot: "bg-emerald-600",
+    pillBg: "bg-emerald-50",
+    pillText: "text-emerald-800",
+    bar: "bg-emerald-600",
+  },
+  perdido: {
+    dot: "bg-stone-400",
+    pillBg: "bg-stone-100",
+    pillText: "text-stone-600",
+    bar: "bg-stone-300",
+  },
 };
 
 export type CrmClient = {
@@ -73,6 +100,24 @@ export type CrmWhatsappMessageStatus =
   | "played"
   | "error";
 
+// Sinal de conversa que o card do kanban precisa mostrar sem carregar a
+// thread inteira: quem respondeu, quando, e se está esperando resposta.
+export type CrmClientChatSignal = {
+  remoteJid: string;
+  unreadCount: number;
+  lastMessageAt: string | null;
+  lastMessagePreview: string | null;
+};
+
+export type CrmBoardClient = CrmClient & {
+  chat: CrmClientChatSignal | null;
+};
+
+export type CrmWhatsappReaction = {
+  emoji: string;
+  fromMe: boolean;
+};
+
 export type CrmWhatsappMessage = {
   id: string;
   remote_jid: string;
@@ -82,4 +127,41 @@ export type CrmWhatsappMessage = {
   status: CrmWhatsappMessageStatus;
   erro: string | null;
   created_at: string;
+  provider_message_id?: string | null;
+  reactions?: CrmWhatsappReaction[];
+};
+
+// Item da inbox estilo WhatsApp: conversa + cliente vinculado (se houver).
+// A "etiqueta" da conversa é o stage do cliente no funil.
+export type CrmInboxChat = {
+  remoteJid: string;
+  pushName: string | null;
+  profileName: string | null;
+  profilePictureUrl: string | null;
+  profileStatus: string | null;
+  lastMessageAt: string | null;
+  lastMessagePreview: string | null;
+  unreadCount: number;
+  inboxNote: string | null;
+  client: {
+    id: string;
+    name: string;
+    company: string | null;
+    phone: string | null;
+    email: string | null;
+    source: string | null;
+    stage: CrmStage;
+    value: number | null;
+  } | null;
+};
+
+export type CrmInboxProspect = {
+  id: string;
+  name: string;
+  website: string | null;
+  address: string | null;
+  niche: string;
+  city: string;
+  status: string;
+  rating: number | null;
 };

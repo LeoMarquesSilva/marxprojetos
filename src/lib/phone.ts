@@ -49,14 +49,25 @@ export function isGroupJid(remoteJid: string): boolean {
 
 export function fillTemplate(
   template: string,
-  vars: { nome: string; cidade: string; hasSite: boolean },
+  vars: {
+    nome: string;
+    cidade: string;
+    hasSite: boolean;
+    portfolioUrl?: string;
+  },
 ): string {
   const sitePhrase = vars.hasSite
-    ? "Vi que vocês já têm um site — talvez seja hora de dar uma modernizada nele."
-    : "Pesquisando negócios da região, percebi que vocês ainda não têm um site próprio.";
+    ? `Vi que ${vars.nome} já tem site — talvez seja hora de dar uma modernizada nele.`
+    : `Vi que ${vars.nome} ainda não tem site, e hoje é por aí que a maioria dos clientes pesquisa e decide em quem confiar antes de ligar.`;
 
+  const portfolio =
+    vars.portfolioUrl?.trim() || "https://www.insytstudio.com.br/";
+
+  // {{site}} primeiro: a frase pode citar o nome, e {{nome}} ainda precisa
+  // ser expandido no restante do template.
   return template
+    .replaceAll("{{site}}", sitePhrase)
     .replaceAll("{{nome}}", vars.nome)
     .replaceAll("{{cidade}}", vars.cidade)
-    .replaceAll("{{site}}", sitePhrase);
+    .replaceAll("{{portfolio}}", portfolio);
 }

@@ -24,11 +24,14 @@ export const PROSPECT_STATUS_ACCENT: Record<
   descartado: { dot: "bg-rose-400", pillBg: "bg-rose-50", pillText: "text-rose-700" },
 };
 
-export const DEFAULT_PROSPECTING_TEMPLATE = `Olá, {{nome}}! Tudo bem?
+/** Site público do estúdio — usado no {{portfolio}} das mensagens de prospecção. */
+export const INSYT_STUDIO_URL = "https://www.insytstudio.com.br/";
 
-Me chamo Leonardo, sou da INSYT — criamos sites e sistemas para negócios aqui de {{cidade}}. {{site}}
+export const DEFAULT_PROSPECTING_TEMPLATE = `Olá! Tudo bem?
 
-Um site profissional passa credibilidade e ajuda clientes a encontrarem vocês no Google. Posso te mostrar rapidinho, sem compromisso, como ficaria um para o seu negócio?`;
+Me chamo Leonardo, da INSYT (criamos sites para negócios de {{cidade}}). {{site}} Posso te mostrar em 2 minutos como ficaria o site, sem compromisso?
+
+Alguns projetos nossos: {{portfolio}}`;
 
 export type Prospect = {
   id: string;

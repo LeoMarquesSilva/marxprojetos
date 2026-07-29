@@ -22,9 +22,12 @@ const nav = [
 export function AdminShell({
   children,
   userEmail,
+  wide = false,
 }: {
   children: React.ReactNode;
   userEmail?: string | null;
+  /** Kanban e boards largos precisam de mais que o max-w-5xl padrão. */
+  wide?: boolean;
 }) {
   const pathname = usePathname();
   const [isPinned, setIsPinned] = useState(false);
@@ -190,7 +193,12 @@ export function AdminShell({
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-5xl px-6 py-12 sm:px-10 sm:py-24 lg:py-32">
+        <main
+          className={cn(
+            "mx-auto w-full px-6 py-12 sm:px-10 sm:py-24 lg:py-32",
+            wide ? "max-w-[1600px]" : "max-w-5xl",
+          )}
+        >
           {children}
         </main>
       </div>

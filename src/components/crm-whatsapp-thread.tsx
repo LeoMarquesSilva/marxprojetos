@@ -5,29 +5,78 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { AlertTriangle, Check, CheckCheck, Loader2, MessageCircle, Send } from "lucide-react";
 import { toast } from "sonner";
-import { sendCrmWhatsappMessage } from "@/app/actions/crm-whatsapp";
+import {
+  sendCrmWhatsappChatMessage,
+  sendCrmWhatsappMessage,
+} from "@/app/actions/crm-whatsapp";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { CrmWhatsappMessage } from "@/types/crm";
 
+function mergeIncomingMessage(
+  prev: CrmWhatsappMessage[],
+  incoming: CrmWhatsappMessage,
+): CrmWhatsappMessage[] {
+  if (prev.some((m) => m.id === incoming.id)) {
+    return prev.map((m) => (m.id === incoming.id ? { ...m, ...incoming } : m));
+  }
+
+  if (incoming.provider_message_id) {
+    const byProvider = prev.findIndex(
+      (m) => m.provider_message_id === incoming.provider_message_id,
+    );
+    if (byProvider >= 0) {
+      const next = [...prev];
+      next[byProvider] = { ...next[byProvider], ...incoming };
+      return next;
+    }
+  }
+
+  // Substitui o otimista pendente com o mesmo texto (evita bolha duplicada).
+  if (incoming.from_me && incoming.conteudo) {
+    const pendingIdx = prev.findIndex(
+      (m) =>
+        m.status === "pending" &&
+        m.from_me &&
+        m.conteudo === incoming.conteudo,
+    );
+    if (pendingIdx >= 0) {
+      const next = [...prev];
+      next[pendingIdx] = incoming;
+      return next;
+    }
+  }
+
+  return [...prev, incoming];
+}
+
 export function CrmWhatsappThread({
   clientId,
   remoteJid,
   initialMessages,
+  layout = "page",
+  onMessageSent,
 }: {
-  clientId: string;
+  clientId?: string | null;
   remoteJid: string | null;
   initialMessages: CrmWhatsappMessage[];
+  /** "sheet" / "inbox" preenchem o painel; "page" é a ficha do cliente. */
+  layout?: "page" | "sheet" | "inbox";
+  onMessageSent?: (preview: string) => void;
 }) {
   const [messages, setMessages] = useState(initialMessages);
   const [draft, setDraft] = useState("");
   const [isPending, startTransition] = useTransition();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const isPanel = layout === "sheet" || layout === "inbox";
 
-  // Mensagens novas (respostas do lead, confirmações de status) chegam pelo
-  // webhook direto no banco — a tela só precisa escutar, sem recarregar.
+  useEffect(() => {
+    setMessages(initialMessages);
+  }, [initialMessages]);
+
+  // Mensagens/status chegam via webhook → Postgres → Realtime.
   useEffect(() => {
     if (!remoteJid) return;
 
@@ -44,9 +93,7 @@ export function CrmWhatsappThread({
         },
         (payload) => {
           const incoming = payload.new as CrmWhatsappMessage;
-          setMessages((prev) =>
-            prev.some((m) => m.id === incoming.id) ? prev : [...prev, incoming],
-          );
+          setMessages((prev) => mergeIncomingMessage(prev, incoming));
         },
       )
       .on(
@@ -60,7 +107,16 @@ export function CrmWhatsappThread({
         (payload) => {
           const updated = payload.new as CrmWhatsappMessage;
           setMessages((prev) =>
-            prev.map((m) => (m.id === updated.id ? updated : m)),
+            prev.map((m) => {
+              if (m.id === updated.id) return { ...m, ...updated };
+              if (
+                updated.provider_message_id &&
+                m.provider_message_id === updated.provider_message_id
+              ) {
+                return { ...m, ...updated };
+              }
+              return m;
+            }),
           );
         },
       )
@@ -85,24 +141,38 @@ export function CrmWhatsappThread({
       {
         id: optimisticId,
         remote_jid: remoteJid,
-        client_id: clientId,
+        client_id: clientId ?? null,
         from_me: true,
         conteudo: text,
         status: "pending",
         erro: null,
         created_at: new Date().toISOString(),
+        reactions: [],
       },
     ]);
     setDraft("");
+    onMessageSent?.(text);
 
     startTransition(async () => {
-      const result = await sendCrmWhatsappMessage(clientId, text);
-      if (result.error) {
+      const result = clientId
+        ? await sendCrmWhatsappMessage(clientId, text)
+        : await sendCrmWhatsappChatMessage(remoteJid, text);
+
+      if ("error" in result && result.error) {
         toast.error(result.error);
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === optimisticId ? { ...m, status: "error", erro: result.error! } : m,
+            m.id === optimisticId
+              ? { ...m, status: "error", erro: result.error! }
+              : m,
           ),
+        );
+        return;
+      }
+
+      if ("message" in result && result.message) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === optimisticId ? result.message! : m)),
         );
       }
     });
@@ -117,9 +187,16 @@ export function CrmWhatsappThread({
 
   if (!remoteJid) {
     return (
-      <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-[var(--insyt-border)] py-10 text-center">
+      <div
+        className={cn(
+          "flex flex-col items-center gap-2 text-center",
+          isPanel
+            ? "flex-1 justify-center px-6 py-16"
+            : "rounded-xl border border-dashed border-[var(--insyt-border)] py-10",
+        )}
+      >
         <MessageCircle className="size-6 text-[var(--insyt-muted)]" />
-        <p className="text-sm text-[var(--insyt-muted)]">
+        <p className="max-w-xs text-sm text-[var(--insyt-muted)]">
           Cadastre um telefone válido para conversar com este cliente pelo
           WhatsApp.
         </p>
@@ -128,10 +205,21 @@ export function CrmWhatsappThread({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="max-h-[420px] space-y-3 overflow-y-auto rounded-xl bg-[var(--insyt-canvas)] p-4">
+    <div
+      className={cn(
+        isPanel ? "flex min-h-0 flex-1 flex-col" : "space-y-3",
+      )}
+    >
+      <div
+        className={cn(
+          "space-y-3 overflow-y-auto bg-[var(--insyt-canvas)] p-4",
+          isPanel
+            ? "min-h-0 flex-1 rounded-none"
+            : "max-h-[420px] rounded-xl",
+        )}
+      >
         {messages.length === 0 ? (
-          <p className="text-center text-sm text-[var(--insyt-muted)]">
+          <p className="py-8 text-center text-sm text-[var(--insyt-muted)]">
             Nenhuma mensagem ainda. Escreva abaixo para iniciar a conversa.
           </p>
         ) : (
@@ -142,13 +230,20 @@ export function CrmWhatsappThread({
         <div ref={bottomRef} />
       </div>
 
-      <div className="space-y-2">
+      <div
+        className={cn(
+          "space-y-2",
+          isPanel &&
+            "shrink-0 border-t border-[var(--insyt-border)] bg-white px-4 py-4",
+        )}
+      >
         <Textarea
-          placeholder="Escreva uma mensagem para o WhatsApp do cliente..."
+          placeholder="Escreva uma mensagem..."
           rows={2}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={handleKeyDown}
+          className={isPanel ? "min-h-[72px] resize-none" : undefined}
         />
         <div className="flex justify-end">
           <Button
@@ -172,12 +267,13 @@ export function CrmWhatsappThread({
 
 function MessageBubble({ message }: { message: CrmWhatsappMessage }) {
   const isError = message.status === "error";
+  const reactions = message.reactions ?? [];
 
   return (
     <div
       className={cn(
-        "flex",
-        message.from_me ? "justify-end" : "justify-start",
+        "flex flex-col gap-1",
+        message.from_me ? "items-end" : "items-start",
       )}
     >
       <div
@@ -210,6 +306,20 @@ function MessageBubble({ message }: { message: CrmWhatsappMessage }) {
           </p>
         ) : null}
       </div>
+
+      {reactions.length > 0 ? (
+        <div className="flex gap-1 px-1">
+          {reactions.map((reaction, index) => (
+            <span
+              key={`${reaction.emoji}-${index}`}
+              className="rounded-full border border-[var(--insyt-border)] bg-white px-1.5 py-0.5 text-xs shadow-sm"
+              title={reaction.fromMe ? "Você" : "Contato"}
+            >
+              {reaction.emoji}
+            </span>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

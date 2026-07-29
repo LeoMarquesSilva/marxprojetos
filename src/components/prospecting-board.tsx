@@ -67,6 +67,7 @@ import {
   updateProspectStatus,
 } from "@/app/actions/prospecting";
 import { buildWaMeUrl, fillTemplate } from "@/lib/phone";
+import { INSYT_STUDIO_URL } from "@/types/prospecting";
 import {
   PROSPECT_STATUS_ACCENT,
   PROSPECT_STATUS_LABELS,
@@ -162,6 +163,7 @@ export function ProspectingBoard({
         nome: p.name,
         cidade: p.city,
         hasSite: Boolean(p.website),
+        portfolioUrl: INSYT_STUDIO_URL,
       })
     );
   }

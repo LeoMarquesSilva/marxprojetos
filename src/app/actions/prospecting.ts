@@ -3,13 +3,19 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { fillTemplate, normalizeBrPhone } from "@/lib/phone";
+import { fillTemplate, normalizeBrPhone, phoneToRemoteJid } from "@/lib/phone";
 import { inferWebsiteFromRow, parseCsv, slugify } from "@/lib/csv";
+import { sendCrmWhatsappMessage } from "@/app/actions/crm-whatsapp";
 import {
   DEFAULT_PROSPECTING_TEMPLATE,
+  INSYT_STUDIO_URL,
   type Prospect,
   type ProspectStatus,
 } from "@/types/prospecting";
+
+function portfolioUrlForTemplate() {
+  return INSYT_STUDIO_URL;
+}
 
 export async function getProspects() {
   const supabase = await createClient();
@@ -32,7 +38,31 @@ export async function getProspectingTemplate() {
     .maybeSingle();
 
   if (error) throw new Error(error.message);
-  return data?.template ?? DEFAULT_PROSPECTING_TEMPLATE;
+
+  const stored = data?.template?.trim();
+  if (!stored) return DEFAULT_PROSPECTING_TEMPLATE;
+
+  // Modelo antigo sem link do portfólio: migra na leitura e persiste o novo
+  // texto padrão (só quando ainda é o template "de fábrica" anterior).
+  if (
+    !stored.includes("{{portfolio}}") &&
+    stored.includes("sou da INSYT") &&
+    stored.includes("{{site}}")
+  ) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from("prospecting_settings").upsert({
+        owner_id: user.id,
+        template: DEFAULT_PROSPECTING_TEMPLATE,
+        updated_at: new Date().toISOString(),
+      });
+    }
+    return DEFAULT_PROSPECTING_TEMPLATE;
+  }
+
+  return stored;
 }
 
 export async function saveProspectingTemplate(template: string) {
@@ -399,10 +429,12 @@ export async function personalizeMessage(id: string) {
   if (!prospect) return { error: "Lead não encontrado." };
 
   const template = await getProspectingTemplate();
+  const portfolioUrl = portfolioUrlForTemplate();
   const baseMessage = fillTemplate(template, {
     nome: prospect.name,
     cidade: prospect.city,
     hasSite: Boolean(prospect.website),
+    portfolioUrl,
   });
 
   const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
@@ -424,11 +456,12 @@ ${baseMessage}
 ---
 
 Regras:
-1) Máximo ~500 caracteres.
+1) Máximo ~650 caracteres.
 2) Sem markdown, sem emojis em excesso (no máximo 1), sem assinatura formal.
 3) Personalize com um detalhe real do contexto (nicho, cidade, avaliação ou ausência de site).
-4) Termine com uma pergunta leve que convide resposta.
-5) Retorne APENAS o texto da mensagem, nada mais.
+4) Inclua o link do portfólio exatamente assim: ${portfolioUrl}
+5) Termine com uma pergunta leve que convide resposta.
+6) Retorne APENAS o texto da mensagem, nada mais.
 `;
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -527,6 +560,92 @@ export async function promoteToCrm(id: string) {
   revalidatePath("/crm");
   revalidatePath("/prospeccao");
   return result;
+}
+
+// Envia a mensagem pelo WhatsApp (Evolution), coloca o lead no CRM, marca
+// como contatado e devolve o JID para abrir a inbox de Conversas.
+export async function sendProspectToConversas(id: string, message: string) {
+  const trimmed = message.trim();
+  if (!trimmed) return { error: "Escreva a mensagem antes de enviar." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Sessão expirada. Faça login novamente." };
+
+  const { data: prospect, error: prospectError } = await supabase
+    .from("prospects")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (prospectError) return { error: prospectError.message };
+  if (!prospect) return { error: "Lead não encontrado." };
+  if (!prospect.phone_e164) {
+    return { error: "Este lead não tem um telefone válido para WhatsApp." };
+  }
+
+  await supabase
+    .from("prospects")
+    .update({
+      custom_message: trimmed,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+
+  let crmClientId = prospect.crm_client_id as string | null;
+  if (!crmClientId) {
+    const promoted = await promoteProspectToCrm(
+      supabase,
+      user.id,
+      prospect as Prospect,
+    );
+    if ("error" in promoted) {
+      return { error: promoted.error ?? "Falha ao criar cliente no CRM." };
+    }
+    crmClientId = promoted.crmClientId;
+  }
+
+  if (!crmClientId) {
+    return { error: "Não foi possível criar o cliente no CRM." };
+  }
+
+  const remoteJid = phoneToRemoteJid(prospect.phone_e164);
+
+  await supabase.from("crm_whatsapp_chats").upsert(
+    {
+      remote_jid: remoteJid,
+      client_id: crmClientId,
+      instance: process.env.EVOLUTION_INSTANCE ?? null,
+      push_name: prospect.name,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "remote_jid" },
+  );
+
+  const sendResult = await sendCrmWhatsappMessage(crmClientId, trimmed);
+  if ("error" in sendResult && sendResult.error) {
+    return { error: sendResult.error };
+  }
+
+  await supabase
+    .from("prospects")
+    .update({
+      status: "contatado",
+      crm_client_id: crmClientId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+
+  revalidatePath("/prospeccao");
+  revalidatePath("/crm");
+
+  return {
+    success: true as const,
+    remoteJid,
+    crmClientId,
+  };
 }
 
 // Import de CSV (ex: export do dashboard do LocalProspects) sem gastar

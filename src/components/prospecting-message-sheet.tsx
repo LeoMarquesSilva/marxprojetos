@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Copy, Loader2, MessageCircle, Sparkles } from "lucide-react";
+import { Copy, Loader2, MessageCircle, MessagesSquare, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -16,10 +16,11 @@ import {
 } from "@/components/ui/sheet";
 import {
   personalizeMessage,
+  sendProspectToConversas,
   updateProspectMessage,
 } from "@/app/actions/prospecting";
 import { buildWaMeUrl, fillTemplate } from "@/lib/phone";
-import type { Prospect } from "@/types/prospecting";
+import { INSYT_STUDIO_URL, type Prospect } from "@/types/prospecting";
 
 export function ProspectingMessageSheet({
   prospect,
@@ -32,16 +33,19 @@ export function ProspectingMessageSheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const portfolioUrl = INSYT_STUDIO_URL;
   const [message, setMessage] = useState(
     prospect.custom_message ??
       fillTemplate(template, {
         nome: prospect.name,
         cidade: prospect.city,
         hasSite: Boolean(prospect.website),
+        portfolioUrl,
       }),
   );
   const [isSaving, startSaveTransition] = useTransition();
   const [isGenerating, startGenerateTransition] = useTransition();
+  const [isSending, startSendTransition] = useTransition();
   const router = useRouter();
 
   function handleSave() {
@@ -79,6 +83,23 @@ export function ProspectingMessageSheet({
     window.open(buildWaMeUrl(prospect.phone_e164, message), "_blank");
   }
 
+  function handleSendToConversas() {
+    startSendTransition(async () => {
+      const result = await sendProspectToConversas(prospect.id, message);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+
+      toast.success("Mensagem enviada · lead no CRM");
+      onOpenChange(false);
+      router.push(
+        `/crm?view=conversas&chat=${encodeURIComponent(result.remoteJid!)}`,
+      );
+      router.refresh();
+    });
+  }
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="sm:max-w-lg">
@@ -92,10 +113,22 @@ export function ProspectingMessageSheet({
 
         <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-4">
           <Textarea
-            rows={10}
+            rows={12}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
           />
+
+          <p className="text-xs text-[var(--insyt-muted)]">
+            Portfólio no modelo:{" "}
+            <a
+              href={portfolioUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-[var(--insyt-primary)] hover:underline"
+            >
+              {portfolioUrl}
+            </a>
+          </p>
 
           <div className="flex flex-wrap gap-2">
             <Button
@@ -119,24 +152,42 @@ export function ProspectingMessageSheet({
           </div>
         </div>
 
-        <SheetFooter className="flex-row justify-between gap-2">
+        <SheetFooter className="flex-col gap-2 sm:flex-col">
           <Button
             type="button"
-            variant="outline"
-            onClick={handleSave}
-            disabled={isSaving}
+            onClick={handleSendToConversas}
+            disabled={!prospect.phone_e164 || isSending}
+            className="w-full"
           >
-            {isSaving ? <Loader2 className="size-4 animate-spin" /> : null}
-            Salvar
+            {isSending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <MessagesSquare className="size-4" />
+            )}
+            Enviar e abrir Conversas
           </Button>
-          <Button
-            type="button"
-            onClick={handleOpenWhatsApp}
-            disabled={!prospect.phone_e164}
-          >
-            <MessageCircle className="size-4" />
-            Abrir WhatsApp
-          </Button>
+          <div className="flex w-full flex-row gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleSave}
+              disabled={isSaving}
+              className="flex-1"
+            >
+              {isSaving ? <Loader2 className="size-4 animate-spin" /> : null}
+              Salvar
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleOpenWhatsApp}
+              disabled={!prospect.phone_e164}
+              className="flex-1"
+            >
+              <MessageCircle className="size-4" />
+              Abrir WhatsApp
+            </Button>
+          </div>
         </SheetFooter>
       </SheetContent>
     </Sheet>

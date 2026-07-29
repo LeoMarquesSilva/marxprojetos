@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/sheet";
 import { saveProspectingTemplate } from "@/app/actions/prospecting";
 import { fillTemplate } from "@/lib/phone";
+import { INSYT_STUDIO_URL } from "@/types/prospecting";
 
 export function ProspectingTemplateSheet({ template }: { template: string }) {
   const [open, setOpen] = useState(false);
@@ -45,6 +46,7 @@ export function ProspectingTemplateSheet({ template }: { template: string }) {
     nome: "Padaria Central",
     cidade: "Campinas",
     hasSite: false,
+    portfolioUrl: INSYT_STUDIO_URL,
   });
 
   return (
@@ -61,7 +63,7 @@ export function ProspectingTemplateSheet({ template }: { template: string }) {
         <SheetHeader>
           <SheetTitle>Modelo de mensagem</SheetTitle>
           <SheetDescription>
-            Usado para todos os leads. Placeholders disponíveis:{" "}
+            Usado para todos os leads. Placeholders:{" "}
             <code className="rounded bg-[var(--insyt-canvas-alt)] px-1">
               {"{{nome}}"}
             </code>{" "}
@@ -70,6 +72,9 @@ export function ProspectingTemplateSheet({ template }: { template: string }) {
             </code>{" "}
             <code className="rounded bg-[var(--insyt-canvas-alt)] px-1">
               {"{{site}}"}
+            </code>{" "}
+            <code className="rounded bg-[var(--insyt-canvas-alt)] px-1">
+              {"{{portfolio}}"}
             </code>
           </SheetDescription>
         </SheetHeader>
