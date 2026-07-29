@@ -88,6 +88,9 @@ export default async function PortfolioPage() {
   );
   const hasPortfolioContent =
     presentation.cases.length > 0 || projectCards.length > 0;
+  const totalProjects =
+    presentation.cases.reduce((sum, item) => sum + item.chapters.length, 0) +
+    projectCards.length;
 
   // WhatsApp com mensagem pronta converte melhor que formulário no Brasil, e
   // a mensagem já contextualizada ("vi seu portfólio") evita o lead ter que
@@ -155,7 +158,11 @@ export default async function PortfolioPage() {
           __html: JSON.stringify(structuredData).replace(/</g, "\\u003c"),
         }}
       />
-      <header className="relative min-h-[92svh] overflow-hidden bg-[#11100f] px-5 text-white sm:px-10 lg:px-16">
+      {/* Tela cheia via flex, sem descontar a altura da nav por conta: um
+          calc() com número mágico quebra sempre que a nav muda de altura
+          (foi o que aconteceu ao entrar o botão "Entrar"). svh em vez de
+          dvh evita o pulo de layout quando a barra do navegador some. */}
+      <header className="relative flex min-h-svh flex-col overflow-hidden bg-[#11100f] px-5 text-white sm:px-10 lg:px-16">
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.055]"
           style={{
@@ -166,7 +173,7 @@ export default async function PortfolioPage() {
         />
         <div className="pointer-events-none absolute -right-32 -top-52 size-[38rem] rounded-full bg-[var(--insyt-primary)] opacity-20 blur-[120px]" />
 
-        <nav className="relative mx-auto flex max-w-7xl items-center justify-between gap-4 border-b border-white/10 py-6">
+        <nav className="relative mx-auto flex w-full max-w-7xl items-center justify-between gap-4 border-b border-white/10 py-6">
           <BrandLogo href="/" variant="horizontal-light" showProduct={false} />
           <div className="flex items-center gap-5 text-xs font-semibold uppercase tracking-[0.16em] sm:gap-8">
             <div className="hidden items-center gap-8 text-white/55 sm:flex">
@@ -203,7 +210,7 @@ export default async function PortfolioPage() {
           </div>
         </nav>
 
-        <div className="relative mx-auto flex min-h-[calc(92svh-89px)] max-w-7xl flex-col justify-between py-12 sm:py-16">
+        <div className="relative mx-auto flex w-full max-w-7xl flex-1 flex-col justify-between gap-10 py-10 sm:gap-14 sm:py-14">
           <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.22em] text-[var(--insyt-primary)]">
             <span className="h-px w-8 bg-current" />
             Estúdio digital independente
@@ -232,8 +239,10 @@ export default async function PortfolioPage() {
             </div>
           </div>
 
-          <div className="mt-14 flex items-center justify-between border-t border-white/10 pt-5 text-[11px] font-medium uppercase tracking-[0.18em] text-white/35">
-            <span>INSYT® — Brasil</span>
+          {/* sem margem própria: o espaçamento vem do gap do flex pai, senão
+              some a folga em telas baixas */}
+          <div className="flex items-center justify-between border-t border-white/10 pt-5 text-[11px] font-medium uppercase tracking-[0.18em] text-white/35">
+            <span>{insytBrand.name}® — Brasil</span>
             <span>{new Date().getFullYear()}</span>
           </div>
         </div>
@@ -245,18 +254,26 @@ export default async function PortfolioPage() {
           className="px-5 py-24 sm:px-10 lg:px-16 lg:py-36"
         >
           <div className="mx-auto max-w-7xl">
-            <div className="grid gap-8 border-b border-black/15 pb-10 lg:grid-cols-[1fr_1fr] lg:items-end">
-              <div>
+            {/* Abertura de capítulo: empilhada e com régua/contagem. O case
+                logo abaixo usa cartão e duas colunas — antes os dois tinham a
+                mesma estrutura e pareciam o mesmo nível de conteúdo. */}
+            <div className="border-b border-black/15 pb-12">
+              <div className="flex items-center gap-4">
+                <span className="h-px w-10 shrink-0 bg-[var(--insyt-primary)]" />
                 <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--insyt-primary)]">
                   Trabalho selecionado
                 </p>
-                <h2 className="mt-4 text-5xl font-bold leading-none tracking-[-0.045em] sm:text-7xl">
-                  Projetos com
-                  <br />
-                  intenção.
-                </h2>
+                {totalProjects > 0 ? (
+                  <span className="ml-auto shrink-0 text-xs font-semibold uppercase tracking-[0.16em] text-black/35">
+                    {totalProjects}{" "}
+                    {totalProjects === 1 ? "projeto" : "projetos"}
+                  </span>
+                ) : null}
               </div>
-              <p className="max-w-xl text-lg leading-relaxed text-black/55 lg:justify-self-end">
+              <h2 className="mt-7 max-w-4xl text-5xl font-bold leading-[0.95] tracking-[-0.045em] sm:text-7xl">
+                Projetos com intenção.
+              </h2>
+              <p className="mt-6 max-w-2xl text-lg leading-relaxed text-black/55">
                 Cada entrega parte de um problema real e termina em uma
                 experiência direta, bonita e pronta para trabalhar pelo negócio.
               </p>

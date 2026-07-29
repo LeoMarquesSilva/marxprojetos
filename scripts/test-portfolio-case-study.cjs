@@ -93,7 +93,11 @@ try {
     }),
   );
 
-  assert.match(html, /Case selecionado/);
+  // O case é um cartão contido com selo, para não se confundir com o
+  // cabeçalho da seção que vem logo acima dele na página.
+  assert.match(html, />Case</);
+  assert.match(html, /rounded-\[2rem\][^"]*bg-white\/70/);
+  assert.match(html, /2 projetos/);
   assert.match(html, /Pereira Garcia Advocacia/);
   assert.equal((html.match(/Objetivo/g) ?? []).length, 2);
   assert.ok(html.indexOf("Site institucional") < html.indexOf("Landing page"));

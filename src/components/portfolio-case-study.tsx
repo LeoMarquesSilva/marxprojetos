@@ -19,30 +19,38 @@ export function PortfolioCaseStudy({
       aria-labelledby={`case-${portfolioCase.id}`}
       className="py-14 lg:py-24"
     >
-      <div className="grid gap-8 border-b border-black/15 pb-12 lg:grid-cols-[0.7fr_1.3fr] lg:items-end">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--insyt-primary)]">
-            Case selecionado
-          </p>
+      {/* Cartão contido, com selo sólido: sinaliza "um item dentro da seção".
+          O cabeçalho da seção, acima, é texto solto sobre o fundo — são tipos
+          diferentes de bloco, e não mais duas variações do mesmo. */}
+      <div className="rounded-[2rem] border border-black/10 bg-white/70 p-7 sm:p-10">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="rounded-full bg-[var(--insyt-primary)] px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-white">
+            Case
+          </span>
+          <span className="text-xs font-semibold uppercase tracking-[0.14em] text-black/40">
+            {portfolioCase.chapters.length}{" "}
+            {portfolioCase.chapters.length === 1 ? "projeto" : "projetos"}
+          </span>
+        </div>
+
+        <div className="mt-7 grid gap-7 lg:grid-cols-[0.85fr_1.15fr] lg:items-end">
           <h3
             id={`case-${portfolioCase.id}`}
-            className="mt-4 max-w-xl text-balance text-4xl font-bold leading-[0.95] tracking-[-0.045em] sm:text-6xl"
+            className="text-balance text-3xl font-bold leading-[0.98] tracking-[-0.04em] sm:text-5xl"
           >
             {portfolioCase.client}
           </h3>
-        </div>
-        <div className="lg:justify-self-end">
-          <p className="max-w-2xl text-pretty text-lg leading-relaxed text-black/60">
-            {portfolioCase.summary}
-          </p>
-          <div className="mt-7 flex flex-wrap gap-x-5 gap-y-2 text-xs font-semibold uppercase tracking-[0.14em] text-black/45">
-            {portfolioCase.services.map((service) => (
-              <span key={service}>{service}</span>
-            ))}
-            <span className="text-[var(--insyt-primary)]">
-              {portfolioCase.chapters.length}{" "}
-              {portfolioCase.chapters.length === 1 ? "projeto" : "projetos"}
-            </span>
+          <div>
+            <p className="text-pretty leading-relaxed text-black/60">
+              {portfolioCase.summary}
+            </p>
+            {portfolioCase.services.length > 0 ? (
+              <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-xs font-semibold uppercase tracking-[0.14em] text-black/45">
+                {portfolioCase.services.map((service) => (
+                  <span key={service}>{service}</span>
+                ))}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
