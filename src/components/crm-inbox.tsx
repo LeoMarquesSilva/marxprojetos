@@ -12,6 +12,7 @@ import {
   Loader2,
   MapPin,
   MessageCircle,
+  RefreshCw,
   Search,
   Star,
 } from "lucide-react";
@@ -23,7 +24,9 @@ import {
 } from "@/app/actions/crm";
 import {
   getCrmInboxChatContext,
+  getCrmWhatsappInbox,
   getCrmWhatsappThreadByJid,
+  syncWhatsAppInbox,
   updateCrmInboxNote,
 } from "@/app/actions/crm-whatsapp";
 import { CrmWhatsappThread } from "@/components/crm-whatsapp-thread";
@@ -152,6 +155,46 @@ export function CrmInbox({
     notes: CrmNote[];
     lastOutboundStatus: CrmWhatsappMessage["status"] | null;
   } | null>(null);
+  const [isSyncing, startSyncTransition] = useTransition();
+
+  function handleSyncWhatsApp() {
+    startSyncTransition(async () => {
+      const result = await syncWhatsAppInbox();
+      if ("error" in result && result.error) {
+        toast.error(result.error);
+        return;
+      }
+
+      const inbox = await getCrmWhatsappInbox();
+      setChats(inbox);
+
+      const nextActive =
+        activeJid && inbox.some((chat) => chat.remoteJid === activeJid)
+          ? activeJid
+          : (inbox[0]?.remoteJid ?? null);
+
+      setActiveJid(nextActive);
+
+      if (nextActive) {
+        try {
+          const thread = await getCrmWhatsappThreadByJid(nextActive);
+          setLoaded({
+            remoteJid: thread.remoteJid,
+            messages: thread.messages,
+          });
+        } catch {
+          setLoaded({ remoteJid: nextActive, messages: [] });
+        }
+      } else {
+        setLoaded(null);
+        setContext(null);
+      }
+
+      toast.success(
+        `${result.chatsUpserted ?? 0} conversas · ${result.messagesUpserted ?? 0} mensagens`,
+      );
+    });
+  }
 
   const isLoadingThread =
     activeJid !== null && loaded?.remoteJid !== activeJid;
@@ -340,42 +383,60 @@ export function CrmInbox({
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {filters.map((item) => {
-          const active = filter === item.id;
-          const stageAccent =
-            item.id !== "all" &&
-            item.id !== "unread" &&
-            item.id !== "unlinked"
-              ? STAGE_ACCENT[item.id]
-              : null;
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1">
+          {filters.map((item) => {
+            const active = filter === item.id;
+            const stageAccent =
+              item.id !== "all" &&
+              item.id !== "unread" &&
+              item.id !== "unlinked"
+                ? STAGE_ACCENT[item.id]
+                : null;
 
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setFilter(item.id)}
-              className={cn(
-                "inline-flex shrink-0 items-center gap-2 rounded-full px-3.5 py-2 text-xs font-semibold transition-colors",
-                active
-                  ? "bg-[var(--insyt-black)] text-white"
-                  : stageAccent
-                    ? cn(stageAccent.pillBg, stageAccent.pillText, "hover:opacity-90")
-                    : "bg-[var(--insyt-canvas)] text-[var(--insyt-slate)] hover:bg-[var(--insyt-canvas-alt)]",
-              )}
-            >
-              {item.label}
-              <span
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setFilter(item.id)}
                 className={cn(
-                  "tabular-nums",
-                  active ? "text-white/70" : "opacity-70",
+                  "inline-flex shrink-0 items-center gap-2 rounded-full px-3.5 py-2 text-xs font-semibold transition-colors",
+                  active
+                    ? "bg-[var(--insyt-black)] text-white"
+                    : stageAccent
+                      ? cn(stageAccent.pillBg, stageAccent.pillText, "hover:opacity-90")
+                      : "bg-[var(--insyt-canvas)] text-[var(--insyt-slate)] hover:bg-[var(--insyt-canvas-alt)]",
                 )}
               >
-                {item.count}
-              </span>
-            </button>
-          );
-        })}
+                {item.label}
+                <span
+                  className={cn(
+                    "tabular-nums",
+                    active ? "text-white/70" : "opacity-70",
+                  )}
+                >
+                  {item.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleSyncWhatsApp}
+          disabled={isSyncing}
+          className="shrink-0"
+        >
+          {isSyncing ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <RefreshCw className="size-4" />
+          )}
+          Sincronizar WhatsApp
+        </Button>
       </div>
 
       <div className="insyt-card grid min-h-[640px] overflow-hidden lg:grid-cols-[20rem_minmax(0,1fr)_18rem]">

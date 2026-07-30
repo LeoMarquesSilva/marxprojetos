@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Copy, Loader2, MessageCircle, MessagesSquare, Sparkles } from "lucide-react";
@@ -22,6 +22,28 @@ import {
 import { buildWaMeUrl, fillTemplate } from "@/lib/phone";
 import { INSYT_STUDIO_URL, type Prospect } from "@/types/prospecting";
 
+function withStudioLink(text: string) {
+  const trimmed = text.trim();
+  if (trimmed.includes("insytstudio.com.br")) return trimmed;
+  return `${trimmed}\n\nAlguns projetos nossos: ${INSYT_STUDIO_URL}`;
+}
+
+function buildProspectMessage(prospect: Prospect, template: string) {
+  const fromTemplate = fillTemplate(template, {
+    nome: prospect.name,
+    cidade: prospect.city,
+    hasSite: Boolean(prospect.website),
+    portfolioUrl: INSYT_STUDIO_URL,
+  });
+
+  // custom_message antiga pode ter sido salva sem o link — completa na hora.
+  if (prospect.custom_message?.trim()) {
+    return withStudioLink(prospect.custom_message);
+  }
+
+  return withStudioLink(fromTemplate);
+}
+
 export function ProspectingMessageSheet({
   prospect,
   template,
@@ -34,23 +56,24 @@ export function ProspectingMessageSheet({
   onOpenChange: (open: boolean) => void;
 }) {
   const portfolioUrl = INSYT_STUDIO_URL;
-  const [message, setMessage] = useState(
-    prospect.custom_message ??
-      fillTemplate(template, {
-        nome: prospect.name,
-        cidade: prospect.city,
-        hasSite: Boolean(prospect.website),
-        portfolioUrl,
-      }),
+  const [message, setMessage] = useState(() =>
+    buildProspectMessage(prospect, template),
   );
+
+  useEffect(() => {
+    if (!open) return;
+    setMessage(buildProspectMessage(prospect, template));
+  }, [open, prospect, template]);
   const [isSaving, startSaveTransition] = useTransition();
   const [isGenerating, startGenerateTransition] = useTransition();
   const [isSending, startSendTransition] = useTransition();
   const router = useRouter();
 
   function handleSave() {
+    const finalMessage = withStudioLink(message);
+    setMessage(finalMessage);
     startSaveTransition(async () => {
-      const result = await updateProspectMessage(prospect.id, message.trim());
+      const result = await updateProspectMessage(prospect.id, finalMessage);
       if (result.error) {
         toast.error(result.error);
         return;
@@ -67,25 +90,31 @@ export function ProspectingMessageSheet({
         toast.error(result.error);
         return;
       }
-      setMessage(result.message!);
+      setMessage(withStudioLink(result.message ?? ""));
       toast.success("Mensagem personalizada gerada!");
       router.refresh();
     });
   }
 
   function handleCopy() {
-    navigator.clipboard.writeText(message);
+    const finalMessage = withStudioLink(message);
+    setMessage(finalMessage);
+    navigator.clipboard.writeText(finalMessage);
     toast.success("Mensagem copiada!");
   }
 
   function handleOpenWhatsApp() {
     if (!prospect.phone_e164) return;
-    window.open(buildWaMeUrl(prospect.phone_e164, message), "_blank");
+    const finalMessage = withStudioLink(message);
+    setMessage(finalMessage);
+    window.open(buildWaMeUrl(prospect.phone_e164, finalMessage), "_blank");
   }
 
   function handleSendToConversas() {
+    const finalMessage = withStudioLink(message);
+    setMessage(finalMessage);
     startSendTransition(async () => {
-      const result = await sendProspectToConversas(prospect.id, message);
+      const result = await sendProspectToConversas(prospect.id, finalMessage);
       if (result.error) {
         toast.error(result.error);
         return;

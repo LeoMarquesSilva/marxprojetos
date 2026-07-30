@@ -17,6 +17,13 @@ function portfolioUrlForTemplate() {
   return INSYT_STUDIO_URL;
 }
 
+function ensureStudioLinkInMessage(message: string) {
+  const trimmed = message.trim();
+  if (!trimmed) return trimmed;
+  if (trimmed.includes("insytstudio.com.br")) return trimmed;
+  return `${trimmed}\n\nAlguns projetos nossos: ${INSYT_STUDIO_URL}`;
+}
+
 export async function getProspects() {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -42,24 +49,23 @@ export async function getProspectingTemplate() {
   const stored = data?.template?.trim();
   if (!stored) return DEFAULT_PROSPECTING_TEMPLATE;
 
-  // Modelo antigo sem link do portfólio: migra na leitura e persiste o novo
-  // texto padrão (só quando ainda é o template "de fábrica" anterior).
-  if (
-    !stored.includes("{{portfolio}}") &&
-    stored.includes("sou da INSYT") &&
-    stored.includes("{{site}}")
-  ) {
+  // Qualquer modelo sem o link do estúdio recebe a linha do portfólio —
+  // sem isso a mensagem de prospecção sai sem URL clicável no WhatsApp.
+  const hasStudioLink =
+    stored.includes("insytstudio.com.br") || stored.includes("{{portfolio}}");
+  if (!hasStudioLink) {
+    const migrated = `${stored}\n\nAlguns projetos nossos: ${INSYT_STUDIO_URL}`;
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (user) {
       await supabase.from("prospecting_settings").upsert({
         owner_id: user.id,
-        template: DEFAULT_PROSPECTING_TEMPLATE,
+        template: migrated,
         updated_at: new Date().toISOString(),
       });
     }
-    return DEFAULT_PROSPECTING_TEMPLATE;
+    return migrated;
   }
 
   return stored;
@@ -485,11 +491,13 @@ Regras:
   const json = (await response.json()) as {
     choices?: { message?: { content?: string } }[];
   };
-  const message = json.choices?.[0]?.message?.content?.trim();
+  const rawMessage = json.choices?.[0]?.message?.content?.trim();
 
-  if (!message) {
+  if (!rawMessage) {
     return { error: "A IA não retornou uma mensagem. Tente novamente." };
   }
+
+  const message = ensureStudioLinkInMessage(rawMessage);
 
   const { error: saveError } = await supabase
     .from("prospects")
@@ -565,7 +573,7 @@ export async function promoteToCrm(id: string) {
 // Envia a mensagem pelo WhatsApp (Evolution), coloca o lead no CRM, marca
 // como contatado e devolve o JID para abrir a inbox de Conversas.
 export async function sendProspectToConversas(id: string, message: string) {
-  const trimmed = message.trim();
+  const trimmed = ensureStudioLinkInMessage(message);
   if (!trimmed) return { error: "Escreva a mensagem antes de enviar." };
 
   const supabase = await createClient();

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { fetchWhatsAppProfile, sendWhatsAppText } from "@/lib/evolution";
+import { fetchWhatsAppProfile, findWhatsAppChats, findWhatsAppMessages, sendWhatsAppText } from "@/lib/evolution";
 import { normalizeBrPhone, phoneToRemoteJid, remoteJidToDigits } from "@/lib/phone";
 import type {
   CrmInboxChat,
@@ -435,4 +435,168 @@ export async function sendCrmWhatsappChatMessage(
   if (chat?.client_id) revalidatePath(`/crm/${chat.client_id}`);
   revalidatePath("/crm");
   return result;
+}
+
+const STATUS_FROM_EVOLUTION: Record<string, CrmWhatsappMessage["status"]> = {
+  pending: "pending",
+  server_ack: "server_ack",
+  delivery_ack: "delivery_ack",
+  read: "read",
+  played: "played",
+  error: "error",
+  // Baileys às vezes manda número/string diferente
+  "0": "pending",
+  "1": "server_ack",
+  "2": "delivery_ack",
+  "3": "read",
+  "4": "played",
+};
+
+function mapSyncedStatus(raw: string): CrmWhatsappMessage["status"] {
+  return STATUS_FROM_EVOLUTION[raw.toLowerCase()] ?? "server_ack";
+}
+
+async function buildPhoneClientIndex(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+) {
+  const { data: clients } = await supabase
+    .from("crm_clients")
+    .select("id, phone")
+    .not("phone", "is", null);
+
+  const byE164 = new Map<string, string>();
+  for (const client of clients ?? []) {
+    if (!client.phone) continue;
+    const e164 = normalizeBrPhone(client.phone).e164;
+    if (e164) byE164.set(e164, client.id);
+  }
+  return byE164;
+}
+
+async function runWithConcurrency<T>(
+  items: T[],
+  limit: number,
+  worker: (item: T) => Promise<void>,
+) {
+  let index = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (index < items.length) {
+      const current = items[index++];
+      await worker(current);
+    }
+  });
+  await Promise.all(runners);
+}
+
+// Puxa todas as conversas individuais da Evolution (findChats) e o histórico
+// recente de cada uma (findMessages), casando telefone com crm_clients.
+export async function syncWhatsAppInbox() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Sessão expirada. Faça login novamente." };
+
+  let chats;
+  try {
+    chats = await findWhatsAppChats();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { error: message };
+  }
+
+  const clientByPhone = await buildPhoneClientIndex(supabase);
+  const instance = process.env.EVOLUTION_INSTANCE ?? null;
+  let chatsUpserted = 0;
+  let messagesUpserted = 0;
+  let linkedClients = 0;
+  const messageErrors: string[] = [];
+
+  for (const chat of chats) {
+    const digits = remoteJidToDigits(chat.remoteJid);
+    const e164 = normalizeBrPhone(digits).e164;
+    const clientId = e164 ? (clientByPhone.get(e164) ?? null) : null;
+    if (clientId) linkedClients += 1;
+
+    const { error } = await supabase.from("crm_whatsapp_chats").upsert(
+      {
+        remote_jid: chat.remoteJid,
+        client_id: clientId,
+        instance,
+        push_name: chat.pushName,
+        profile_picture_url: chat.profilePictureUrl,
+        last_message_at: chat.lastMessageAt,
+        last_message_preview: chat.lastMessagePreview,
+        unread_count: chat.unreadCount,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "remote_jid" },
+    );
+
+    if (!error) chatsUpserted += 1;
+  }
+
+  // Histórico recente por conversa — em paralelo limitado para não estourar timeout.
+  await runWithConcurrency(chats, 4, async (chat) => {
+    try {
+      const messages = await findWhatsAppMessages(chat.remoteJid, 100);
+      if (messages.length === 0) return;
+
+      const digits = remoteJidToDigits(chat.remoteJid);
+      const e164 = normalizeBrPhone(digits).e164;
+      const clientId = e164 ? (clientByPhone.get(e164) ?? null) : null;
+
+      const rows = messages.map((message) => ({
+        remote_jid: message.remoteJid,
+        client_id: clientId,
+        from_me: message.fromMe,
+        conteudo: message.content,
+        status: mapSyncedStatus(message.status),
+        provider_message_id: message.providerMessageId,
+        created_at: message.createdAt,
+        reactions: [],
+      }));
+
+      const { error, count } = await supabase
+        .from("crm_whatsapp_mensagens")
+        .upsert(rows, {
+          onConflict: "provider_message_id",
+          ignoreDuplicates: false,
+          count: "exact",
+        });
+
+      if (error) {
+        messageErrors.push(`${chat.remoteJid}: ${error.message}`);
+        return;
+      }
+
+      messagesUpserted += count ?? rows.length;
+
+      const last = messages[messages.length - 1];
+      if (last) {
+        await supabase
+          .from("crm_whatsapp_chats")
+          .update({
+            last_message_at: last.createdAt,
+            last_message_preview: (last.content ?? "").slice(0, 140),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("remote_jid", chat.remoteJid);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      messageErrors.push(`${chat.remoteJid}: ${message}`);
+    }
+  });
+
+  revalidatePath("/crm");
+
+  return {
+    success: true as const,
+    chatsFound: chats.length,
+    chatsUpserted,
+    messagesUpserted,
+    linkedClients,
+    messageErrors: messageErrors.slice(0, 5),
+  };
 }

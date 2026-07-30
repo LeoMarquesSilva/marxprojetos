@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   ExternalLink,
@@ -64,6 +65,7 @@ import {
   promoteToCrm,
   refreshEnrichment,
   searchPlaces,
+  sendProspectToConversas,
   updateProspectStatus,
 } from "@/app/actions/prospecting";
 import { buildWaMeUrl, fillTemplate } from "@/lib/phone";
@@ -90,9 +92,11 @@ export function ProspectingBoard({
   const [onlyNoSite, setOnlyNoSite] = useState(false);
   const [messageProspect, setMessageProspect] = useState<Prospect | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Prospect | null>(null);
+  const [sendingId, setSendingId] = useState<string | null>(null);
   const [isSearching, startSearchTransition] = useTransition();
   const [isEnriching, startEnrichTransition] = useTransition();
   const [, startTransition] = useTransition();
+  const router = useRouter();
 
   const prospects = initialProspects;
   const hasPendingEnrichment = prospects.some((p) => p.enrich_job_id);
@@ -157,20 +161,45 @@ export function ProspectingBoard({
   }
 
   function messageFor(p: Prospect) {
-    return (
+    const base =
       p.custom_message ??
       fillTemplate(template, {
         nome: p.name,
         cidade: p.city,
         hasSite: Boolean(p.website),
         portfolioUrl: INSYT_STUDIO_URL,
-      })
-    );
+      });
+    if (base.includes("insytstudio.com.br")) return base;
+    return `${base.trim()}\n\nAlguns projetos nossos: ${INSYT_STUDIO_URL}`;
   }
 
   function handleOpenWhatsApp(p: Prospect) {
     if (!p.phone_e164) return;
     window.open(buildWaMeUrl(p.phone_e164, messageFor(p)), "_blank");
+  }
+
+  function handleSendWhatsApp(p: Prospect) {
+    if (!p.phone_e164) {
+      toast.error("Este lead não tem telefone válido.");
+      return;
+    }
+
+    setSendingId(p.id);
+    startTransition(async () => {
+      const result = await sendProspectToConversas(p.id, messageFor(p));
+      setSendingId(null);
+
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+
+      toast.success("Mensagem enviada pelo WhatsApp da INSYT");
+      router.push(
+        `/crm?view=conversas&chat=${encodeURIComponent(result.remoteJid!)}`,
+      );
+      router.refresh();
+    });
   }
 
   function handleCopyMessage(p: Prospect) {
@@ -419,6 +448,21 @@ export function ProspectingBoard({
                     </Select>
                   </TableCell>
                   <TableCell className="py-4 pr-6">
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={!p.phone_e164 || sendingId === p.id}
+                        onClick={() => handleSendWhatsApp(p)}
+                        title="Enviar pelo WhatsApp da INSYT"
+                      >
+                        {sendingId === p.id ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <MessageCircle className="size-4" />
+                        )}
+                        <span className="hidden sm:inline">Enviar</span>
+                      </Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger
                         render={
@@ -429,11 +473,17 @@ export function ProspectingBoard({
                       />
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem
+                          disabled={!p.phone_e164 || sendingId === p.id}
+                          onClick={() => handleSendWhatsApp(p)}
+                        >
+                          <MessageCircle className="size-4" />
+                          Enviar pelo WhatsApp
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
                           disabled={!p.phone_e164}
                           onClick={() => handleOpenWhatsApp(p)}
                         >
-                          <MessageCircle className="size-4" />
-                          Abrir WhatsApp
+                          Abrir no wa.me
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleCopyMessage(p)}>
                           Copiar mensagem
@@ -464,6 +514,7 @@ export function ProspectingBoard({
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

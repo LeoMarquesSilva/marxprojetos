@@ -31,7 +31,7 @@ export const DEFAULT_PROSPECTING_TEMPLATE = `Olá! Tudo bem?
 
 Me chamo Leonardo, da INSYT (criamos sites para negócios de {{cidade}}). {{site}} Posso te mostrar em 2 minutos como ficaria o site, sem compromisso?
 
-Alguns projetos nossos: {{portfolio}}`;
+Alguns projetos nossos: https://www.insytstudio.com.br/`;
 
 export type Prospect = {
   id: string;

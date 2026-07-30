@@ -1,10 +1,11 @@
 import "server-only";
-import { remoteJidToDigits } from "@/lib/phone";
+import { isGroupJid, remoteJidToDigits } from "@/lib/phone";
 
 // Delay curto só para o indicador "digitando..." — 1,2s deixava o envio
 // perceptivelmente lento no CRM 1:1. Rajadas em massa é outro caso.
 const SEND_DELAY_MS = 350;
 const REQUEST_TIMEOUT_MS = 20_000;
+const SYNC_TIMEOUT_MS = 60_000;
 
 type EvolutionSendTextResponse = {
   key?: { id?: string };
@@ -19,6 +20,25 @@ export type EvolutionContactProfile = {
   businessWebsite: string | null;
   businessEmail: string | null;
   businessAddress: string | null;
+};
+
+export type EvolutionChatSummary = {
+  remoteJid: string;
+  pushName: string | null;
+  profilePictureUrl: string | null;
+  unreadCount: number;
+  lastMessageAt: string | null;
+  lastMessagePreview: string | null;
+  lastMessageFromMe: boolean | null;
+};
+
+export type EvolutionSyncedMessage = {
+  providerMessageId: string;
+  remoteJid: string;
+  fromMe: boolean;
+  content: string | null;
+  createdAt: string;
+  status: string;
 };
 
 function requireEnv(name: string): string {
@@ -36,20 +56,206 @@ function evolutionUrl(path: string): string {
   return `${base}${path}`;
 }
 
-async function evolutionPost<T>(path: string, body: unknown): Promise<T | null> {
+async function evolutionFetch(
+  path: string,
+  {
+    method = "POST",
+    body,
+    timeoutMs = REQUEST_TIMEOUT_MS,
+  }: {
+    method?: "GET" | "POST";
+    body?: unknown;
+    timeoutMs?: number;
+  } = {},
+): Promise<{ ok: boolean; status: number; data: unknown }> {
   const apiKey = requireEnv("EVOLUTION_API_KEY");
   const response = await fetch(evolutionUrl(path), {
-    method: "POST",
+    method,
     headers: {
       "Content-Type": "application/json",
       apikey: apiKey,
     },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(timeoutMs),
   });
 
-  if (!response.ok) return null;
-  return (await response.json().catch(() => null)) as T | null;
+  const data = await response.json().catch(() => null);
+  return { ok: response.ok, status: response.status, data };
+}
+
+async function evolutionPost<T>(path: string, body: unknown): Promise<T | null> {
+  const result = await evolutionFetch(path, { body });
+  if (!result.ok) return null;
+  return result.data as T | null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function extractTextFromMessage(message: unknown): string | null {
+  const msg = asRecord(message);
+  if (!msg) return null;
+  if (typeof msg.conversation === "string") return msg.conversation;
+  const extended = asRecord(msg.extendedTextMessage);
+  if (typeof extended?.text === "string") return extended.text;
+  const image = asRecord(msg.imageMessage);
+  if (typeof image?.caption === "string" && image.caption) return image.caption;
+  if (image) return "[imagem]";
+  const audio = asRecord(msg.audioMessage);
+  if (audio) return "[áudio]";
+  const document = asRecord(msg.documentMessage);
+  if (document) return "[documento]";
+  const video = asRecord(msg.videoMessage);
+  if (typeof video?.caption === "string" && video.caption) return video.caption;
+  if (video) return "[vídeo]";
+  const sticker = asRecord(msg.stickerMessage);
+  if (sticker) return "[figurinha]";
+  const reaction = asRecord(msg.reactionMessage);
+  if (reaction) return null;
+  return null;
+}
+
+function timestampToIso(value: unknown): string | null {
+  if (value == null) return null;
+  if (typeof value === "string") {
+    const asNumber = Number(value);
+    if (!Number.isNaN(asNumber) && asNumber > 0) {
+      const ms = asNumber < 1e12 ? asNumber * 1000 : asNumber;
+      return new Date(ms).toISOString();
+    }
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+  }
+  if (typeof value === "number") {
+    const ms = value < 1e12 ? value * 1000 : value;
+    return new Date(ms).toISOString();
+  }
+  return null;
+}
+
+function normalizeChatList(data: unknown): unknown[] {
+  if (Array.isArray(data)) return data;
+  const record = asRecord(data);
+  if (!record) return [];
+  if (Array.isArray(record.chats)) return record.chats;
+  if (Array.isArray(record.data)) return record.data;
+  if (Array.isArray(record.records)) return record.records;
+  return [];
+}
+
+function normalizeMessageList(data: unknown): unknown[] {
+  if (Array.isArray(data)) return data;
+  const record = asRecord(data);
+  if (!record) return [];
+  if (Array.isArray(record.messages)) return record.messages;
+  if (Array.isArray(record.data)) return record.data;
+  if (Array.isArray(record.records)) return record.records;
+  const nested = asRecord(record.messages);
+  if (nested && Array.isArray(nested.records)) return nested.records;
+  return [];
+}
+
+function mapEvolutionChat(raw: unknown): EvolutionChatSummary | null {
+  const chat = asRecord(raw);
+  if (!chat) return null;
+
+  const remoteJid =
+    (typeof chat.remoteJid === "string" && chat.remoteJid) ||
+    (typeof chat.id === "string" && chat.id.includes("@") ? chat.id : null) ||
+    (typeof asRecord(chat.key)?.remoteJid === "string"
+      ? (asRecord(chat.key)!.remoteJid as string)
+      : null);
+
+  if (!remoteJid || isGroupJid(remoteJid)) return null;
+  if (remoteJid.endsWith("@broadcast") || remoteJid.includes("status@")) {
+    return null;
+  }
+
+  const lastMessage = asRecord(chat.lastMessage);
+  const lastKey = asRecord(lastMessage?.key);
+  const preview =
+    extractTextFromMessage(lastMessage?.message) ??
+    (typeof chat.lastMessagePreview === "string"
+      ? chat.lastMessagePreview
+      : null) ??
+    (typeof lastMessage?.conversation === "string"
+      ? lastMessage.conversation
+      : null);
+
+  const lastMessageAt =
+    timestampToIso(chat.lastMsgTimestamp) ??
+    timestampToIso(chat.updatedAt) ??
+    timestampToIso(lastMessage?.messageTimestamp) ??
+    timestampToIso(chat.conversationTimestamp);
+
+  return {
+    remoteJid,
+    pushName:
+      (typeof chat.pushName === "string" && chat.pushName) ||
+      (typeof chat.name === "string" && chat.name) ||
+      null,
+    profilePictureUrl:
+      (typeof chat.profilePicUrl === "string" && chat.profilePicUrl) ||
+      (typeof chat.profilePictureUrl === "string" && chat.profilePictureUrl) ||
+      null,
+    unreadCount:
+      typeof chat.unreadCount === "number"
+        ? chat.unreadCount
+        : typeof chat.unreadCount === "string"
+          ? Number(chat.unreadCount) || 0
+          : 0,
+    lastMessageAt,
+    lastMessagePreview: preview ? preview.slice(0, 140) : null,
+    lastMessageFromMe:
+      typeof lastKey?.fromMe === "boolean" ? lastKey.fromMe : null,
+  };
+}
+
+function mapEvolutionMessage(
+  raw: unknown,
+  fallbackRemoteJid?: string,
+): EvolutionSyncedMessage | null {
+  const item = asRecord(raw);
+  if (!item) return null;
+
+  const key = asRecord(item.key);
+  const providerMessageId =
+    (typeof key?.id === "string" && key.id) ||
+    (typeof item.id === "string" && item.id) ||
+    null;
+  const remoteJid =
+    (typeof key?.remoteJid === "string" && key.remoteJid) ||
+    (typeof item.remoteJid === "string" && item.remoteJid) ||
+    fallbackRemoteJid ||
+    null;
+
+  if (!providerMessageId || !remoteJid || isGroupJid(remoteJid)) return null;
+
+  const fromMe = Boolean(key?.fromMe ?? item.fromMe);
+  const content = extractTextFromMessage(item.message) ?? "[mensagem sem texto]";
+  const createdAt =
+    timestampToIso(item.messageTimestamp) ??
+    timestampToIso(item.createdAt) ??
+    new Date().toISOString();
+
+  const statusRaw =
+    typeof item.status === "string"
+      ? item.status.toLowerCase()
+      : fromMe
+        ? "server_ack"
+        : "delivery_ack";
+
+  return {
+    providerMessageId,
+    remoteJid,
+    fromMe,
+    content,
+    createdAt,
+    status: statusRaw,
+  };
 }
 
 export async function sendWhatsAppText(
@@ -58,29 +264,21 @@ export async function sendWhatsAppText(
 ): Promise<{ providerMessageId: string | null }> {
   const instance = requireEnv("EVOLUTION_INSTANCE");
 
-  const response = await fetch(
-    evolutionUrl(`/message/sendText/${encodeURIComponent(instance)}`),
+  const result = await evolutionFetch(
+    `/message/sendText/${encodeURIComponent(instance)}`,
     {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: requireEnv("EVOLUTION_API_KEY"),
-      },
-      body: JSON.stringify({
+      body: {
         number: remoteJidToDigits(remoteJid),
         text,
         delay: SEND_DELAY_MS,
-      }),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      },
     },
   );
 
-  const data = (await response.json().catch(() => null)) as
-    | EvolutionSendTextResponse
-    | null;
+  const data = result.data as EvolutionSendTextResponse | null;
 
-  if (!response.ok) {
-    const detail = data ? JSON.stringify(data) : `HTTP ${response.status}`;
+  if (!result.ok) {
+    const detail = data ? JSON.stringify(data) : `HTTP ${result.status}`;
     throw new Error(`Evolution recusou o envio: ${detail}`);
   }
 
@@ -152,4 +350,59 @@ export async function fetchWhatsAppProfile(
     businessEmail: profile?.businessProfile?.email ?? null,
     businessAddress: profile?.businessProfile?.address ?? null,
   };
+}
+
+// Docs: POST /chat/findChats/:instance
+export async function findWhatsAppChats(): Promise<EvolutionChatSummary[]> {
+  const instance = requireEnv("EVOLUTION_INSTANCE");
+  const result = await evolutionFetch(
+    `/chat/findChats/${encodeURIComponent(instance)}`,
+    { body: {}, timeoutMs: SYNC_TIMEOUT_MS },
+  );
+
+  if (!result.ok) {
+    throw new Error(
+      `Evolution findChats falhou (HTTP ${result.status}): ${JSON.stringify(result.data)}`,
+    );
+  }
+
+  return normalizeChatList(result.data)
+    .map(mapEvolutionChat)
+    .filter((chat): chat is EvolutionChatSummary => Boolean(chat));
+}
+
+// Docs: POST /chat/findMessages/:instance
+export async function findWhatsAppMessages(
+  remoteJid: string,
+  limit = 80,
+): Promise<EvolutionSyncedMessage[]> {
+  const instance = requireEnv("EVOLUTION_INSTANCE");
+  const result = await evolutionFetch(
+    `/chat/findMessages/${encodeURIComponent(instance)}`,
+    {
+      body: {
+        where: {
+          key: {
+            remoteJid,
+          },
+        },
+        limit,
+      },
+      timeoutMs: SYNC_TIMEOUT_MS,
+    },
+  );
+
+  if (!result.ok) {
+    throw new Error(
+      `Evolution findMessages falhou (HTTP ${result.status}): ${JSON.stringify(result.data)}`,
+    );
+  }
+
+  return normalizeMessageList(result.data)
+    .map((item) => mapEvolutionMessage(item, remoteJid))
+    .filter((message): message is EvolutionSyncedMessage => Boolean(message))
+    .sort(
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
 }

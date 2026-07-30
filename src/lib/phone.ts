@@ -65,9 +65,17 @@ export function fillTemplate(
 
   // {{site}} primeiro: a frase pode citar o nome, e {{nome}} ainda precisa
   // ser expandido no restante do template.
-  return template
+  let filled = template
     .replaceAll("{{site}}", sitePhrase)
     .replaceAll("{{nome}}", vars.nome)
     .replaceAll("{{cidade}}", vars.cidade)
     .replaceAll("{{portfolio}}", portfolio);
+
+  // Garante o link clicável na mensagem final — modelo antigo/customizado
+  // às vezes não traz {{portfolio}} nem a URL.
+  if (!filled.includes("insytstudio.com.br")) {
+    filled = `${filled.trim()}\n\nAlguns projetos nossos: ${portfolio}`;
+  }
+
+  return filled;
 }
