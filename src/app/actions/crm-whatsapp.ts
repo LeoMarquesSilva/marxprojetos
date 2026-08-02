@@ -7,7 +7,7 @@ import { normalizeBrPhone, phoneToRemoteJid, remoteJidToDigits } from "@/lib/pho
 import type {
   CrmInboxChat,
   CrmInboxProspect,
-  CrmNote,
+
   CrmStage,
   CrmWhatsappMessage,
   CrmWhatsappReaction,
@@ -54,7 +54,7 @@ export async function getCrmWhatsappInbox(): Promise<CrmInboxChat[]> {
     supabase
       .from("crm_whatsapp_chats")
       .select(
-        "remote_jid, client_id, push_name, profile_name, profile_picture_url, profile_status, last_message_at, last_message_preview, unread_count, inbox_note",
+        "remote_jid, client_id, push_name, profile_name, profile_picture_url, profile_status, last_message_at, last_message_preview, unread_count, inbox_note, origem",
       )
       .order("last_message_at", { ascending: false, nullsFirst: false }),
     supabase
@@ -91,6 +91,7 @@ export async function getCrmWhatsappInbox(): Promise<CrmInboxChat[]> {
     lastMessagePreview: chat.last_message_preview,
     unreadCount: chat.unread_count ?? 0,
     inboxNote: chat.inbox_note,
+    origem: (chat.origem as CrmInboxChat["origem"]) ?? null,
     client: chat.client_id ? (clientById.get(chat.client_id) ?? null) : null,
   }));
 }
@@ -184,7 +185,7 @@ async function matchProspectByPhone(
 export async function getCrmInboxChatContext(remoteJid: string): Promise<{
   chat: CrmInboxChat | null;
   prospect: CrmInboxProspect | null;
-  notes: CrmNote[];
+
   lastOutboundStatus: CrmWhatsappMessage["status"] | null;
 }> {
   const supabase = await createClient();
@@ -192,13 +193,13 @@ export async function getCrmInboxChatContext(remoteJid: string): Promise<{
   const { data: chatRow } = await supabase
     .from("crm_whatsapp_chats")
     .select(
-      "remote_jid, client_id, push_name, profile_name, profile_picture_url, profile_status, profile_fetched_at, last_message_at, last_message_preview, unread_count, inbox_note",
+      "remote_jid, client_id, push_name, profile_name, profile_picture_url, profile_status, profile_fetched_at, last_message_at, last_message_preview, unread_count, inbox_note, origem",
     )
     .eq("remote_jid", remoteJid)
     .maybeSingle();
 
   if (!chatRow) {
-    return { chat: null, prospect: null, notes: [], lastOutboundStatus: null };
+    return { chat: null, prospect: null, lastOutboundStatus: null };
   }
 
   const fetchedAt = chatRow.profile_fetched_at
@@ -234,22 +235,13 @@ export async function getCrmInboxChatContext(remoteJid: string): Promise<{
   }
 
   let client: CrmInboxChat["client"] = null;
-  let notes: CrmNote[] = [];
 
   if (chatRow.client_id) {
-    const [{ data: clientRow }, { data: noteRows }] = await Promise.all([
-      supabase
-        .from("crm_clients")
-        .select("id, name, company, phone, email, source, stage, value")
-        .eq("id", chatRow.client_id)
-        .maybeSingle(),
-      supabase
-        .from("crm_notes")
-        .select("*")
-        .eq("client_id", chatRow.client_id)
-        .order("created_at", { ascending: false })
-        .limit(8),
-    ]);
+    const { data: clientRow } = await supabase
+      .from("crm_clients")
+      .select("id, name, company, phone, email, source, stage, value")
+      .eq("id", chatRow.client_id)
+      .maybeSingle();
 
     if (clientRow) {
       client = {
@@ -263,7 +255,6 @@ export async function getCrmInboxChatContext(remoteJid: string): Promise<{
         value: clientRow.value == null ? null : Number(clientRow.value),
       };
     }
-    notes = (noteRows ?? []) as CrmNote[];
   }
 
   const prospect = await matchProspectByPhone(remoteJidToDigits(remoteJid));
@@ -288,10 +279,11 @@ export async function getCrmInboxChatContext(remoteJid: string): Promise<{
       lastMessagePreview: chatRow.last_message_preview,
       unreadCount: chatRow.unread_count ?? 0,
       inboxNote: chatRow.inbox_note,
+      origem: (chatRow.origem as CrmInboxChat["origem"]) ?? null,
       client,
     },
     prospect,
-    notes,
+
     lastOutboundStatus:
       (lastOutbound?.status as CrmWhatsappMessage["status"] | undefined) ?? null,
   };

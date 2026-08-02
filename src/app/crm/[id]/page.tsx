@@ -6,8 +6,7 @@ import { ArrowLeft, Building2, Mail, Phone, Tag } from "lucide-react";
 import { AdminShell } from "@/components/admin-shell";
 import { CrmStageSelect } from "@/components/crm-stage-select";
 import { CrmLinkBriefing } from "@/components/crm-link-briefing";
-import { CrmTasks } from "@/components/crm-tasks";
-import { CrmNotes } from "@/components/crm-notes";
+import { CrmNextStep } from "@/components/crm-next-step";
 import { CrmWhatsappThread } from "@/components/crm-whatsapp-thread";
 import { CrmDeleteClientButton } from "@/components/crm-delete-client-button";
 import { CrmEditClientSheet } from "@/components/crm-edit-client-sheet";
@@ -34,7 +33,7 @@ export default async function CrmClientPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { client, tasks, notes } = await getCrmClient(id);
+  const { client } = await getCrmClient(id);
   if (!client) notFound();
 
   const linkableProjects = await getLinkableProjects(client.project_id);
@@ -164,21 +163,17 @@ export default async function CrmClientPage({
 
             <Card className="insyt-card border-none shadow-none">
               <CardHeader>
-                <CardTitle>Tarefas</CardTitle>
-                <CardDescription>Follow-ups e lembretes para este cliente.</CardDescription>
+                <CardTitle>Próximo passo</CardTitle>
+                <CardDescription>
+                  O que fazer com este lead, e quando.
+                </CardDescription>
               </CardHeader>
               <CardContent>
-                <CrmTasks clientId={client.id} initialTasks={tasks} />
-              </CardContent>
-            </Card>
-
-            <Card className="insyt-card border-none shadow-none">
-              <CardHeader>
-                <CardTitle>Histórico</CardTitle>
-                <CardDescription>Ligações, reuniões e observações.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <CrmNotes clientId={client.id} initialNotes={notes} />
+                <CrmNextStep
+                  clientId={client.id}
+                  initialStep={client.next_step}
+                  initialDate={client.next_step_at}
+                />
               </CardContent>
             </Card>
           </div>

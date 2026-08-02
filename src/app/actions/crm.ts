@@ -7,9 +7,7 @@ import type {
   CrmBoardClient,
   CrmClient,
   CrmClientChatSignal,
-  CrmNote,
   CrmStage,
-  CrmTask,
 } from "@/types/crm";
 
 export async function getCrmClients() {
@@ -68,25 +66,7 @@ export async function getCrmClient(id: string) {
     .maybeSingle();
 
   if (error) throw new Error(error.message);
-  if (!client) return { client: null, tasks: [], notes: [] };
-
-  const { data: tasks } = await supabase
-    .from("crm_tasks")
-    .select("*")
-    .eq("client_id", id)
-    .order("due_date", { ascending: true, nullsFirst: false });
-
-  const { data: notes } = await supabase
-    .from("crm_notes")
-    .select("*")
-    .eq("client_id", id)
-    .order("created_at", { ascending: false });
-
-  return {
-    client: client as CrmClient,
-    tasks: (tasks ?? []) as CrmTask[],
-    notes: (notes ?? []) as CrmNote[],
-  };
+  return { client: (client as CrmClient) ?? null };
 }
 
 type CreateCrmClientInput = {
@@ -116,7 +96,7 @@ export async function createCrmClient(input: CreateCrmClientInput) {
       email: input.email || null,
       phone: input.phone || null,
       source: input.source || null,
-      stage: input.stage ?? "lead",
+      stage: input.stage ?? "enviado",
       value: input.value ?? null,
     })
     .select("id")
@@ -206,52 +186,29 @@ export async function deleteCrmClient(id: string) {
   return { success: true };
 }
 
-export async function createCrmTask(
+// Tarefas e histórico foram removidos: as duas tabelas ficaram com zero
+// linhas desde a criação. No lugar entrou um "próximo passo" único, que
+// responde a mesma pergunta sem virar duas listas para manter.
+export async function updateCrmNextStep(
   clientId: string,
-  title: string,
-  dueDate?: string,
+  input: { step: string; date: string | null },
 ) {
   const supabase = await createClient();
-  const { error } = await supabase.from("crm_tasks").insert({
-    client_id: clientId,
-    title,
-    due_date: dueDate || null,
-  });
+  const step = input.step.trim();
 
-  if (error) return { error: error.message };
-  revalidatePath(`/crm/${clientId}`);
-  return { success: true };
-}
-
-export async function toggleCrmTask(id: string, clientId: string, done: boolean) {
-  const supabase = await createClient();
   const { error } = await supabase
-    .from("crm_tasks")
-    .update({ done, done_at: done ? new Date().toISOString() : null })
-    .eq("id", id);
+    .from("crm_clients")
+    .update({
+      next_step: step || null,
+      // Data sem passo não significa nada — limpa junto.
+      next_step_at: step && input.date ? `${input.date}T12:00:00Z` : null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", clientId);
 
   if (error) return { error: error.message };
+
   revalidatePath(`/crm/${clientId}`);
-  return { success: true };
-}
-
-export async function deleteCrmTask(id: string, clientId: string) {
-  const supabase = await createClient();
-  const { error } = await supabase.from("crm_tasks").delete().eq("id", id);
-
-  if (error) return { error: error.message };
-  revalidatePath(`/crm/${clientId}`);
-  return { success: true };
-}
-
-export async function createCrmNote(clientId: string, body: string) {
-  const supabase = await createClient();
-  const { error } = await supabase.from("crm_notes").insert({
-    client_id: clientId,
-    body,
-  });
-
-  if (error) return { error: error.message };
-  revalidatePath(`/crm/${clientId}`);
+  revalidatePath("/crm");
   return { success: true };
 }

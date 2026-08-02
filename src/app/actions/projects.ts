@@ -101,7 +101,7 @@ export async function createProject(input: CreateProjectInput) {
       name: input.clientName.trim(),
       company: input.clientCompany?.trim() || null,
       email: input.clientEmail?.trim() || null,
-      stage: "lead",
+      stage: "enviado",
       project_id: data.id,
     });
   }

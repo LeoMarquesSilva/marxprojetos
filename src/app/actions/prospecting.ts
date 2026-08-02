@@ -525,7 +525,7 @@ async function promoteProspectToCrm(
       phone: prospect.phone,
       email: prospect.email,
       source: "Prospecção",
-      stage: "lead",
+      stage: "enviado",
     })
     .select("id")
     .single();
@@ -627,6 +627,10 @@ export async function sendProspectToConversas(id: string, message: string) {
       client_id: crmClientId,
       instance: process.env.EVOLUTION_INSTANCE ?? null,
       push_name: prospect.name,
+      // Nasceu de um disparo seu: é conversa de venda, não contato pessoal
+      // que já existia no celular. A inbox usa isso para não afogar o
+      // trabalho comercial no meio das outras conversas do número.
+      origem: "prospeccao",
       updated_at: new Date().toISOString(),
     },
     { onConflict: "remote_jid" },

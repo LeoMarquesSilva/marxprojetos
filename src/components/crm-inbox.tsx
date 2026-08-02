@@ -17,11 +17,7 @@ import {
   Star,
 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  createCrmNote,
-  updateCrmClient,
-  updateCrmClientStage,
-} from "@/app/actions/crm";
+import { updateCrmClient, updateCrmClientStage } from "@/app/actions/crm";
 import {
   getCrmInboxChatContext,
   getCrmWhatsappInbox,
@@ -41,7 +37,6 @@ import {
   STAGE_LABELS,
   type CrmInboxChat,
   type CrmInboxProspect,
-  type CrmNote,
   type CrmStage,
   type CrmWhatsappMessage,
 } from "@/types/crm";
@@ -52,7 +47,15 @@ const currencyFormatter = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 0,
 });
 
-type Filter = "all" | "unread" | "unlinked" | CrmStage;
+type Filter = "prospeccao" | "all" | "unread" | "unlinked" | CrmStage;
+
+// Filtros que não são estágio do funil — usados para decidir se a conversa
+// deve ser comparada contra chat.client.stage.
+const NON_STAGE_FILTERS: Filter[] = ["prospeccao", "all", "unread", "unlinked"];
+
+function isStageFilter(filter: Filter): filter is CrmStage {
+  return !NON_STAGE_FILTERS.includes(filter);
+}
 
 function initialsOf(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -135,7 +138,10 @@ export function CrmInbox({
 }) {
   const [chats, setChats] = useState(initialChats);
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
+  // Abre em "Prospecção": o número tem dezenas de conversas pessoais que já
+  // existiam no celular, e elas afogavam o trabalho comercial quando a
+  // inbox abria em "Todas".
+  const [filter, setFilter] = useState<Filter>("prospeccao");
   const [activeJid, setActiveJid] = useState<string | null>(() => {
     if (
       initialActiveJid &&
@@ -152,7 +158,6 @@ export function CrmInbox({
   const [context, setContext] = useState<{
     chat: CrmInboxChat;
     prospect: CrmInboxProspect | null;
-    notes: CrmNote[];
     lastOutboundStatus: CrmWhatsappMessage["status"] | null;
   } | null>(null);
   const [isSyncing, startSyncTransition] = useTransition();
@@ -295,7 +300,6 @@ export function CrmInbox({
         setContext({
           chat: enriched,
           prospect: result.prospect,
-          notes: result.notes,
           lastOutboundStatus: result.lastOutboundStatus,
         });
         setChats((prev) =>
@@ -325,9 +329,11 @@ export function CrmInbox({
     ) as Record<CrmStage, number>;
     let unread = 0;
     let unlinked = 0;
+    let prospeccao = 0;
 
     for (const chat of chats) {
       if (chat.unreadCount > 0) unread += 1;
+      if (chat.origem === "prospeccao" || chat.client) prospeccao += 1;
       if (!chat.client) {
         unlinked += 1;
         continue;
@@ -335,22 +341,24 @@ export function CrmInbox({
       byStage[chat.client.stage] += 1;
     }
 
-    return { byStage, unread, unlinked, total: chats.length };
+    return { byStage, unread, unlinked, prospeccao, total: chats.length };
   }, [chats]);
 
   const visibleChats = useMemo(() => {
     const term = query.trim().toLowerCase();
     return chats.filter((chat) => {
-      if (filter === "unread" && chat.unreadCount === 0) return false;
-      if (filter === "unlinked" && chat.client) return false;
+      // Conversa vinculada a cliente é de venda mesmo que a origem não
+      // tenha sido marcada (conversas anteriores a este campo).
       if (
-        filter !== "all" &&
-        filter !== "unread" &&
-        filter !== "unlinked" &&
-        chat.client?.stage !== filter
+        filter === "prospeccao" &&
+        chat.origem !== "prospeccao" &&
+        !chat.client
       ) {
         return false;
       }
+      if (filter === "unread" && chat.unreadCount === 0) return false;
+      if (filter === "unlinked" && chat.client) return false;
+      if (isStageFilter(filter) && chat.client?.stage !== filter) return false;
       if (!term) return true;
       const haystack = [
         chat.client?.name,
@@ -371,6 +379,7 @@ export function CrmInbox({
     activeJid ? (chats.find((chat) => chat.remoteJid === activeJid) ?? null) : null;
 
   const filters: { id: Filter; label: string; count: number }[] = [
+    { id: "prospeccao", label: "Prospecção", count: counts.prospeccao },
     { id: "all", label: "Todas", count: counts.total },
     { id: "unread", label: "Não lidas", count: counts.unread },
     ...STAGE_COLUMNS.map((stage) => ({
@@ -387,12 +396,9 @@ export function CrmInbox({
         <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1">
           {filters.map((item) => {
             const active = filter === item.id;
-            const stageAccent =
-              item.id !== "all" &&
-              item.id !== "unread" &&
-              item.id !== "unlinked"
-                ? STAGE_ACCENT[item.id]
-                : null;
+            const stageAccent = isStageFilter(item.id)
+              ? STAGE_ACCENT[item.id]
+              : null;
 
             return (
               <button
@@ -671,11 +677,6 @@ export function CrmInbox({
                 : prev,
             );
           }}
-          onClientNoteAdded={(note) => {
-            setContext((prev) =>
-              prev ? { ...prev, notes: [note, ...prev.notes] } : prev,
-            );
-          }}
           onClientUpdated={(client) => {
             if (!activeChat) return;
             setChats((prev) =>
@@ -701,29 +702,24 @@ function InboxDetailsPanel({
   activeChat,
   context,
   onNoteSaved,
-  onClientNoteAdded,
   onClientUpdated,
 }: {
   activeChat: CrmInboxChat | null;
   context: {
     chat: CrmInboxChat;
     prospect: CrmInboxProspect | null;
-    notes: CrmNote[];
     lastOutboundStatus: CrmWhatsappMessage["status"] | null;
   } | null;
   onNoteSaved: (note: string | null) => void;
-  onClientNoteAdded: (note: CrmNote) => void;
   onClientUpdated: (client: NonNullable<CrmInboxChat["client"]>) => void;
 }) {
   const [inboxNote, setInboxNote] = useState("");
-  const [clientNote, setClientNote] = useState("");
   const [dealValue, setDealValue] = useState("");
   const [dealSource, setDealSource] = useState("");
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
     setInboxNote(context?.chat.inboxNote ?? activeChat?.inboxNote ?? "");
-    setClientNote("");
     const client = context?.chat.client ?? activeChat?.client;
     setDealValue(client?.value != null ? String(client.value) : "");
     setDealSource(client?.source ?? "");
@@ -1060,63 +1056,10 @@ function InboxDetailsPanel({
           </Button>
         </section>
 
-        {activeChat.client ? (
-          <section className="space-y-2">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--insyt-muted)]">
-              Anotações do cliente
-            </p>
-            <Textarea
-              rows={2}
-              value={clientNote}
-              onChange={(event) => setClientNote(event.target.value)}
-              placeholder="Registrar observação na ficha..."
-              className="bg-white text-sm"
-            />
-            <Button
-              type="button"
-              size="sm"
-              disabled={isPending || !clientNote.trim()}
-              onClick={() => {
-                const body = clientNote.trim();
-                const clientId = activeChat.client!.id;
-                startTransition(async () => {
-                  const result = await createCrmNote(clientId, body);
-                  if (result.error) {
-                    toast.error(result.error);
-                    return;
-                  }
-                  onClientNoteAdded({
-                    id: crypto.randomUUID(),
-                    client_id: clientId,
-                    body,
-                    created_at: new Date().toISOString(),
-                  });
-                  setClientNote("");
-                  toast.success("Anotação registrada");
-                });
-              }}
-            >
-              Registrar
-            </Button>
-            <div className="space-y-2">
-              {(context?.notes ?? []).slice(0, 4).map((note) => (
-                <div
-                  key={note.id}
-                  className="rounded-xl border-l-2 border-[var(--insyt-primary)]/30 bg-white p-2.5 pl-3"
-                >
-                  <p className="text-xs whitespace-pre-wrap text-[var(--insyt-black)]">
-                    {note.body}
-                  </p>
-                  <p className="mt-1 text-[10px] text-[var(--insyt-muted)]">
-                    {format(new Date(note.created_at), "dd MMM HH:mm", {
-                      locale: ptBR,
-                    })}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </section>
-        ) : null}
+        {/* A antiga lista de "Anotações do cliente" saiu: crm_notes ficou com
+            zero linhas desde a criação, e esta coluna já tem a nota por
+            conversa (inbox_note) logo acima. O acompanhamento do lead virou
+            o "próximo passo", na ficha do cliente. */}
       </div>
     </aside>
   );

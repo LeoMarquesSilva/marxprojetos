@@ -1,24 +1,41 @@
+// Estágios desenhados a partir do que a operação realmente faz. Os antigos
+// (lead / contato_feito / proposta_enviada) tinham 15 clientes parados nos
+// dois primeiros e três colunas nunca usadas — "contato_feito" era marcado
+// sozinho no disparo, então não representava decisão nenhuma.
+// Aqui "enviado" e "respondeu" se preenchem sozinhos (disparo e webhook);
+// só a partir de "em_conversa" é que existe julgamento humano.
 export type CrmStage =
-  | "lead"
-  | "contato_feito"
-  | "proposta_enviada"
+  | "enviado"
+  | "respondeu"
+  | "em_conversa"
+  | "proposta"
   | "fechado"
   | "perdido";
 
 export const STAGE_LABELS: Record<CrmStage, string> = {
-  lead: "Lead",
-  contato_feito: "Contato feito",
-  proposta_enviada: "Proposta enviada",
+  enviado: "Enviado",
+  respondeu: "Respondeu",
+  em_conversa: "Em conversa",
+  proposta: "Proposta",
   fechado: "Fechado",
   perdido: "Perdido",
 };
 
 export const STAGE_COLUMNS: CrmStage[] = [
-  "lead",
-  "contato_feito",
-  "proposta_enviada",
+  "enviado",
+  "respondeu",
+  "em_conversa",
+  "proposta",
   "fechado",
   "perdido",
+];
+
+// Estágios que ainda podem virar receita (não ganhos nem perdidos).
+export const OPEN_STAGES: CrmStage[] = [
+  "enviado",
+  "respondeu",
+  "em_conversa",
+  "proposta",
 ];
 
 // Identidade visual por estágio — tons sóbrios que convivem com a paleta
@@ -27,19 +44,25 @@ export const STAGE_ACCENT: Record<
   CrmStage,
   { dot: string; pillBg: string; pillText: string; bar: string }
 > = {
-  lead: {
+  enviado: {
     dot: "bg-[var(--insyt-muted)]",
     pillBg: "bg-[var(--insyt-canvas-alt)]",
     pillText: "text-[var(--insyt-slate)]",
     bar: "bg-[var(--insyt-muted)]",
   },
-  contato_feito: {
+  respondeu: {
+    dot: "bg-[var(--insyt-primary)]",
+    pillBg: "bg-[var(--insyt-canvas)]",
+    pillText: "text-[var(--insyt-primary-dark)]",
+    bar: "bg-[var(--insyt-primary)]",
+  },
+  em_conversa: {
     dot: "bg-[var(--insyt-slate)]",
     pillBg: "bg-[var(--insyt-canvas)]",
     pillText: "text-[var(--insyt-black)]",
     bar: "bg-[var(--insyt-slate)]",
   },
-  proposta_enviada: {
+  proposta: {
     dot: "bg-[var(--insyt-primary)]",
     pillBg: "bg-[var(--accent)]",
     pillText: "text-[var(--insyt-primary-dark)]",
@@ -71,6 +94,9 @@ export type CrmClient = {
   value: number | null;
   project_id: string | null;
   lost_reason: string | null;
+  /** Substitui as antigas tarefas/anotações: uma única ação combinada. */
+  next_step: string | null;
+  next_step_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -143,6 +169,8 @@ export type CrmInboxChat = {
   lastMessagePreview: string | null;
   unreadCount: number;
   inboxNote: string | null;
+  /** "prospeccao" = nasceu de um disparo seu; "pessoal" = já existia no celular. */
+  origem: "prospeccao" | "pessoal" | null;
   client: {
     id: string;
     name: string;

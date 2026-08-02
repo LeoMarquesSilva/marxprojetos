@@ -20,6 +20,7 @@ import { CrmWhatsappSheet } from "@/components/crm-whatsapp-sheet";
 import { updateCrmClientStage } from "@/app/actions/crm";
 import { cn } from "@/lib/utils";
 import {
+  OPEN_STAGES,
   STAGE_ACCENT,
   STAGE_COLUMNS,
   STAGE_LABELS,
@@ -33,11 +34,6 @@ const compactCurrency = new Intl.NumberFormat("pt-BR", {
   notation: "compact",
   maximumFractionDigits: 1,
 });
-
-// Estágios que ainda representam receita em jogo. "Fechado" já foi ganho e
-// "perdido" saiu — somá-los no total do funil daria um número que não
-// significa nada para decidir o que fazer hoje.
-const OPEN_STAGES: CrmStage[] = ["lead", "contato_feito", "proposta_enviada"];
 
 function sumValues(clients: CrmBoardClient[]) {
   return clients.reduce((total, client) => total + (client.value ?? 0), 0);

@@ -8,7 +8,18 @@ import { isGroupJid, normalizeBrPhone, remoteJidToDigits } from "@/lib/phone";
 // client service-role, então a autorização é só o secret na query string.
 
 type EvolutionMessagePayload = {
-  key?: { id?: string; remoteJid?: string; fromMe?: boolean };
+  key?: {
+    id?: string;
+    remoteJid?: string;
+    fromMe?: boolean;
+    // O WhatsApp migrou para endereçamento "LID": quando o contato responde,
+    // remoteJid vem como um identificador opaco (ex: 226280452669555@lid) em
+    // vez do telefone. Nesse caso o telefone real vem em remoteJidAlt — sem
+    // ler esse campo, a resposta cai numa conversa órfã e o CRM nunca fica
+    // sabendo que o lead respondeu.
+    remoteJidAlt?: string;
+    addressingMode?: string;
+  };
   pushName?: string;
   message?: {
     conversation?: string;
@@ -53,6 +64,40 @@ function extractText(message: EvolutionMessagePayload["message"]): string | null
   return message.conversation ?? message.extendedTextMessage?.text ?? null;
 }
 
+function isLidJid(jid: string): boolean {
+  return jid.endsWith("@lid");
+}
+
+// Resolve a conversa para o JID de telefone sempre que possível, para que a
+// mensagem enviada e a resposta do lead caiam na MESMA thread.
+async function resolveChatJid(
+  supabase: SupabaseClient,
+  key: NonNullable<EvolutionMessagePayload["key"]>,
+): Promise<{ remoteJid: string; lidJid: string | null } | null> {
+  const raw = key.remoteJid;
+  if (!raw) return null;
+
+  if (!isLidJid(raw)) return { remoteJid: raw, lidJid: null };
+
+  // Caminho feliz: a Evolution manda o telefone junto no próprio evento.
+  const alt = key.remoteJidAlt;
+  if (alt && !isLidJid(alt)) {
+    return { remoteJid: alt, lidJid: raw };
+  }
+
+  // Sem remoteJidAlt: se já fundimos esse LID antes, reaproveita o vínculo.
+  const { data: known } = await supabase
+    .from("crm_whatsapp_chats")
+    .select("remote_jid")
+    .eq("lid_jid", raw)
+    .maybeSingle();
+
+  if (known?.remote_jid) return { remoteJid: known.remote_jid, lidJid: raw };
+
+  // Último caso: mantém o LID para não perder a mensagem.
+  return { remoteJid: raw, lidJid: raw };
+}
+
 export async function POST(request: NextRequest) {
   const expectedSecret = process.env.WHATSAPP_WEBHOOK_SECRET;
   const providedSecret = request.nextUrl.searchParams.get("secret");
@@ -77,8 +122,7 @@ export async function POST(request: NextRequest) {
     event === "messages.set"
   ) {
     for (const item of toMessageList(body.data)) {
-      const remoteJid = item.key?.remoteJid;
-      if (!remoteJid || isGroupJid(remoteJid)) continue;
+      if (!item.key?.remoteJid || isGroupJid(item.key.remoteJid)) continue;
 
       // Reação: atualiza a mensagem alvo em vez de criar bolha nova.
       const reaction = item.message?.reactionMessage;
@@ -91,10 +135,13 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
+      const resolved = await resolveChatJid(supabase, item.key);
+      if (!resolved) continue;
+      const { remoteJid, lidJid } = resolved;
+
       const fromMe = Boolean(item.key?.fromMe);
       const text = extractText(item.message) ?? "[mensagem sem texto]";
-      const digits = remoteJidToDigits(remoteJid);
-      const normalized = normalizeBrPhone(digits);
+      const normalized = normalizeBrPhone(remoteJidToDigits(remoteJid));
 
       const clientId = normalized.e164
         ? await matchClientByPhone(supabase, normalized.e164)
@@ -102,7 +149,7 @@ export async function POST(request: NextRequest) {
 
       const { data: existingChat } = await supabase
         .from("crm_whatsapp_chats")
-        .select("unread_count, push_name")
+        .select("unread_count, push_name, origem")
         .eq("remote_jid", remoteJid)
         .maybeSingle();
 
@@ -115,6 +162,10 @@ export async function POST(request: NextRequest) {
           last_message_at: new Date().toISOString(),
           last_message_preview: text.slice(0, 140),
           unread_count: fromMe ? 0 : (existingChat?.unread_count ?? 0) + 1,
+          // Conversa vinculada a um cliente nasceu de prospecção; as demais
+          // são contatos que já existiam no celular.
+          origem: existingChat?.origem ?? (clientId ? "prospeccao" : "pessoal"),
+          ...(lidJid ? { lid_jid: lidJid } : {}),
           updated_at: new Date().toISOString(),
         },
         { onConflict: "remote_jid" },
@@ -129,9 +180,15 @@ export async function POST(request: NextRequest) {
             conteudo: text,
             status: fromMe ? "server_ack" : "delivery_ack",
             provider_message_id: item.key.id,
+            raw: item,
           },
           { onConflict: "provider_message_id" },
         );
+      }
+
+      // Resposta do lead move o funil sozinho — sem depender de arrastar card.
+      if (!fromMe && clientId) {
+        await promoteStageOnReply(supabase, clientId);
       }
     }
   }
@@ -184,6 +241,17 @@ async function applyReaction(
     .from("crm_whatsapp_mensagens")
     .update({ reactions: next })
     .eq("id", message.id);
+}
+
+// Só avança de "enviado" para "respondeu". Quem já está mais adiante no
+// funil (em conversa, proposta, fechado) não pode retroceder porque o lead
+// mandou mais uma mensagem.
+async function promoteStageOnReply(supabase: SupabaseClient, clientId: string) {
+  await supabase
+    .from("crm_clients")
+    .update({ stage: "respondeu", updated_at: new Date().toISOString() })
+    .eq("id", clientId)
+    .eq("stage", "enviado");
 }
 
 async function matchClientByPhone(
