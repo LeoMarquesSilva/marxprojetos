@@ -1,5 +1,6 @@
 import "server-only";
 import { isGroupJid, remoteJidToDigits } from "@/lib/phone";
+import { extractWhatsAppText } from "@/lib/whatsapp-message";
 
 // Delay curto só para o indicador "digitando..." — 1,2s deixava o envio
 // perceptivelmente lento no CRM 1:1. Rajadas em massa é outro caso.
@@ -95,28 +96,6 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function extractTextFromMessage(message: unknown): string | null {
-  const msg = asRecord(message);
-  if (!msg) return null;
-  if (typeof msg.conversation === "string") return msg.conversation;
-  const extended = asRecord(msg.extendedTextMessage);
-  if (typeof extended?.text === "string") return extended.text;
-  const image = asRecord(msg.imageMessage);
-  if (typeof image?.caption === "string" && image.caption) return image.caption;
-  if (image) return "[imagem]";
-  const audio = asRecord(msg.audioMessage);
-  if (audio) return "[áudio]";
-  const document = asRecord(msg.documentMessage);
-  if (document) return "[documento]";
-  const video = asRecord(msg.videoMessage);
-  if (typeof video?.caption === "string" && video.caption) return video.caption;
-  if (video) return "[vídeo]";
-  const sticker = asRecord(msg.stickerMessage);
-  if (sticker) return "[figurinha]";
-  const reaction = asRecord(msg.reactionMessage);
-  if (reaction) return null;
-  return null;
-}
 
 function timestampToIso(value: unknown): string | null {
   if (value == null) return null;
@@ -177,7 +156,7 @@ function mapEvolutionChat(raw: unknown): EvolutionChatSummary | null {
   const lastMessage = asRecord(chat.lastMessage);
   const lastKey = asRecord(lastMessage?.key);
   const preview =
-    extractTextFromMessage(lastMessage?.message) ??
+    extractWhatsAppText(lastMessage?.message) ??
     (typeof chat.lastMessagePreview === "string"
       ? chat.lastMessagePreview
       : null) ??
@@ -235,7 +214,7 @@ function mapEvolutionMessage(
   if (!providerMessageId || !remoteJid || isGroupJid(remoteJid)) return null;
 
   const fromMe = Boolean(key?.fromMe ?? item.fromMe);
-  const content = extractTextFromMessage(item.message) ?? "[mensagem sem texto]";
+  const content = extractWhatsAppText(item.message) ?? "[mensagem sem texto]";
   const createdAt =
     timestampToIso(item.messageTimestamp) ??
     timestampToIso(item.createdAt) ??

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isGroupJid, normalizeBrPhone, remoteJidToDigits } from "@/lib/phone";
+import { extractWhatsAppText } from "@/lib/whatsapp-message";
 
 // Endpoint chamado pela Evolution API a cada evento (mensagem enviada,
 // recebida, atualização de status). Não tem sessão de usuário — usa o
@@ -59,9 +60,7 @@ function toMessageList(data: unknown): EvolutionMessagePayload[] {
 }
 
 function extractText(message: EvolutionMessagePayload["message"]): string | null {
-  if (!message) return null;
-  if (message.reactionMessage) return null;
-  return message.conversation ?? message.extendedTextMessage?.text ?? null;
+  return extractWhatsAppText(message);
 }
 
 function isLidJid(jid: string): boolean {
