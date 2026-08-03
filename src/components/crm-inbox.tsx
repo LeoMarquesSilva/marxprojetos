@@ -718,18 +718,28 @@ function InboxDetailsPanel({
   const [dealSource, setDealSource] = useState("");
   const [isPending, startTransition] = useTransition();
 
-  useEffect(() => {
-    setInboxNote(context?.chat.inboxNote ?? activeChat?.inboxNote ?? "");
-    const client = context?.chat.client ?? activeChat?.client;
-    setDealValue(client?.value != null ? String(client.value) : "");
-    setDealSource(client?.source ?? "");
-  }, [
-    activeChat?.remoteJid,
-    context?.chat.inboxNote,
-    activeChat?.inboxNote,
-    context?.chat.client,
-    activeChat?.client,
-  ]);
+  // Os campos do painel refletem a conversa aberta. Ajustar durante o render
+  // (padrão recomendado pelo React para "estado derivado de prop") em vez de
+  // num efeito evita o render extra em que o formulário ainda mostrava os
+  // dados do contato anterior.
+  const panelClient = context?.chat.client ?? activeChat?.client;
+  const nextInboxNote = context?.chat.inboxNote ?? activeChat?.inboxNote ?? "";
+  const nextDealValue = panelClient?.value != null ? String(panelClient.value) : "";
+  const nextDealSource = panelClient?.source ?? "";
+  const panelKey = [
+    activeChat?.remoteJid ?? "",
+    nextInboxNote,
+    nextDealValue,
+    nextDealSource,
+  ].join("|");
+
+  const [syncedPanelKey, setSyncedPanelKey] = useState(panelKey);
+  if (syncedPanelKey !== panelKey) {
+    setSyncedPanelKey(panelKey);
+    setInboxNote(nextInboxNote);
+    setDealValue(nextDealValue);
+    setDealSource(nextDealSource);
+  }
 
   if (!activeChat) {
     return (

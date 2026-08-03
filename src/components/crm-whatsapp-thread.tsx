@@ -72,9 +72,15 @@ export function CrmWhatsappThread({
   const bottomRef = useRef<HTMLDivElement>(null);
   const isPanel = layout === "sheet" || layout === "inbox";
 
-  useEffect(() => {
+  // Ressincroniza quando o servidor manda outra lista (ex: router.refresh()
+  // na ficha do cliente). Feito durante o render em vez de num efeito: o
+  // efeito rodava um render a mais, exibindo a lista antiga por um quadro —
+  // é o padrão que o React recomenda para ajustar estado quando a prop muda.
+  const [syncedMessages, setSyncedMessages] = useState(initialMessages);
+  if (syncedMessages !== initialMessages) {
+    setSyncedMessages(initialMessages);
     setMessages(initialMessages);
-  }, [initialMessages]);
+  }
 
   // Mensagens/status chegam via webhook → Postgres → Realtime.
   useEffect(() => {

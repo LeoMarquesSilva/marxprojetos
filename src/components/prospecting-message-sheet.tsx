@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Copy, Loader2, MessageCircle, MessagesSquare, Sparkles } from "lucide-react";
@@ -60,10 +60,16 @@ export function ProspectingMessageSheet({
     buildProspectMessage(prospect, template),
   );
 
-  useEffect(() => {
-    if (!open) return;
-    setMessage(buildProspectMessage(prospect, template));
-  }, [open, prospect, template]);
+  // Regenera o rascunho ao abrir a gaveta (e se o lead/modelo mudar com ela
+  // aberta). Ajuste durante o render em vez de efeito: o efeito causava um
+  // render a mais mostrando a mensagem do lead anterior. Ao fechar, a chave
+  // volta a null para que reabrir gere de novo.
+  const openKey = open ? `${prospect.id}|${template}` : null;
+  const [syncedOpenKey, setSyncedOpenKey] = useState<string | null>(null);
+  if (syncedOpenKey !== openKey) {
+    setSyncedOpenKey(openKey);
+    if (openKey) setMessage(buildProspectMessage(prospect, template));
+  }
   const [isSaving, startSaveTransition] = useTransition();
   const [isGenerating, startGenerateTransition] = useTransition();
   const [isSending, startSendTransition] = useTransition();

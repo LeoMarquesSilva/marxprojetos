@@ -159,7 +159,6 @@ export function SiteReviewViewer({
   useEffect(() => {
     commentsRef.current = comments;
     renderPins();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comments]);
 
   useEffect(() => {
