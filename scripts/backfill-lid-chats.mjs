@@ -44,7 +44,11 @@ async function findMessagesForJid(remoteJid) {
     {
       method: "POST",
       headers: { "Content-Type": "application/json", apikey: env.EVOLUTION_API_KEY },
-      body: JSON.stringify({ where: { key: { remoteJid } }, limit: 50 }),
+      body: JSON.stringify({
+        where: { key: { remoteJid } },
+        offset: 100,
+        page: 1,
+      }),
       signal: AbortSignal.timeout(30_000),
     },
   );

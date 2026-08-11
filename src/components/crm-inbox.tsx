@@ -138,10 +138,9 @@ export function CrmInbox({
 }) {
   const [chats, setChats] = useState(initialChats);
   const [query, setQuery] = useState("");
-  // Abre em "Prospecção": o número tem dezenas de conversas pessoais que já
-  // existiam no celular, e elas afogavam o trabalho comercial quando a
-  // inbox abria em "Todas".
-  const [filter, setFilter] = useState<Filter>("prospeccao");
+  // Uma inbox precisa abrir mostrando o WhatsApp inteiro. O filtro de
+  // prospecção continua disponível para focar só no trabalho comercial.
+  const [filter, setFilter] = useState<Filter>("all");
   const [activeJid, setActiveJid] = useState<string | null>(() => {
     if (
       initialActiveJid &&
@@ -445,7 +444,7 @@ export function CrmInbox({
         </Button>
       </div>
 
-      <div className="insyt-card grid min-h-[640px] overflow-hidden lg:grid-cols-[20rem_minmax(0,1fr)_18rem]">
+      <div className="insyt-card grid min-h-[640px] overflow-hidden lg:h-[calc(100dvh-12rem)] lg:max-h-[820px] lg:min-h-[560px] lg:grid-cols-[20rem_minmax(0,1fr)_18rem]">
         <aside className="flex min-h-[280px] flex-col border-b border-[var(--insyt-border)] lg:min-h-0 lg:border-b-0 lg:border-r">
           <div className="border-b border-[var(--insyt-border)] p-3">
             <div className="relative">
@@ -560,10 +559,10 @@ export function CrmInbox({
           </div>
         </aside>
 
-        <section className="flex min-h-[420px] flex-col border-b border-[var(--insyt-border)] lg:min-h-0 lg:border-b-0 lg:border-r">
+        <section className="flex min-h-[420px] flex-col overflow-hidden border-b border-[var(--insyt-border)] lg:min-h-0 lg:border-b-0 lg:border-r">
           {activeChat ? (
             <>
-              <header className="flex items-center justify-between gap-3 border-b border-[var(--insyt-border)] px-5 py-4">
+              <header className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--insyt-border)] px-5 py-4">
                 <div className="flex min-w-0 items-center gap-3">
                   <Avatar
                     name={displayName(activeChat)}

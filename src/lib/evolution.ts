@@ -1,4 +1,10 @@
 import "server-only";
+import {
+  buildFindMessagesBody,
+  latestEvolutionMessageStatus,
+  normalizeEvolutionMessagePage,
+  resolveEvolutionMessageJid,
+} from "@/lib/evolution-payload";
 import { isGroupJid, remoteJidToDigits } from "@/lib/phone";
 import { extractWhatsAppText } from "@/lib/whatsapp-message";
 
@@ -25,6 +31,7 @@ export type EvolutionContactProfile = {
 
 export type EvolutionChatSummary = {
   remoteJid: string;
+  lidJid: string | null;
   pushName: string | null;
   profilePictureUrl: string | null;
   unreadCount: number;
@@ -125,36 +132,32 @@ function normalizeChatList(data: unknown): unknown[] {
   return [];
 }
 
-function normalizeMessageList(data: unknown): unknown[] {
-  if (Array.isArray(data)) return data;
-  const record = asRecord(data);
-  if (!record) return [];
-  if (Array.isArray(record.messages)) return record.messages;
-  if (Array.isArray(record.data)) return record.data;
-  if (Array.isArray(record.records)) return record.records;
-  const nested = asRecord(record.messages);
-  if (nested && Array.isArray(nested.records)) return nested.records;
-  return [];
-}
-
 function mapEvolutionChat(raw: unknown): EvolutionChatSummary | null {
   const chat = asRecord(raw);
   if (!chat) return null;
 
-  const remoteJid =
+  const rawRemoteJid =
     (typeof chat.remoteJid === "string" && chat.remoteJid) ||
     (typeof chat.id === "string" && chat.id.includes("@") ? chat.id : null) ||
     (typeof asRecord(chat.key)?.remoteJid === "string"
       ? (asRecord(chat.key)!.remoteJid as string)
       : null);
 
-  if (!remoteJid || isGroupJid(remoteJid)) return null;
+  if (!rawRemoteJid || isGroupJid(rawRemoteJid)) return null;
+  const lastMessage = asRecord(chat.lastMessage);
+  const lastKey = asRecord(lastMessage?.key);
+  const resolved = resolveEvolutionMessageJid({
+    remoteJid: rawRemoteJid,
+    remoteJidAlt: lastKey?.remoteJidAlt,
+    senderPn: lastKey?.senderPn,
+  });
+  if (!resolved) return null;
+  const { remoteJid, lidJid } = resolved;
+
   if (remoteJid.endsWith("@broadcast") || remoteJid.includes("status@")) {
     return null;
   }
 
-  const lastMessage = asRecord(chat.lastMessage);
-  const lastKey = asRecord(lastMessage?.key);
   const preview =
     extractWhatsAppText(lastMessage?.message) ??
     (typeof chat.lastMessagePreview === "string"
@@ -172,6 +175,7 @@ function mapEvolutionChat(raw: unknown): EvolutionChatSummary | null {
 
   return {
     remoteJid,
+    lidJid,
     pushName:
       (typeof chat.pushName === "string" && chat.pushName) ||
       (typeof chat.name === "string" && chat.name) ||
@@ -205,13 +209,19 @@ function mapEvolutionMessage(
     (typeof key?.id === "string" && key.id) ||
     (typeof item.id === "string" && item.id) ||
     null;
-  const remoteJid =
-    (typeof key?.remoteJid === "string" && key.remoteJid) ||
-    (typeof item.remoteJid === "string" && item.remoteJid) ||
-    fallbackRemoteJid ||
-    null;
+  const resolved = resolveEvolutionMessageJid({
+    remoteJid:
+      (typeof key?.remoteJid === "string" && key.remoteJid) ||
+      (typeof item.remoteJid === "string" && item.remoteJid) ||
+      fallbackRemoteJid,
+    remoteJidAlt: key?.remoteJidAlt,
+    senderPn: key?.senderPn,
+  });
 
-  if (!providerMessageId || !remoteJid || isGroupJid(remoteJid)) return null;
+  if (!providerMessageId || !resolved || isGroupJid(resolved.remoteJid)) {
+    return null;
+  }
+  const { remoteJid } = resolved;
 
   const fromMe = Boolean(key?.fromMe ?? item.fromMe);
   const content = extractWhatsAppText(item.message) ?? "[mensagem sem texto]";
@@ -221,11 +231,8 @@ function mapEvolutionMessage(
     new Date().toISOString();
 
   const statusRaw =
-    typeof item.status === "string"
-      ? item.status.toLowerCase()
-      : fromMe
-        ? "server_ack"
-        : "delivery_ack";
+    latestEvolutionMessageStatus(item) ??
+    (fromMe ? "server_ack" : "delivery_ack");
 
   return {
     providerMessageId,
@@ -345,9 +352,31 @@ export async function findWhatsAppChats(): Promise<EvolutionChatSummary[]> {
     );
   }
 
-  return normalizeChatList(result.data)
+  const chats = normalizeChatList(result.data)
     .map(mapEvolutionChat)
     .filter((chat): chat is EvolutionChatSummary => Boolean(chat));
+
+  // A Evolution pode devolver a mesma conversa uma vez por telefone e outra
+  // por LID. Mantemos só o registro mais recente já canonicalizado.
+  const byRemoteJid = new Map<string, EvolutionChatSummary>();
+  for (const chat of chats) {
+    const previous = byRemoteJid.get(chat.remoteJid);
+    const previousAt = previous?.lastMessageAt
+      ? new Date(previous.lastMessageAt).getTime()
+      : 0;
+    const nextAt = chat.lastMessageAt
+      ? new Date(chat.lastMessageAt).getTime()
+      : 0;
+    if (!previous || nextAt >= previousAt) {
+      byRemoteJid.set(chat.remoteJid, {
+        ...previous,
+        ...chat,
+        lidJid: chat.lidJid ?? previous?.lidJid ?? null,
+      });
+    }
+  }
+
+  return [...byRemoteJid.values()];
 }
 
 // Docs: POST /chat/findMessages/:instance
@@ -356,17 +385,11 @@ export async function findWhatsAppMessages(
   limit = 80,
 ): Promise<EvolutionSyncedMessage[]> {
   const instance = requireEnv("EVOLUTION_INSTANCE");
+  const pageSize = Math.max(1, Math.min(Math.trunc(limit), 500));
   const result = await evolutionFetch(
     `/chat/findMessages/${encodeURIComponent(instance)}`,
     {
-      body: {
-        where: {
-          key: {
-            remoteJid,
-          },
-        },
-        limit,
-      },
+      body: buildFindMessagesBody(remoteJid, pageSize, 1),
       timeoutMs: SYNC_TIMEOUT_MS,
     },
   );
@@ -377,7 +400,8 @@ export async function findWhatsAppMessages(
     );
   }
 
-  return normalizeMessageList(result.data)
+  return normalizeEvolutionMessagePage(result.data)
+    .records
     .map((item) => mapEvolutionMessage(item, remoteJid))
     .filter((message): message is EvolutionSyncedMessage => Boolean(message))
     .sort(

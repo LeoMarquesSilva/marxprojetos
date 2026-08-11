@@ -69,7 +69,7 @@ export function CrmWhatsappThread({
   const [messages, setMessages] = useState(initialMessages);
   const [draft, setDraft] = useState("");
   const [isPending, startTransition] = useTransition();
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const messageListRef = useRef<HTMLDivElement>(null);
   const isPanel = layout === "sheet" || layout === "inbox";
 
   // Ressincroniza quando o servidor manda outra lista (ex: router.refresh()
@@ -134,7 +134,10 @@ export function CrmWhatsappThread({
   }, [remoteJid]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: "end" });
+    // scrollIntoView também rolava a página inteira e fazia o composer
+    // parecer "empurrado" para baixo. Rolamos somente a lista de mensagens.
+    const list = messageListRef.current;
+    if (list) list.scrollTop = list.scrollHeight;
   }, [messages.length]);
 
   function handleSend() {
@@ -213,12 +216,15 @@ export function CrmWhatsappThread({
   return (
     <div
       className={cn(
-        isPanel ? "flex min-h-0 flex-1 flex-col" : "space-y-3",
+        isPanel
+          ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+          : "space-y-3",
       )}
     >
       <div
+        ref={messageListRef}
         className={cn(
-          "space-y-3 overflow-y-auto bg-[var(--insyt-canvas)] p-4",
+          "overscroll-contain space-y-3 overflow-y-auto bg-[var(--insyt-canvas)] p-4",
           isPanel
             ? "min-h-0 flex-1 rounded-none"
             : "max-h-[420px] rounded-xl",
@@ -233,25 +239,28 @@ export function CrmWhatsappThread({
             <MessageBubble key={message.id} message={message} />
           ))
         )}
-        <div ref={bottomRef} />
       </div>
 
       <div
         className={cn(
           "space-y-2",
           isPanel &&
-            "shrink-0 border-t border-[var(--insyt-border)] bg-white px-4 py-4",
+            "flex shrink-0 items-end gap-2 space-y-0 border-t border-[var(--insyt-border)] bg-white px-4 py-3",
         )}
       >
         <Textarea
           placeholder="Escreva uma mensagem..."
-          rows={2}
+          rows={1}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={handleKeyDown}
-          className={isPanel ? "min-h-[72px] resize-none" : undefined}
+          className={
+            isPanel
+              ? "max-h-32 min-h-11 flex-1 resize-none py-2.5"
+              : undefined
+          }
         />
-        <div className="flex justify-end">
+        <div className={cn("flex justify-end", isPanel && "shrink-0")}>
           <Button
             type="button"
             size="sm"

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolveEvolutionMessageJid } from "@/lib/evolution-payload";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isGroupJid, normalizeBrPhone, remoteJidToDigits } from "@/lib/phone";
 import { extractWhatsAppText } from "@/lib/whatsapp-message";
@@ -19,6 +20,7 @@ type EvolutionMessagePayload = {
     // ler esse campo, a resposta cai numa conversa órfã e o CRM nunca fica
     // sabendo que o lead respondeu.
     remoteJidAlt?: string;
+    senderPn?: string;
     addressingMode?: string;
   };
   pushName?: string;
@@ -32,6 +34,19 @@ type EvolutionMessagePayload = {
   };
   status?: string;
   keyId?: string;
+  messageTimestamp?: number | string;
+};
+
+type EvolutionChatPayload = {
+  id?: string;
+  remoteJid?: string;
+  pushName?: string;
+  profilePicUrl?: string;
+  profilePictureUrl?: string;
+  unreadCount?: number | string;
+  updatedAt?: string;
+  lastMsgTimestamp?: number | string;
+  lastMessage?: EvolutionMessagePayload;
 };
 
 const STATUS_MAP: Record<string, string> = {
@@ -59,6 +74,32 @@ function toMessageList(data: unknown): EvolutionMessagePayload[] {
   return [];
 }
 
+function toChatList(data: unknown): EvolutionChatPayload[] {
+  if (Array.isArray(data)) return data as EvolutionChatPayload[];
+  if (data && typeof data === "object") {
+    const record = data as { chats?: unknown; data?: unknown };
+    if (Array.isArray(record.chats)) {
+      return record.chats as EvolutionChatPayload[];
+    }
+    if (Array.isArray(record.data)) {
+      return record.data as EvolutionChatPayload[];
+    }
+    return [data as EvolutionChatPayload];
+  }
+  return [];
+}
+
+function timestampToIso(value: unknown): string | null {
+  if (value == null) return null;
+  const numeric = Number(value);
+  if (Number.isFinite(numeric) && numeric > 0) {
+    return new Date(numeric < 1e12 ? numeric * 1000 : numeric).toISOString();
+  }
+  if (typeof value !== "string") return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
 function extractText(message: EvolutionMessagePayload["message"]): string | null {
   return extractWhatsAppText(message);
 }
@@ -73,16 +114,10 @@ async function resolveChatJid(
   supabase: SupabaseClient,
   key: NonNullable<EvolutionMessagePayload["key"]>,
 ): Promise<{ remoteJid: string; lidJid: string | null } | null> {
-  const raw = key.remoteJid;
-  if (!raw) return null;
-
-  if (!isLidJid(raw)) return { remoteJid: raw, lidJid: null };
-
-  // Caminho feliz: a Evolution manda o telefone junto no próprio evento.
-  const alt = key.remoteJidAlt;
-  if (alt && !isLidJid(alt)) {
-    return { remoteJid: alt, lidJid: raw };
-  }
+  const resolved = resolveEvolutionMessageJid(key);
+  if (!resolved) return null;
+  if (!isLidJid(resolved.remoteJid)) return resolved;
+  const raw = resolved.remoteJid;
 
   // Sem remoteJidAlt: se já fundimos esse LID antes, reaproveita o vínculo.
   const { data: known } = await supabase
@@ -114,6 +149,80 @@ export async function POST(request: NextRequest) {
 
   const supabase = createAdminClient();
   const event = normalizeEvent(body.event);
+
+  if (
+    event === "chats.set" ||
+    event === "chats.upsert" ||
+    event === "chats.update"
+  ) {
+    for (const item of toChatList(body.data)) {
+      const rawRemoteJid =
+        item.remoteJid ??
+        (item.id?.includes("@") ? item.id : undefined) ??
+        item.lastMessage?.key?.remoteJid;
+      if (!rawRemoteJid || isGroupJid(rawRemoteJid)) continue;
+
+      const resolved = await resolveChatJid(supabase, {
+        remoteJid: rawRemoteJid,
+        remoteJidAlt: item.lastMessage?.key?.remoteJidAlt,
+        senderPn: item.lastMessage?.key?.senderPn,
+      });
+      if (!resolved) continue;
+      const { remoteJid, lidJid } = resolved;
+      if (isGroupJid(remoteJid) || remoteJid.endsWith("@broadcast")) continue;
+
+      const normalized = normalizeBrPhone(remoteJidToDigits(remoteJid));
+      const clientId = normalized.e164
+        ? await matchClientByPhone(supabase, normalized.e164)
+        : null;
+      const { data: existingChat } = await supabase
+        .from("crm_whatsapp_chats")
+        .select(
+          "client_id, push_name, profile_picture_url, unread_count, last_message_at, last_message_preview, origem",
+        )
+        .eq("remote_jid", remoteJid)
+        .maybeSingle();
+
+      const lastText = extractText(item.lastMessage?.message);
+      const lastMessageAt =
+        timestampToIso(item.lastMessage?.messageTimestamp) ??
+        timestampToIso(item.lastMsgTimestamp) ??
+        timestampToIso(item.updatedAt) ??
+        existingChat?.last_message_at ??
+        null;
+
+      await supabase.from("crm_whatsapp_chats").upsert(
+        {
+          remote_jid: remoteJid,
+          client_id: clientId ?? existingChat?.client_id ?? null,
+          instance: body.instance ?? null,
+          push_name: item.pushName || existingChat?.push_name || null,
+          profile_picture_url:
+            item.profilePicUrl ||
+            item.profilePictureUrl ||
+            existingChat?.profile_picture_url ||
+            null,
+          last_message_at: lastMessageAt,
+          last_message_preview:
+            lastText?.slice(0, 140) ??
+            existingChat?.last_message_preview ??
+            null,
+          unread_count:
+            typeof item.unreadCount === "number"
+              ? item.unreadCount
+              : typeof item.unreadCount === "string"
+                ? Number(item.unreadCount) || 0
+                : existingChat?.unread_count ?? 0,
+          origem:
+            existingChat?.origem ??
+            (clientId ?? existingChat?.client_id ? "prospeccao" : "pessoal"),
+          ...(lidJid ? { lid_jid: lidJid } : {}),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "remote_jid" },
+      );
+    }
+  }
 
   if (
     event === "messages.upsert" ||

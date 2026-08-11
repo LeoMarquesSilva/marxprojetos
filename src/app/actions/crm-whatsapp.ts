@@ -504,28 +504,48 @@ export async function syncWhatsAppInbox() {
   let linkedClients = 0;
   const messageErrors: string[] = [];
 
-  for (const chat of chats) {
+  const { data: existingChats } = await supabase
+    .from("crm_whatsapp_chats")
+    .select(
+      "remote_jid, client_id, push_name, profile_picture_url, origem, lid_jid",
+    );
+  const existingByJid = new Map(
+    (existingChats ?? []).map((chat) => [chat.remote_jid, chat]),
+  );
+
+  const chatRows = chats.map((chat) => {
     const digits = remoteJidToDigits(chat.remoteJid);
     const e164 = normalizeBrPhone(digits).e164;
-    const clientId = e164 ? (clientByPhone.get(e164) ?? null) : null;
+    const existing = existingByJid.get(chat.remoteJid);
+    const clientId =
+      (e164 ? clientByPhone.get(e164) : null) ?? existing?.client_id ?? null;
     if (clientId) linkedClients += 1;
 
-    const { error } = await supabase.from("crm_whatsapp_chats").upsert(
-      {
-        remote_jid: chat.remoteJid,
-        client_id: clientId,
-        instance,
-        push_name: chat.pushName,
-        profile_picture_url: chat.profilePictureUrl,
-        last_message_at: chat.lastMessageAt,
-        last_message_preview: chat.lastMessagePreview,
-        unread_count: chat.unreadCount,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "remote_jid" },
-    );
+    return {
+      remote_jid: chat.remoteJid,
+      client_id: clientId,
+      instance,
+      push_name: chat.pushName || existing?.push_name || null,
+      profile_picture_url:
+        chat.profilePictureUrl || existing?.profile_picture_url || null,
+      last_message_at: chat.lastMessageAt,
+      last_message_preview: chat.lastMessagePreview,
+      unread_count: chat.unreadCount,
+      origem:
+        existing?.origem ?? (clientId ? "prospeccao" : "pessoal"),
+      lid_jid: chat.lidJid ?? existing?.lid_jid ?? null,
+      updated_at: new Date().toISOString(),
+    };
+  });
 
-    if (!error) chatsUpserted += 1;
+  if (chatRows.length > 0) {
+    const { error } = await supabase
+      .from("crm_whatsapp_chats")
+      .upsert(chatRows, { onConflict: "remote_jid" });
+    if (error) {
+      return { error: `Falha ao salvar conversas: ${error.message}` };
+    }
+    chatsUpserted = chatRows.length;
   }
 
   // Histórico recente por conversa — em paralelo limitado para não estourar timeout.
@@ -536,7 +556,10 @@ export async function syncWhatsAppInbox() {
 
       const digits = remoteJidToDigits(chat.remoteJid);
       const e164 = normalizeBrPhone(digits).e164;
-      const clientId = e164 ? (clientByPhone.get(e164) ?? null) : null;
+      const clientId =
+        (e164 ? clientByPhone.get(e164) : null) ??
+        existingByJid.get(chat.remoteJid)?.client_id ??
+        null;
 
       const rows = messages.map((message) => ({
         remote_jid: message.remoteJid,
