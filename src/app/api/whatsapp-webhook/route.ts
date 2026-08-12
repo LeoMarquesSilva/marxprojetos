@@ -4,6 +4,14 @@ import { resolveEvolutionMessageJid } from "@/lib/evolution-payload";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isGroupJid, normalizeBrPhone, remoteJidToDigits } from "@/lib/phone";
 import { extractWhatsAppText } from "@/lib/whatsapp-message";
+import {
+  ingestWebhookMessageTransactionally,
+  parseWebhookPayload,
+  requireSupabaseSuccess,
+  resolveClientId,
+  shouldIncrementUnread,
+  type WebhookMessageStatus,
+} from "@/lib/whatsapp-webhook-core";
 
 // Endpoint chamado pela Evolution API a cada evento (mensagem enviada,
 // recebida, atualização de status). Não tem sessão de usuário — usa o
@@ -49,7 +57,7 @@ type EvolutionChatPayload = {
   lastMessage?: EvolutionMessagePayload;
 };
 
-const STATUS_MAP: Record<string, string> = {
+const STATUS_MAP: Record<string, WebhookMessageStatus> = {
   PENDING: "pending",
   SERVER_ACK: "server_ack",
   DELIVERY_ACK: "delivery_ack",
@@ -120,11 +128,13 @@ async function resolveChatJid(
   const raw = resolved.remoteJid;
 
   // Sem remoteJidAlt: se já fundimos esse LID antes, reaproveita o vínculo.
-  const { data: known } = await supabase
+  const knownResult = await supabase
     .from("crm_whatsapp_chats")
     .select("remote_jid")
     .eq("lid_jid", raw)
     .maybeSingle();
+  requireSupabaseSuccess(knownResult, "chat.resolve_lid");
+  const { data: known } = knownResult;
 
   if (known?.remote_jid) return { remoteJid: known.remote_jid, lidJid: raw };
 
@@ -139,16 +149,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const body = (await request.json().catch(() => null)) as {
-    event?: string;
-    instance?: string;
-    data?: unknown;
-  } | null;
+  const rawBody = await request.text().catch(() => null);
+  if (rawBody === null) {
+    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
+  }
+  const parsedBody = parseWebhookPayload(rawBody);
+  if (!parsedBody.ok) {
+    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
+  }
+  const body = parsedBody.value;
 
-  if (!body) return NextResponse.json({ ok: true });
-
-  const supabase = createAdminClient();
-  const event = normalizeEvent(body.event);
+  try {
+    const supabase = createAdminClient();
+    const event = normalizeEvent(body.event);
 
   if (
     event === "chats.set" ||
@@ -175,13 +188,15 @@ export async function POST(request: NextRequest) {
       const clientId = normalized.e164
         ? await matchClientByPhone(supabase, normalized.e164)
         : null;
-      const { data: existingChat } = await supabase
+      const existingChatResult = await supabase
         .from("crm_whatsapp_chats")
         .select(
           "client_id, push_name, profile_picture_url, unread_count, last_message_at, last_message_preview, origem",
         )
         .eq("remote_jid", remoteJid)
         .maybeSingle();
+      requireSupabaseSuccess(existingChatResult, "chat.lookup");
+      const { data: existingChat } = existingChatResult;
 
       const lastText = extractText(item.lastMessage?.message);
       const lastMessageAt =
@@ -191,7 +206,7 @@ export async function POST(request: NextRequest) {
         existingChat?.last_message_at ??
         null;
 
-      await supabase.from("crm_whatsapp_chats").upsert(
+      const chatUpsertResult = await supabase.from("crm_whatsapp_chats").upsert(
         {
           remote_jid: remoteJid,
           client_id: clientId ?? existingChat?.client_id ?? null,
@@ -221,6 +236,7 @@ export async function POST(request: NextRequest) {
         },
         { onConflict: "remote_jid" },
       );
+      requireSupabaseSuccess(chatUpsertResult, "chat.upsert");
     }
   }
 
@@ -255,48 +271,80 @@ export async function POST(request: NextRequest) {
         ? await matchClientByPhone(supabase, normalized.e164)
         : null;
 
-      const { data: existingChat } = await supabase
+      const existingChatResult = await supabase
         .from("crm_whatsapp_chats")
-        .select("unread_count, push_name, origem")
+        .select("client_id, unread_count, push_name, origem")
         .eq("remote_jid", remoteJid)
         .maybeSingle();
-
-      await supabase.from("crm_whatsapp_chats").upsert(
-        {
-          remote_jid: remoteJid,
-          client_id: clientId,
-          instance: body.instance ?? null,
-          push_name: item.pushName ?? existingChat?.push_name ?? null,
-          last_message_at: new Date().toISOString(),
-          last_message_preview: text.slice(0, 140),
-          unread_count: fromMe ? 0 : (existingChat?.unread_count ?? 0) + 1,
-          // Conversa vinculada a um cliente nasceu de prospecção; as demais
-          // são contatos que já existiam no celular.
-          origem: existingChat?.origem ?? (clientId ? "prospeccao" : "pessoal"),
-          ...(lidJid ? { lid_jid: lidJid } : {}),
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "remote_jid" },
+      requireSupabaseSuccess(existingChatResult, "message.chat_lookup");
+      const { data: existingChat } = existingChatResult;
+      const effectiveClientId = resolveClientId(
+        clientId,
+        existingChat?.client_id,
       );
 
-      if (item.key?.id) {
-        await supabase.from("crm_whatsapp_mensagens").upsert(
-          {
-            remote_jid: remoteJid,
-            client_id: clientId,
-            from_me: fromMe,
-            conteudo: text,
-            status: fromMe ? "server_ack" : "delivery_ack",
-            provider_message_id: item.key.id,
-            raw: item,
-          },
-          { onConflict: "provider_message_id" },
-        );
+      const providerMessageId = item.key?.id ?? null;
+
+      if (providerMessageId) {
+        await ingestWebhookMessageTransactionally(supabase, {
+          p_remote_jid: remoteJid,
+          p_client_id: clientId,
+          p_from_me: fromMe,
+          p_conteudo: text,
+          p_status: fromMe ? "server_ack" : "delivery_ack",
+          p_provider_message_id: providerMessageId,
+          p_raw: item,
+          p_instance: body.instance ?? null,
+          p_push_name: item.pushName ?? null,
+          p_lid_jid: lidJid,
+          p_message_at:
+            timestampToIso(item.messageTimestamp) ?? new Date().toISOString(),
+        });
+      } else {
+        // Eventos legados sem id do provider não permitem deduplicação
+        // confiável; mantém o incremento conservador anterior.
+        const chatUpsertResult = await supabase
+          .from("crm_whatsapp_chats")
+          .upsert(
+            {
+              remote_jid: remoteJid,
+              client_id: effectiveClientId,
+              instance: body.instance ?? null,
+              push_name: item.pushName ?? existingChat?.push_name ?? null,
+              origem:
+                existingChat?.origem ??
+                (effectiveClientId ? "prospeccao" : "pessoal"),
+              ...(lidJid ? { lid_jid: lidJid } : {}),
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "remote_jid" },
+          );
+        requireSupabaseSuccess(chatUpsertResult, "message.chat_upsert");
+
+        const incrementUnread = shouldIncrementUnread({
+          fromMe,
+          providerMessageId,
+          isNew: false,
+        });
+        const chatUpdateResult = await supabase
+          .from("crm_whatsapp_chats")
+          .update({
+            last_message_at: new Date().toISOString(),
+            last_message_preview: text.slice(0, 140),
+            ...(fromMe
+              ? { unread_count: 0 }
+              : incrementUnread
+                ? { unread_count: (existingChat?.unread_count ?? 0) + 1 }
+                : {}),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("remote_jid", remoteJid);
+        requireSupabaseSuccess(chatUpdateResult, "message.chat_update");
       }
 
       // Resposta do lead move o funil sozinho — sem depender de arrastar card.
-      if (!fromMe && clientId) {
-        await promoteStageOnReply(supabase, clientId);
+      if (!fromMe && effectiveClientId) {
+        await promoteStageOnReply(supabase, effectiveClientId);
       }
     }
   }
@@ -308,15 +356,22 @@ export async function POST(request: NextRequest) {
       const status =
         typeof rawStatus === "string" ? STATUS_MAP[rawStatus] : undefined;
       if (providerMessageId && status) {
-        await supabase
+        const statusUpdateResult = await supabase
           .from("crm_whatsapp_mensagens")
           .update({ status })
           .eq("provider_message_id", providerMessageId);
+        requireSupabaseSuccess(statusUpdateResult, "status.update");
       }
     }
   }
 
-  return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json(
+      { error: "temporarily_unavailable" },
+      { status: 503 },
+    );
+  }
 }
 
 async function applyReaction(
@@ -327,11 +382,13 @@ async function applyReaction(
     fromMe,
   }: { targetProviderId: string; emoji: string; fromMe: boolean },
 ) {
-  const { data: message } = await supabase
+  const messageResult = await supabase
     .from("crm_whatsapp_mensagens")
     .select("id, reactions")
     .eq("provider_message_id", targetProviderId)
     .maybeSingle();
+  requireSupabaseSuccess(messageResult, "reaction.lookup");
+  const { data: message } = messageResult;
 
   if (!message) return;
 
@@ -345,31 +402,35 @@ async function applyReaction(
       ]
     : current.filter((reaction) => reaction.fromMe !== fromMe);
 
-  await supabase
+  const reactionUpdateResult = await supabase
     .from("crm_whatsapp_mensagens")
     .update({ reactions: next })
     .eq("id", message.id);
+  requireSupabaseSuccess(reactionUpdateResult, "reaction.update");
 }
 
 // Só avança de "enviado" para "respondeu". Quem já está mais adiante no
 // funil (em conversa, proposta, fechado) não pode retroceder porque o lead
 // mandou mais uma mensagem.
 async function promoteStageOnReply(supabase: SupabaseClient, clientId: string) {
-  await supabase
+  const promotionResult = await supabase
     .from("crm_clients")
     .update({ stage: "respondeu", updated_at: new Date().toISOString() })
     .eq("id", clientId)
     .eq("stage", "enviado");
+  requireSupabaseSuccess(promotionResult, "promotion.update");
 }
 
 async function matchClientByPhone(
   supabase: SupabaseClient,
   inboundE164: string,
 ): Promise<string | null> {
-  const { data: clients } = await supabase
+  const clientsResult = await supabase
     .from("crm_clients")
     .select("id, phone")
     .not("phone", "is", null);
+  requireSupabaseSuccess(clientsResult, "client.match");
+  const { data: clients } = clientsResult;
 
   for (const client of (clients ?? []) as { id: string; phone: string }[]) {
     if (normalizeBrPhone(client.phone).e164 === inboundE164) return client.id;

@@ -1,10 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { fillTemplate, normalizeBrPhone, phoneToRemoteJid } from "@/lib/phone";
 import { inferWebsiteFromRow, parseCsv, slugify } from "@/lib/csv";
+import { requireAuthenticatedUser } from "@/lib/supabase/require-authenticated-user";
 import { sendCrmWhatsappMessage } from "@/app/actions/crm-whatsapp";
 import {
   DEFAULT_PROSPECTING_TEMPLATE,
@@ -12,6 +11,11 @@ import {
   type Prospect,
   type ProspectStatus,
 } from "@/types/prospecting";
+
+type AuthenticatedContext = Awaited<ReturnType<typeof requireAuthenticatedUser>>;
+type PromoteToCrmResult =
+  | { crmClientId: string; error?: never }
+  | { error: string; crmClientId?: never };
 
 function portfolioUrlForTemplate() {
   return INSYT_STUDIO_URL;
@@ -25,7 +29,7 @@ function ensureStudioLinkInMessage(message: string) {
 }
 
 export async function getProspects() {
-  const supabase = await createClient();
+  const { supabase } = await requireAuthenticatedUser();
   const { data, error } = await supabase
     .from("prospects")
     .select("*")
@@ -36,7 +40,14 @@ export async function getProspects() {
 }
 
 export async function getProspectingTemplate() {
-  const supabase = await createClient();
+  const { supabase, user } = await requireAuthenticatedUser();
+  return loadProspectingTemplate(supabase, user.id);
+}
+
+async function loadProspectingTemplate(
+  supabase: AuthenticatedContext["supabase"],
+  userId: string,
+) {
   const { data, error } = await supabase
     .from("prospecting_settings")
     .select("template")
@@ -55,16 +66,11 @@ export async function getProspectingTemplate() {
     stored.includes("insytstudio.com.br") || stored.includes("{{portfolio}}");
   if (!hasStudioLink) {
     const migrated = `${stored}\n\nAlguns projetos nossos: ${INSYT_STUDIO_URL}`;
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user) {
-      await supabase.from("prospecting_settings").upsert({
-        owner_id: user.id,
-        template: migrated,
-        updated_at: new Date().toISOString(),
-      });
-    }
+    await supabase.from("prospecting_settings").upsert({
+      owner_id: userId,
+      template: migrated,
+      updated_at: new Date().toISOString(),
+    });
     return migrated;
   }
 
@@ -72,12 +78,7 @@ export async function getProspectingTemplate() {
 }
 
 export async function saveProspectingTemplate(template: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login");
+  const { supabase, user } = await requireAuthenticatedUser();
 
   const { error } = await supabase.from("prospecting_settings").upsert(
     {
@@ -125,12 +126,7 @@ function lpBusinessId(b: LpBusiness) {
 }
 
 export async function searchPlaces(niche: string, city: string, state?: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login");
+  const { supabase, user } = await requireAuthenticatedUser();
 
   const trimmedNiche = niche.trim();
   const trimmedCity = city.trim();
@@ -250,12 +246,7 @@ export async function searchPlaces(niche: string, city: string, state?: string) 
 // telefone, celular) aos leads cujo job já terminou. enrich_job_id = null
 // marca o lead como "enriquecimento aplicado".
 export async function refreshEnrichment() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login");
+  const { supabase } = await requireAuthenticatedUser();
 
   const apiKey = lpKey();
   if (!apiKey) {
@@ -352,7 +343,7 @@ export async function refreshEnrichment() {
 }
 
 export async function updateProspectStatus(id: string, status: ProspectStatus) {
-  const supabase = await createClient();
+  const { supabase, user } = await requireAuthenticatedUser();
   const { error } = await supabase
     .from("prospects")
     .update({ status, updated_at: new Date().toISOString() })
@@ -364,20 +355,14 @@ export async function updateProspectStatus(id: string, status: ProspectStatus) {
   // pipeline do CRM — não faz sentido esperar um clique manual em "Enviar ao
   // CRM". Best-effort: uma falha aqui não deve reverter a troca de status.
   if (status === "contatado" || status === "respondeu") {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { data: prospect } = await supabase
+      .from("prospects")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
 
-    if (user) {
-      const { data: prospect } = await supabase
-        .from("prospects")
-        .select("*")
-        .eq("id", id)
-        .maybeSingle();
-
-      if (prospect && !prospect.crm_client_id) {
-        await promoteProspectToCrm(supabase, user.id, prospect as Prospect);
-      }
+    if (prospect && !prospect.crm_client_id) {
+      await promoteProspectToCrm(supabase, user.id, prospect as Prospect);
     }
   }
 
@@ -386,7 +371,7 @@ export async function updateProspectStatus(id: string, status: ProspectStatus) {
 }
 
 export async function updateProspectMessage(id: string, message: string) {
-  const supabase = await createClient();
+  const { supabase } = await requireAuthenticatedUser();
   const { error } = await supabase
     .from("prospects")
     .update({ custom_message: message || null, updated_at: new Date().toISOString() })
@@ -398,7 +383,7 @@ export async function updateProspectMessage(id: string, message: string) {
 }
 
 export async function deleteProspect(id: string) {
-  const supabase = await createClient();
+  const { supabase } = await requireAuthenticatedUser();
   const { error } = await supabase.from("prospects").delete().eq("id", id);
 
   if (error) return { error: error.message };
@@ -407,14 +392,7 @@ export async function deleteProspect(id: string) {
 }
 
 export async function personalizeMessage(id: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { error: "Sessão expirada. Faça login novamente." };
-  }
+  const { supabase, user } = await requireAuthenticatedUser();
 
   const apiKey =
     process.env.OPENAI_API_KEY ||
@@ -434,7 +412,7 @@ export async function personalizeMessage(id: string) {
   if (prospectError) return { error: prospectError.message };
   if (!prospect) return { error: "Lead não encontrado." };
 
-  const template = await getProspectingTemplate();
+  const template = await loadProspectingTemplate(supabase, user.id);
   const portfolioUrl = portfolioUrlForTemplate();
   const baseMessage = fillTemplate(template, {
     nome: prospect.name,
@@ -513,7 +491,7 @@ Regras:
 // Compartilhado entre o botão manual "Enviar ao CRM" e a promoção automática
 // ao marcar um lead como contatado/respondeu.
 async function promoteProspectToCrm(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: AuthenticatedContext["supabase"],
   userId: string,
   prospect: Prospect,
 ) {
@@ -542,13 +520,8 @@ async function promoteProspectToCrm(
   return { crmClientId: client.id as string };
 }
 
-export async function promoteToCrm(id: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login");
+export async function promoteToCrm(id: string): Promise<PromoteToCrmResult> {
+  const { supabase, user } = await requireAuthenticatedUser();
 
   const { data: prospect, error: prospectError } = await supabase
     .from("prospects")
@@ -576,11 +549,7 @@ export async function sendProspectToConversas(id: string, message: string) {
   const trimmed = ensureStudioLinkInMessage(message);
   if (!trimmed) return { error: "Escreva a mensagem antes de enviar." };
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Sessão expirada. Faça login novamente." };
+  const { supabase, user } = await requireAuthenticatedUser();
 
   const { data: prospect, error: prospectError } = await supabase
     .from("prospects")
@@ -665,12 +634,7 @@ export async function sendProspectToConversas(id: string, message: string) {
 // nome + telefone (ou endereço/índice como fallback) — estável entre imports
 // do mesmo arquivo, mas específico dessa origem (por isso o prefixo "csv:").
 export async function importProspectsCsv(csvText: string, niche: string, city: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login");
+  const { supabase, user } = await requireAuthenticatedUser();
 
   const trimmedNiche = niche.trim();
   const trimmedCity = city.trim();

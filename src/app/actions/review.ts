@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { requireAuthenticatedUser } from "@/lib/supabase/require-authenticated-user";
 import { createClient } from "@/lib/supabase/server";
 import type { Project, SiteComment } from "@/types/briefing";
 
@@ -75,7 +76,7 @@ export async function addReviewComment(input: {
 }
 
 export async function enableSiteReview(projectId: string, sitePath: string) {
-  const supabase = await createClient();
+  const { supabase } = await requireAuthenticatedUser();
 
   const { data: existing } = await supabase
     .from("projects")
@@ -100,7 +101,7 @@ export async function enableSiteReview(projectId: string, sitePath: string) {
 }
 
 export async function getSitesOverview() {
-  const supabase = await createClient();
+  const { supabase } = await requireAuthenticatedUser();
   const { data: projects, error } = await supabase
     .from("projects")
     .select(
@@ -138,7 +139,7 @@ export async function approveReview(token: string) {
 }
 
 export async function getProjectComments(projectId: string) {
-  const supabase = await createClient();
+  const { supabase } = await requireAuthenticatedUser();
   const { data, error } = await supabase
     .from("site_comments")
     .select("*")
@@ -150,7 +151,7 @@ export async function getProjectComments(projectId: string) {
 }
 
 export async function resolveComment(commentId: string, projectId: string) {
-  const supabase = await createClient();
+  const { supabase } = await requireAuthenticatedUser();
   const { error } = await supabase
     .from("site_comments")
     .update({ status: "resolved", resolved_at: new Date().toISOString() })

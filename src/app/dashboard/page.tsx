@@ -3,11 +3,14 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   ArrowUpRight,
+  CalendarClock,
   CheckCircle2,
   ClipboardCheck,
   Clock3,
   LayoutDashboard,
+  MessageCircle,
   Plus,
+  Sparkles,
   Users,
   Wallet,
 } from "lucide-react";
@@ -24,8 +27,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getProjects } from "@/app/actions/projects";
-import { getCrmClients } from "@/app/actions/crm";
+import { getDashboardProjectSummary } from "@/app/actions/projects";
+import { getCrmDashboardSummary } from "@/app/actions/crm";
 import { createClient } from "@/lib/supabase/server";
 import type { ProjectStatus } from "@/types/briefing";
 import { cn } from "@/lib/utils";
@@ -37,33 +40,30 @@ const currencyFormatter = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 0,
 });
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ projects?: string }>;
+}) {
+  const params = await searchParams;
+  const showAllProjects = params.projects === "all";
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const [projects, crmClients] = await Promise.all([getProjects(), getCrmClients()]);
-
+  const [projectSummary, crmSummary] = await Promise.all([
+    getDashboardProjectSummary(showAllProjects),
+    getCrmDashboardSummary(),
+  ]);
   const stats = {
-    total: projects.length,
-    submitted: projects.filter((p) => p.status === "submitted").length,
-    pending: projects.filter((p) =>
-      ["sent", "in_progress"].includes(p.status),
-    ).length,
+    total: projectSummary.total,
+    submitted: projectSummary.submitted,
+    pending: projectSummary.pending,
   };
   const responseRate =
     stats.total > 0 ? Math.round((stats.submitted / stats.total) * 100) : 0;
   const today = format(new Date(), "dd MMM yyyy", { locale: ptBR });
   const userName = displayNameFromEmail(user?.email);
-
-  const crmStats = {
-    active: crmClients.filter((c) => c.stage !== "fechado" && c.stage !== "perdido")
-      .length,
-    openValue: crmClients
-      .filter((c) => c.stage !== "fechado" && c.stage !== "perdido")
-      .reduce((sum, c) => sum + (c.value ?? 0), 0),
-    closed: crmClients.filter((c) => c.stage === "fechado").length,
-  };
 
   return (
     <AdminShell userEmail={user?.email}>
@@ -92,6 +92,99 @@ export default async function DashboardPage() {
             </Link>
           }
         />
+
+        <section className="insyt-card overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[var(--insyt-border)] px-5 py-4 sm:px-6">
+            <div>
+              <h2 className="text-lg font-bold tracking-tight text-[var(--insyt-black)]">
+                Hoje
+              </h2>
+              <p className="text-xs text-[var(--insyt-muted)]">
+                O que pede atenção agora
+              </p>
+            </div>
+            <Sparkles className="size-5 text-[var(--insyt-primary)]" />
+          </div>
+          <div className="grid divide-y divide-[var(--insyt-border)] md:grid-cols-3 md:divide-x md:divide-y-0">
+            <TodayItem
+              href="/crm?view=conversas&filter=unread"
+              icon={MessageCircle}
+              label="Conversas não lidas"
+              value={crmSummary.unreadConversations}
+              detail="Abrir inbox do WhatsApp"
+            />
+            <div className="p-5 sm:p-6">
+              <Link
+                href={
+                  crmSummary.overdueSteps[0]
+                    ? `/crm/${crmSummary.overdueSteps[0].id}`
+                    : "/crm"
+                }
+                className="group flex items-start justify-between gap-3"
+              >
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-muted)]">
+                    Próximos passos atrasados
+                  </p>
+                  <p className="mt-2 text-3xl font-bold tracking-tight text-[var(--insyt-black)]">
+                    {crmSummary.overdueCount}
+                  </p>
+                </div>
+                <CalendarClock className="size-5 text-[var(--insyt-primary)]" />
+              </Link>
+              {crmSummary.overdueSteps.length > 0 ? (
+                <div className="mt-3 space-y-1.5">
+                  {crmSummary.overdueSteps.map((item) => (
+                    <Link
+                      key={item.id}
+                      href={`/crm/${item.id}`}
+                      className="block truncate text-xs text-[var(--insyt-slate)] hover:text-[var(--insyt-primary)]"
+                    >
+                      <span className="font-semibold">{item.name}</span>
+                      {" · "}
+                      {item.step}
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 text-xs text-[var(--insyt-muted)]">
+                  Nenhuma pendência vencida
+                </p>
+              )}
+            </div>
+            <div className="p-5 sm:p-6">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-muted)]">
+                    Briefings respondidos
+                  </p>
+                  <p className="mt-2 text-3xl font-bold tracking-tight text-[var(--insyt-black)]">
+                    {projectSummary.recentResponseCount}
+                  </p>
+                  <p className="text-xs text-[var(--insyt-muted)]">nos últimos 7 dias</p>
+                </div>
+                <ClipboardCheck className="size-5 text-[var(--insyt-primary)]" />
+              </div>
+              {projectSummary.recentResponses.length > 0 ? (
+                <div className="mt-3 space-y-1.5">
+                  {projectSummary.recentResponses.map((project) => (
+                    <Link
+                      key={project.id}
+                      href={`/projects/${project.id}`}
+                      className="block truncate text-xs font-semibold text-[var(--insyt-slate)] hover:text-[var(--insyt-primary)]"
+                    >
+                      {project.client_name || project.title}
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 text-xs text-[var(--insyt-muted)]">
+                  Nenhuma resposta recente
+                </p>
+              )}
+            </div>
+          </div>
+        </section>
 
         {/* Asymmetrical Bento Grid */}
         <div className="grid gap-6 md:grid-cols-12 md:grid-rows-2">
@@ -132,26 +225,44 @@ export default async function DashboardPage() {
             </Link>
           </div>
           <div className="grid gap-6 md:grid-cols-3">
-            <StatCard label="Leads ativos" value={crmStats.active} icon={Users} />
+            <StatCard label="Leads ativos" value={crmSummary.active} icon={Users} />
             <StatCard
               label="Pipeline em aberto"
-              value={currencyFormatter.format(crmStats.openValue)}
+              value={currencyFormatter.format(crmSummary.openValue)}
               icon={Wallet}
             />
-            <StatCard label="Clientes fechados" value={crmStats.closed} icon={CheckCircle2} />
+            <StatCard label="Clientes fechados" value={crmSummary.closed} icon={CheckCircle2} />
           </div>
         </div>
 
         {/* Table Card */}
-        <div className="insyt-card overflow-hidden">
-            <div className="border-b border-[var(--insyt-border)] px-8 py-6">
-              <h2 className="text-2xl font-bold tracking-tight text-[var(--insyt-black)]">Projetos recentes</h2>
-              <p className="mt-1 text-sm text-[var(--insyt-slate)]">
-                Clique em um projeto para ver respostas e copiar o link do cliente.
-              </p>
+        <div id="projetos" className="insyt-card scroll-mt-6 overflow-hidden">
+            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--insyt-border)] px-8 py-6">
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight text-[var(--insyt-black)]">
+                  {showAllProjects ? "Todos os projetos" : "Projetos recentes"}
+                </h2>
+                <p className="mt-1 text-sm text-[var(--insyt-slate)]">
+                  Clique em um projeto para ver respostas e copiar o link do cliente.
+                </p>
+              </div>
+              {projectSummary.total > 6 ? (
+                <Link
+                  href={
+                    showAllProjects
+                      ? "/dashboard#projetos"
+                      : "/dashboard?projects=all#projetos"
+                  }
+                  className="text-sm font-semibold text-[var(--insyt-primary)] hover:underline"
+                >
+                  {showAllProjects
+                    ? "Mostrar apenas recentes"
+                    : `Ver todos (${projectSummary.total})`}
+                </Link>
+              ) : null}
             </div>
             <div className="p-0 bg-white">
-              {projects.length === 0 ? (
+              {projectSummary.recentProjects.length === 0 ? (
                 <div className="px-6 py-24 text-center">
                   <p className="text-lg text-[var(--insyt-slate)]">
                     Nenhum briefing criado ainda.
@@ -176,7 +287,7 @@ export default async function DashboardPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {projects.map((project) => (
+                    {projectSummary.recentProjects.map((project) => (
                       <TableRow key={project.id} className="group border-[var(--insyt-border)] transition-colors hover:bg-[var(--insyt-canvas-alt)]/50">
                         <TableCell className="pl-8 py-5">
                           <Link
@@ -221,6 +332,40 @@ export default async function DashboardPage() {
         </div>
       </div>
     </AdminShell>
+  );
+}
+
+function TodayItem({
+  href,
+  icon: Icon,
+  label,
+  value,
+  detail,
+}: {
+  href: string;
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  value: number;
+  detail: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group flex items-start justify-between gap-3 p-5 transition-colors hover:bg-[var(--insyt-canvas)]/60 sm:p-6"
+    >
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-muted)]">
+          {label}
+        </p>
+        <p className="mt-2 text-3xl font-bold tracking-tight text-[var(--insyt-black)]">
+          {value}
+        </p>
+        <p className="mt-1 text-xs text-[var(--insyt-muted)] group-hover:text-[var(--insyt-primary)]">
+          {detail}
+        </p>
+      </div>
+      <Icon className="size-5 text-[var(--insyt-primary)]" />
+    </Link>
   );
 }
 

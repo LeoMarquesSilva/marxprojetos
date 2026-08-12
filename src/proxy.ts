@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isAdminRoute } from "@/lib/proxy-route-policy";
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -31,15 +32,8 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isAuthRoute = pathname.startsWith("/login");
-  const isAdminRoute =
-    pathname.startsWith("/dashboard") ||
-    pathname.startsWith("/projects") ||
-    pathname.startsWith("/crm") ||
-    pathname.startsWith("/prospeccao") ||
-    pathname.startsWith("/portfolio/gerenciar") ||
-    pathname.startsWith("/configuracoes");
 
-  if (isAdminRoute && !user) {
+  if (isAdminRoute(pathname) && !user) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
@@ -62,6 +56,7 @@ export const config = {
     "/prospeccao/:path*",
     "/portfolio/gerenciar/:path*",
     "/configuracoes/:path*",
+    "/sites/:path*",
     "/login",
   ],
 };

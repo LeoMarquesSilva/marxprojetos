@@ -2,11 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { requireAuthenticatedUser } from "@/lib/supabase/require-authenticated-user";
 import type { BriefingQuestion, ProjectStatus } from "@/types/briefing";
 
 export async function getTemplates() {
-  const supabase = await createClient();
+  const { supabase } = await requireAuthenticatedUser();
   const { data, error } = await supabase
     .from("briefing_templates")
     .select("*")
@@ -17,7 +17,7 @@ export async function getTemplates() {
 }
 
 export async function getProjects() {
-  const supabase = await createClient();
+  const { supabase } = await requireAuthenticatedUser();
   const { data, error } = await supabase
     .from("projects")
     .select("*")
@@ -27,8 +27,67 @@ export async function getProjects() {
   return data;
 }
 
+export async function getDashboardProjectSummary(includeAllProjects = false) {
+  const { supabase } = await requireAuthenticatedUser();
+  const recentResponseThreshold = new Date(
+    Date.now() - 7 * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  let recentProjectsQuery = supabase
+    .from("projects")
+    .select("id, title, client_name, status, created_at, submitted_at")
+    .order("created_at", { ascending: false });
+
+  if (!includeAllProjects) {
+    recentProjectsQuery = recentProjectsQuery.limit(6);
+  }
+
+  const [
+    totalResult,
+    submittedResult,
+    pendingResult,
+    recentProjectsResult,
+    recentResponsesResult,
+  ] = await Promise.all([
+    supabase.from("projects").select("id", { count: "exact", head: true }),
+    supabase
+      .from("projects")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "submitted"),
+    supabase
+      .from("projects")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["sent", "in_progress"]),
+    recentProjectsQuery,
+    supabase
+      .from("projects")
+      .select("id, title, client_name, submitted_at", { count: "exact" })
+      .not("submitted_at", "is", null)
+      .gte("submitted_at", recentResponseThreshold)
+      .order("submitted_at", { ascending: false })
+      .limit(3),
+  ]);
+
+  const firstError = [
+    totalResult.error,
+    submittedResult.error,
+    pendingResult.error,
+    recentProjectsResult.error,
+    recentResponsesResult.error,
+  ].find(Boolean);
+  if (firstError) throw new Error(firstError.message);
+
+  return {
+    total: totalResult.count ?? 0,
+    submitted: submittedResult.count ?? 0,
+    pending: pendingResult.count ?? 0,
+    recentProjects: recentProjectsResult.data ?? [],
+    recentResponseCount: recentResponsesResult.count ?? 0,
+    recentResponses: recentResponsesResult.data ?? [],
+  };
+}
+
 export async function getProject(id: string) {
-  const supabase = await createClient();
+  const { supabase } = await requireAuthenticatedUser();
   const { data: project, error } = await supabase
     .from("projects")
     .select("*")
@@ -61,12 +120,7 @@ type CreateProjectInput = {
 };
 
 export async function createProject(input: CreateProjectInput) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login");
+  const { supabase, user } = await requireAuthenticatedUser();
 
   const { data, error } = await supabase
     .from("projects")
@@ -112,7 +166,7 @@ export async function createProject(input: CreateProjectInput) {
 }
 
 export async function updateProjectStatus(id: string, status: ProjectStatus) {
-  const supabase = await createClient();
+  const { supabase } = await requireAuthenticatedUser();
   const { error } = await supabase
     .from("projects")
     .update({ status })
@@ -128,7 +182,7 @@ export async function updateProjectQuestions(
   id: string,
   questions: BriefingQuestion[],
 ) {
-  const supabase = await createClient();
+  const { supabase } = await requireAuthenticatedUser();
   const { error } = await supabase
     .from("projects")
     .update({ questions })

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -93,12 +93,53 @@ export function ProspectingBoard({
   const [messageProspect, setMessageProspect] = useState<Prospect | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Prospect | null>(null);
   const [sendingId, setSendingId] = useState<string | null>(null);
+  const [prospects, setProspects] = useState(initialProspects);
   const [isSearching, startSearchTransition] = useTransition();
   const [isEnriching, startEnrichTransition] = useTransition();
   const [, startTransition] = useTransition();
+  const pendingStatuses = useRef(
+    new Map<string, { status: ProspectStatus; operation: symbol }>(),
+  );
+  const pendingDeletes = useRef(new Set<string>());
+  const pendingPromotions = useRef(new Map<string, string>());
   const router = useRouter();
 
-  const prospects = initialProspects;
+  useEffect(() => {
+    setProspects(() => {
+      const serverIds = new Set(initialProspects.map((prospect) => prospect.id));
+      for (const id of pendingDeletes.current) {
+        if (!serverIds.has(id)) pendingDeletes.current.delete(id);
+      }
+
+      return initialProspects
+        .filter((prospect) => !pendingDeletes.current.has(prospect.id))
+        .map((prospect) => {
+          const pending = pendingStatuses.current.get(prospect.id);
+          if (pending && prospect.status === pending.status) {
+            pendingStatuses.current.delete(prospect.id);
+          }
+
+          const optimisticStatus =
+            pendingStatuses.current.get(prospect.id)?.status;
+          const pendingCrmClientId = pendingPromotions.current.get(prospect.id);
+          if (
+            pendingCrmClientId &&
+            prospect.crm_client_id === pendingCrmClientId
+          ) {
+            pendingPromotions.current.delete(prospect.id);
+          }
+
+          return {
+            ...prospect,
+            status: optimisticStatus ?? prospect.status,
+            crm_client_id:
+              pendingPromotions.current.get(prospect.id) ??
+              prospect.crm_client_id,
+          };
+        });
+    });
+  }, [initialProspects]);
+
   const hasPendingEnrichment = prospects.some((p) => p.enrich_job_id);
 
   const stats = useMemo(
@@ -140,6 +181,7 @@ export function ProspectingBoard({
       toast.success(
         `${result.imported} novo(s) lead(s) importado(s) de ${result.total} encontrado(s). O enriquecimento (e-mail, celular) roda em segundo plano — use "Atualizar dados" em alguns minutos.`,
       );
+      router.refresh();
     });
   }
 
@@ -150,6 +192,7 @@ export function ProspectingBoard({
         toast.error(result.error);
         return;
       }
+      router.refresh();
       if (result.pendingJobs && result.pendingJobs > 0) {
         toast.info(
           `${result.updated ?? 0} lead(s) atualizado(s); ainda há enriquecimento em andamento. Tente de novo em alguns minutos.`,
@@ -208,9 +251,29 @@ export function ProspectingBoard({
   }
 
   function handleStatusChange(p: Prospect, status: ProspectStatus) {
+    const operation = Symbol(p.id);
+    pendingStatuses.current.set(p.id, { status, operation });
+    setProspects((current) =>
+      current.map((prospect) =>
+        prospect.id === p.id ? { ...prospect, status } : prospect,
+      ),
+    );
+
     startTransition(async () => {
       const result = await updateProspectStatus(p.id, status);
-      if (result.error) toast.error(result.error);
+      if (result.error) {
+        toast.error(result.error);
+        if (pendingStatuses.current.get(p.id)?.operation === operation) {
+          pendingStatuses.current.delete(p.id);
+          setProspects((current) =>
+            current.map((prospect) =>
+              prospect.id === p.id ? { ...prospect, status: p.status } : prospect,
+            ),
+          );
+        }
+        return;
+      }
+      router.refresh();
     });
   }
 
@@ -221,17 +284,45 @@ export function ProspectingBoard({
         toast.error(result.error);
         return;
       }
+      const crmClientId = result.crmClientId;
+      if (!crmClientId) {
+        toast.error("O CRM não retornou o cliente criado.");
+        return;
+      }
+      pendingPromotions.current.set(p.id, crmClientId);
+      setProspects((current) =>
+        current.map((prospect) =>
+          prospect.id === p.id
+            ? { ...prospect, crm_client_id: crmClientId }
+            : prospect,
+        ),
+      );
       toast.success("Lead enviado ao CRM!");
+      router.refresh();
     });
   }
 
   function handleDelete() {
     if (!deleteTarget) return;
-    const id = deleteTarget.id;
+    const removed = deleteTarget;
+    const id = removed.id;
     setDeleteTarget(null);
+    pendingDeletes.current.add(id);
+    setProspects((current) => current.filter((prospect) => prospect.id !== id));
+
     startTransition(async () => {
       const result = await deleteProspect(id);
-      if (result.error) toast.error(result.error);
+      if (result.error) {
+        toast.error(result.error);
+        pendingDeletes.current.delete(id);
+        setProspects((current) =>
+          current.some((prospect) => prospect.id === id)
+            ? current
+            : [removed, ...current],
+        );
+        return;
+      }
+      router.refresh();
     });
   }
 

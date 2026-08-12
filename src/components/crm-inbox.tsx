@@ -5,6 +5,8 @@ import Link from "next/link";
 import { format, isToday, isYesterday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
+  AlertTriangle,
+  ArrowLeft,
   Check,
   CheckCheck,
   ExternalLink,
@@ -12,12 +14,19 @@ import {
   Loader2,
   MapPin,
   MessageCircle,
+  PanelRight,
   RefreshCw,
   Search,
   Star,
+  UserPlus,
 } from "lucide-react";
 import { toast } from "sonner";
-import { updateCrmClient, updateCrmClientStage } from "@/app/actions/crm";
+import {
+  createAndLinkCrmClientFromChat,
+  updateCrmClient,
+  updateCrmClientStage,
+} from "@/app/actions/crm";
+import { CrmLostReasonDialog } from "@/components/crm-lost-reason-dialog";
 import {
   getCrmInboxChatContext,
   getCrmWhatsappInbox,
@@ -28,6 +37,12 @@ import {
 import { CrmWhatsappThread } from "@/components/crm-whatsapp-thread";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -132,15 +147,17 @@ function Avatar({
 export function CrmInbox({
   initialChats,
   initialActiveJid = null,
+  initialFilter = "all",
 }: {
   initialChats: CrmInboxChat[];
   initialActiveJid?: string | null;
+  initialFilter?: Filter;
 }) {
   const [chats, setChats] = useState(initialChats);
   const [query, setQuery] = useState("");
   // Uma inbox precisa abrir mostrando o WhatsApp inteiro. O filtro de
   // prospecção continua disponível para focar só no trabalho comercial.
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<Filter>(initialFilter);
   const [activeJid, setActiveJid] = useState<string | null>(() => {
     if (
       initialActiveJid &&
@@ -158,6 +175,14 @@ export function CrmInbox({
     chat: CrmInboxChat;
     prospect: CrmInboxProspect | null;
     lastOutboundStatus: CrmWhatsappMessage["status"] | null;
+  } | null>(null);
+  const [mobileView, setMobileView] = useState<"list" | "chat">(
+    initialActiveJid ? "chat" : "list",
+  );
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [syncInfo, setSyncInfo] = useState<{
+    at: Date;
+    partialErrors: string[];
   } | null>(null);
   const [isSyncing, startSyncTransition] = useTransition();
 
@@ -194,6 +219,10 @@ export function CrmInbox({
         setContext(null);
       }
 
+      setSyncInfo({
+        at: new Date(),
+        partialErrors: result.messageErrors ?? [],
+      });
       toast.success(
         `${result.chatsUpserted ?? 0} conversas · ${result.messagesUpserted ?? 0} mensagens`,
       );
@@ -377,6 +406,11 @@ export function CrmInbox({
   const activeChat =
     activeJid ? (chats.find((chat) => chat.remoteJid === activeJid) ?? null) : null;
 
+  function selectChat(remoteJid: string) {
+    setActiveJid(remoteJid);
+    setMobileView("chat");
+  }
+
   const filters: { id: Filter; label: string; count: number }[] = [
     { id: "prospeccao", label: "Prospecção", count: counts.prospeccao },
     { id: "all", label: "Todas", count: counts.total },
@@ -444,8 +478,42 @@ export function CrmInbox({
         </Button>
       </div>
 
-      <div className="insyt-card grid min-h-[640px] overflow-hidden lg:h-[calc(100dvh-12rem)] lg:max-h-[820px] lg:min-h-[560px] lg:grid-cols-[20rem_minmax(0,1fr)_18rem]">
-        <aside className="flex min-h-[280px] flex-col border-b border-[var(--insyt-border)] lg:min-h-0 lg:border-b-0 lg:border-r">
+      {syncInfo ? (
+        <div
+          role="status"
+          className={cn(
+            "flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl px-3 py-2 text-xs",
+            syncInfo.partialErrors.length > 0
+              ? "bg-amber-50 text-amber-900"
+              : "bg-emerald-50 text-emerald-800",
+          )}
+        >
+          {syncInfo.partialErrors.length > 0 ? (
+            <AlertTriangle className="size-3.5 shrink-0" />
+          ) : (
+            <Check className="size-3.5 shrink-0" />
+          )}
+          <span>
+            Última sincronização às {format(syncInfo.at, "HH:mm")}
+          </span>
+          {syncInfo.partialErrors.length > 0 ? (
+            <span
+              title={syncInfo.partialErrors.join("\n")}
+              className="font-semibold"
+            >
+              · {syncInfo.partialErrors.length} conversa(s) com erro parcial
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="insyt-card grid h-[calc(100dvh-15rem)] min-h-[32rem] overflow-hidden lg:h-[calc(100dvh-12rem)] lg:max-h-[820px] lg:min-h-[560px] lg:grid-cols-[20rem_minmax(0,1fr)_18rem]">
+        <aside
+          className={cn(
+            "min-h-0 flex-col border-[var(--insyt-border)] lg:flex lg:border-r",
+            mobileView === "list" ? "flex" : "hidden",
+          )}
+        >
           <div className="border-b border-[var(--insyt-border)] p-3">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--insyt-muted)]" />
@@ -480,7 +548,7 @@ export function CrmInbox({
                   <button
                     key={chat.remoteJid}
                     type="button"
-                    onClick={() => setActiveJid(chat.remoteJid)}
+                    onClick={() => selectChat(chat.remoteJid)}
                     className={cn(
                       "flex w-full items-start gap-3 border-b border-[var(--insyt-border)]/70 px-3.5 py-3.5 text-left transition-colors",
                       selected
@@ -559,11 +627,24 @@ export function CrmInbox({
           </div>
         </aside>
 
-        <section className="flex min-h-[420px] flex-col overflow-hidden border-b border-[var(--insyt-border)] lg:min-h-0 lg:border-b-0 lg:border-r">
+        <section
+          className={cn(
+            "min-h-0 flex-col overflow-hidden border-[var(--insyt-border)] lg:flex lg:border-r",
+            mobileView === "chat" ? "flex" : "hidden",
+          )}
+        >
           {activeChat ? (
             <>
               <header className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--insyt-border)] px-5 py-4">
                 <div className="flex min-w-0 items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setMobileView("list")}
+                    aria-label="Voltar para conversas"
+                    className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-[var(--insyt-slate)] transition-colors hover:bg-[var(--insyt-canvas)] lg:hidden"
+                  >
+                    <ArrowLeft className="size-5" />
+                  </button>
                   <Avatar
                     name={displayName(activeChat)}
                     src={activeChat.profilePictureUrl}
@@ -583,6 +664,16 @@ export function CrmInbox({
                 </div>
 
                 <div className="flex shrink-0 items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => setDetailsOpen(true)}
+                    aria-label="Abrir detalhes do contato"
+                    className="lg:hidden"
+                  >
+                    <PanelRight className="size-4" />
+                  </Button>
                   {activeChat.client ? (
                     <>
                       <span
@@ -661,6 +752,8 @@ export function CrmInbox({
         <InboxDetailsPanel
           activeChat={activeChat}
           context={context}
+          className="hidden lg:flex"
+          idPrefix="desktop"
           onNoteSaved={(note) => {
             if (!activeChat) return;
             setChats((prev) =>
@@ -693,6 +786,50 @@ export function CrmInbox({
           }}
         />
       </div>
+
+      <Sheet open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <SheetContent side="right" className="w-[min(92vw,26rem)] p-0 lg:hidden">
+          <SheetHeader className="border-b border-[var(--insyt-border)] pr-14">
+            <SheetTitle>Detalhes do contato</SheetTitle>
+          </SheetHeader>
+          <InboxDetailsPanel
+            activeChat={activeChat}
+            context={context}
+            className="flex min-h-0 flex-1"
+            idPrefix="mobile"
+            onNoteSaved={(note) => {
+              if (!activeChat) return;
+              setChats((prev) =>
+                prev.map((chat) =>
+                  chat.remoteJid === activeChat.remoteJid
+                    ? { ...chat, inboxNote: note }
+                    : chat,
+                ),
+              );
+              setContext((prev) =>
+                prev
+                  ? { ...prev, chat: { ...prev.chat, inboxNote: note } }
+                  : prev,
+              );
+            }}
+            onClientUpdated={(client) => {
+              if (!activeChat) return;
+              setChats((prev) =>
+                prev.map((chat) =>
+                  chat.remoteJid === activeChat.remoteJid
+                    ? { ...chat, client }
+                    : chat,
+                ),
+              );
+              setContext((prev) =>
+                prev
+                  ? { ...prev, chat: { ...prev.chat, client } }
+                  : prev,
+              );
+            }}
+          />
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
@@ -700,6 +837,8 @@ export function CrmInbox({
 function InboxDetailsPanel({
   activeChat,
   context,
+  className,
+  idPrefix,
   onNoteSaved,
   onClientUpdated,
 }: {
@@ -709,12 +848,16 @@ function InboxDetailsPanel({
     prospect: CrmInboxProspect | null;
     lastOutboundStatus: CrmWhatsappMessage["status"] | null;
   } | null;
+  className?: string;
+  idPrefix: string;
   onNoteSaved: (note: string | null) => void;
   onClientUpdated: (client: NonNullable<CrmInboxChat["client"]>) => void;
 }) {
   const [inboxNote, setInboxNote] = useState("");
   const [dealValue, setDealValue] = useState("");
   const [dealSource, setDealSource] = useState("");
+  const [lostDialogOpen, setLostDialogOpen] = useState(false);
+  const [lostReasonInput, setLostReasonInput] = useState("");
   const [isPending, startTransition] = useTransition();
 
   // Os campos do painel refletem a conversa aberta. Ajustar durante o render
@@ -742,7 +885,12 @@ function InboxDetailsPanel({
 
   if (!activeChat) {
     return (
-      <aside className="hidden flex-col bg-[var(--insyt-canvas)]/40 p-5 lg:flex">
+      <aside
+        className={cn(
+          "flex-col bg-[var(--insyt-canvas)]/40 p-5",
+          className,
+        )}
+      >
         <p className="text-sm text-[var(--insyt-muted)]">
           Detalhes do contato aparecem ao abrir uma conversa.
         </p>
@@ -755,8 +903,33 @@ function InboxDetailsPanel({
   const lastStatus = context?.lastOutboundStatus ?? null;
   const phone = activeChat.remoteJid.replace("@s.whatsapp.net", "");
 
+  function commitStage(stage: CrmStage, lostReason?: string) {
+    const client = activeChat!.client!;
+    startTransition(async () => {
+      const result = await updateCrmClientStage(client.id, stage, lostReason);
+      if ("error" in result) {
+        toast.error(result.error);
+        return;
+      }
+      setLostDialogOpen(false);
+      onClientUpdated({
+        ...client,
+        stage,
+        lost_reason:
+          stage === "perdido" ? (lostReason?.trim() ?? client.lost_reason) : client.lost_reason,
+      });
+      toast.success(`Movido para ${STAGE_LABELS[stage]}`);
+    });
+  }
+
   return (
-    <aside className="flex min-h-[280px] flex-col overflow-y-auto bg-[var(--insyt-canvas)]/30 p-5 lg:min-h-0">
+    <>
+      <aside
+      className={cn(
+        "min-h-0 flex-col overflow-y-auto bg-[var(--insyt-canvas)]/30 p-5",
+        className,
+      )}
+    >
       <div className="flex flex-col items-center gap-3 border-b border-[var(--insyt-border)] pb-5 text-center">
         <Avatar
           name={name}
@@ -804,7 +977,7 @@ function InboxDetailsPanel({
 
             <div className="space-y-1.5 rounded-xl bg-white p-3">
               <label
-                htmlFor="inbox-deal-value"
+                htmlFor={`${idPrefix}-inbox-deal-value`}
                 className="text-xs font-medium text-[var(--insyt-slate)]"
               >
                 Valor em negociação
@@ -815,7 +988,7 @@ function InboxDetailsPanel({
                     R$
                   </span>
                   <Input
-                    id="inbox-deal-value"
+                    id={`${idPrefix}-inbox-deal-value`}
                     inputMode="decimal"
                     value={dealValue}
                     onChange={(event) =>
@@ -881,18 +1054,12 @@ function InboxDetailsPanel({
                       disabled={isPending || active}
                       onClick={() => {
                         const client = activeChat.client!;
-                        startTransition(async () => {
-                          const result = await updateCrmClientStage(
-                            client.id,
-                            stage,
-                          );
-                          if (result.error) {
-                            toast.error(result.error);
-                            return;
-                          }
-                          onClientUpdated({ ...client, stage });
-                          toast.success(`Movido para ${STAGE_LABELS[stage]}`);
-                        });
+                        if (stage === "perdido") {
+                          setLostReasonInput(client.lost_reason ?? "");
+                          setLostDialogOpen(true);
+                          return;
+                        }
+                        commitStage(stage);
                       }}
                       className={cn(
                         "rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide transition-colors",
@@ -914,14 +1081,14 @@ function InboxDetailsPanel({
 
             <div className="space-y-1.5">
               <label
-                htmlFor="inbox-deal-source"
+                htmlFor={`${idPrefix}-inbox-deal-source`}
                 className="text-xs font-medium text-[var(--insyt-slate)]"
               >
                 Origem
               </label>
               <div className="flex gap-2">
                 <Input
-                  id="inbox-deal-source"
+                  id={`${idPrefix}-inbox-deal-source`}
                   value={dealSource}
                   onChange={(event) => setDealSource(event.target.value)}
                   placeholder="Indicação, Instagram, Google..."
@@ -965,13 +1132,46 @@ function InboxDetailsPanel({
             )}
           </section>
         ) : (
-          <section className="space-y-2">
+          <section className="space-y-3">
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--insyt-muted)]">
               Negociação
             </p>
             <p className="text-xs text-[var(--insyt-muted)]">
-              Vincule um cliente CRM para registrar valor, estágio e origem.
+              Crie o cliente com os dados desta conversa para registrar valor,
+              estágio e origem.
             </p>
+            <Button
+              type="button"
+              size="sm"
+              disabled={isPending}
+              onClick={() => {
+                startTransition(async () => {
+                  const result = await createAndLinkCrmClientFromChat({
+                    remoteJid: activeChat.remoteJid,
+                    name,
+                    phone,
+                  });
+                  if ("error" in result && result.error) {
+                    toast.error(result.error);
+                    return;
+                  }
+                  if (!result.client) {
+                    toast.error("Não foi possível carregar o novo cliente.");
+                    return;
+                  }
+                  onClientUpdated(result.client);
+                  toast.success("Cliente criado e conversa vinculada");
+                });
+              }}
+              className="w-full"
+            >
+              {isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <UserPlus className="size-4" />
+              )}
+              Criar cliente no CRM
+            </Button>
           </section>
         )}
 
@@ -1070,6 +1270,16 @@ function InboxDetailsPanel({
             conversa (inbox_note) logo acima. O acompanhamento do lead virou
             o "próximo passo", na ficha do cliente. */}
       </div>
-    </aside>
+      </aside>
+      <CrmLostReasonDialog
+        open={lostDialogOpen}
+        inputId={`${idPrefix}-inbox-lost-reason`}
+        reason={lostReasonInput}
+        isPending={isPending}
+        onReasonChange={setLostReasonInput}
+        onCancel={() => setLostDialogOpen(false)}
+        onConfirm={(reason) => commitStage("perdido", reason)}
+      />
+    </>
   );
 }

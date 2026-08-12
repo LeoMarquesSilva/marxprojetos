@@ -180,6 +180,7 @@ export type CrmInboxChat = {
     source: string | null;
     stage: CrmStage;
     value: number | null;
+    lost_reason: string | null;
   } | null;
 };
 

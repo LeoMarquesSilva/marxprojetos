@@ -3,7 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { fetchWhatsAppProfile, findWhatsAppChats, findWhatsAppMessages, sendWhatsAppText } from "@/lib/evolution";
+import {
+  chooseFinalOutgoingStatus,
+  chooseMostAdvancedOutgoingStatus,
+  finalizeOutgoingMessageIdempotently,
+  reconcilePendingOutgoingMessages,
+  runOutgoingMessageOutbox,
+} from "@/lib/outgoing-message-outbox";
 import { normalizeBrPhone, phoneToRemoteJid, remoteJidToDigits } from "@/lib/phone";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type {
   CrmInboxChat,
   CrmInboxProspect,
@@ -59,7 +67,7 @@ export async function getCrmWhatsappInbox(): Promise<CrmInboxChat[]> {
       .order("last_message_at", { ascending: false, nullsFirst: false }),
     supabase
       .from("crm_clients")
-      .select("id, name, company, phone, email, source, stage, value"),
+      .select("id, name, company, phone, email, source, stage, value, lost_reason"),
   ]);
 
   if (chatsResult.error) throw new Error(chatsResult.error.message);
@@ -77,6 +85,7 @@ export async function getCrmWhatsappInbox(): Promise<CrmInboxChat[]> {
         source: client.source,
         stage: client.stage as CrmStage,
         value: client.value == null ? null : Number(client.value),
+        lost_reason: client.lost_reason,
       },
     ]),
   );
@@ -239,7 +248,7 @@ export async function getCrmInboxChatContext(remoteJid: string): Promise<{
   if (chatRow.client_id) {
     const { data: clientRow } = await supabase
       .from("crm_clients")
-      .select("id, name, company, phone, email, source, stage, value")
+      .select("id, name, company, phone, email, source, stage, value, lost_reason")
       .eq("id", chatRow.client_id)
       .maybeSingle();
 
@@ -253,6 +262,7 @@ export async function getCrmInboxChatContext(remoteJid: string): Promise<{
         source: clientRow.source,
         stage: clientRow.stage as CrmStage,
         value: clientRow.value == null ? null : Number(clientRow.value),
+        lost_reason: clientRow.lost_reason,
       };
     }
   }
@@ -320,7 +330,7 @@ async function persistOutgoingMessage({
   } = await supabase.auth.getUser();
   if (!user) return { error: "Sessão expirada. Faça login novamente." };
 
-  await supabase.from("crm_whatsapp_chats").upsert(
+  const { error: chatError } = await supabase.from("crm_whatsapp_chats").upsert(
     {
       remote_jid: remoteJid,
       client_id: clientId,
@@ -328,53 +338,130 @@ async function persistOutgoingMessage({
     },
     { onConflict: "remote_jid" },
   );
+  if (chatError) {
+    return { error: "Não foi possível preparar a conversa para o envio." };
+  }
 
   try {
-    const { providerMessageId } = await sendWhatsAppText(remoteJid, text);
+    const result = await runOutgoingMessageOutbox({
+      createPending: async () => {
+        const { data, error } = await supabase
+          .from("crm_whatsapp_mensagens")
+          .insert({
+            remote_jid: remoteJid,
+            client_id: clientId,
+            from_me: true,
+            conteudo: text,
+            status: "pending",
+            provider_message_id: null,
+            erro: null,
+            reactions: [],
+          })
+          .select(
+            "id, remote_jid, client_id, from_me, conteudo, status, erro, created_at, provider_message_id, reactions",
+          )
+          .single();
+        if (error || !data) throw new Error("outbox_create_failed");
+        return mapMessage(data);
+      },
+      send: () => sendWhatsAppText(remoteJid, text),
+      markSent: async (id, providerMessageId) =>
+        finalizeOutgoingMessageIdempotently({
+          providerMessageId,
+          finalizePending: async () => {
+            const { data, error } = await supabase
+              .from("crm_whatsapp_mensagens")
+              .update({
+                status: "server_ack",
+                provider_message_id: providerMessageId,
+                erro: null,
+              })
+              .eq("id", id)
+              .select(
+                "id, remote_jid, client_id, from_me, conteudo, status, erro, created_at, provider_message_id, reactions",
+              )
+              .single();
+            if (error || !data) throw new Error("outbox_finalize_failed");
+            return mapMessage(data);
+          },
+          findProviderMessage: async () => {
+            if (!providerMessageId) return null;
+            const { data, error } = await supabase
+              .from("crm_whatsapp_mensagens")
+              .select(
+                "id, remote_jid, client_id, from_me, conteudo, status, erro, created_at, provider_message_id, reactions",
+              )
+              .eq("provider_message_id", providerMessageId)
+              .maybeSingle();
+            if (error) throw new Error("outbox_reconcile_lookup_failed");
+            if (!data) return null;
 
-    const { data: inserted, error: insertError } = await supabase
-      .from("crm_whatsapp_mensagens")
-      .insert({
-        remote_jid: remoteJid,
-        client_id: clientId,
-        from_me: true,
-        conteudo: text,
-        status: "server_ack",
-        provider_message_id: providerMessageId,
-        reactions: [],
-      })
-      .select(
-        "id, remote_jid, client_id, from_me, conteudo, status, erro, created_at, provider_message_id, reactions",
-      )
-      .single();
+            const message = mapMessage(data);
+            if (message.remote_jid !== remoteJid || !message.from_me) {
+              throw new Error("outbox_reconcile_mismatch");
+            }
+            return message;
+          },
+          adoptProviderMessage: async (providerMessage) => {
+            const { data, error } = await supabase
+              .from("crm_whatsapp_mensagens")
+              .update({
+                remote_jid: remoteJid,
+                client_id: clientId ?? providerMessage.client_id,
+                from_me: true,
+                conteudo: text,
+                status: chooseFinalOutgoingStatus(providerMessage.status),
+                erro: null,
+              })
+              .eq("id", providerMessage.id)
+              .eq("provider_message_id", providerMessageId)
+              .select(
+                "id, remote_jid, client_id, from_me, conteudo, status, erro, created_at, provider_message_id, reactions",
+              )
+              .single();
+            if (error || !data) throw new Error("outbox_reconcile_update_failed");
+            return mapMessage(data);
+          },
+          removePendingDuplicate: async (providerMessage) => {
+            if (providerMessage.id === id) return;
 
-    if (insertError) return { error: insertError.message };
-
-    await supabase
-      .from("crm_whatsapp_chats")
-      .update({
-        last_message_at: new Date().toISOString(),
-        last_message_preview: text.slice(0, 140),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("remote_jid", remoteJid);
-
-    return { success: true, message: mapMessage(inserted) };
-  } catch (sendError) {
-    const message =
-      sendError instanceof Error ? sendError.message : String(sendError);
-
-    await supabase.from("crm_whatsapp_mensagens").insert({
-      remote_jid: remoteJid,
-      client_id: clientId,
-      from_me: true,
-      conteudo: text,
-      status: "error",
-      erro: message.slice(0, 1000),
-      reactions: [],
+            const admin = createAdminClient();
+            const { error } = await admin
+              .from("crm_whatsapp_mensagens")
+              .delete()
+              .eq("id", id)
+              .is("provider_message_id", null);
+            if (error) throw new Error("outbox_reconcile_delete_failed");
+          },
+        }),
+      markError: async (id, safeError) => {
+        const { data, error } = await supabase
+          .from("crm_whatsapp_mensagens")
+          .update({ status: "error", erro: safeError })
+          .eq("id", id)
+          .select(
+            "id, remote_jid, client_id, from_me, conteudo, status, erro, created_at, provider_message_id, reactions",
+          )
+          .single();
+        if (error || !data) throw new Error("outbox_error_update_failed");
+        return mapMessage(data);
+      },
     });
 
-    return { error: message };
+    if ("success" in result) {
+      await supabase
+        .from("crm_whatsapp_chats")
+        .update({
+          last_message_at: new Date().toISOString(),
+          last_message_preview: text.slice(0, 140),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("remote_jid", remoteJid);
+    }
+
+    return result;
+  } catch {
+    return { error: "Não foi possível preparar a mensagem para o envio." };
   }
 }
 
@@ -451,10 +538,11 @@ function mapSyncedStatus(raw: string): CrmWhatsappMessage["status"] {
 async function buildPhoneClientIndex(
   supabase: Awaited<ReturnType<typeof createClient>>,
 ) {
-  const { data: clients } = await supabase
+  const { data: clients, error } = await supabase
     .from("crm_clients")
     .select("id, phone")
     .not("phone", "is", null);
+  if (error) throw new Error("Não foi possível consultar os clientes.");
 
   const byE164 = new Map<string, string>();
   for (const client of clients ?? []) {
@@ -486,8 +574,11 @@ export async function syncWhatsAppInbox() {
   const supabase = await createClient();
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Sessão expirada. Faça login novamente." };
+  if (authError || !user) {
+    return { error: "Sessão expirada. Faça login novamente." };
+  }
 
   let chats;
   try {
@@ -497,18 +588,30 @@ export async function syncWhatsAppInbox() {
     return { error: message };
   }
 
-  const clientByPhone = await buildPhoneClientIndex(supabase);
+  let clientByPhone: Awaited<ReturnType<typeof buildPhoneClientIndex>>;
+  try {
+    clientByPhone = await buildPhoneClientIndex(supabase);
+  } catch {
+    return { error: "Não foi possível consultar os clientes." };
+  }
   const instance = process.env.EVOLUTION_INSTANCE ?? null;
   let chatsUpserted = 0;
   let messagesUpserted = 0;
   let linkedClients = 0;
   const messageErrors: string[] = [];
+  const recentMessagesByJid = new Map<
+    string,
+    Awaited<ReturnType<typeof findWhatsAppMessages>>
+  >();
 
-  const { data: existingChats } = await supabase
+  const { data: existingChats, error: existingChatsError } = await supabase
     .from("crm_whatsapp_chats")
     .select(
       "remote_jid, client_id, push_name, profile_picture_url, origem, lid_jid",
     );
+  if (existingChatsError) {
+    return { error: "Não foi possível consultar as conversas existentes." };
+  }
   const existingByJid = new Map(
     (existingChats ?? []).map((chat) => [chat.remote_jid, chat]),
   );
@@ -552,6 +655,7 @@ export async function syncWhatsAppInbox() {
   await runWithConcurrency(chats, 4, async (chat) => {
     try {
       const messages = await findWhatsAppMessages(chat.remoteJid, 100);
+      recentMessagesByJid.set(chat.remoteJid, messages);
       if (messages.length === 0) return;
 
       const digits = remoteJidToDigits(chat.remoteJid);
@@ -561,16 +665,54 @@ export async function syncWhatsAppInbox() {
         existingByJid.get(chat.remoteJid)?.client_id ??
         null;
 
-      const rows = messages.map((message) => ({
-        remote_jid: message.remoteJid,
-        client_id: clientId,
-        from_me: message.fromMe,
-        conteudo: message.content,
-        status: mapSyncedStatus(message.status),
-        provider_message_id: message.providerMessageId,
-        created_at: message.createdAt,
-        reactions: [],
-      }));
+      const outgoingProviderIds = messages
+        .filter((message) => message.fromMe)
+        .map((message) => message.providerMessageId);
+      const existingStatusByProviderId = new Map<string, string>();
+      if (outgoingProviderIds.length > 0) {
+        const { data: existingMessages, error: existingMessagesError } =
+          await supabase
+            .from("crm_whatsapp_mensagens")
+            .select("provider_message_id, status")
+            .in("provider_message_id", outgoingProviderIds);
+        if (existingMessagesError) {
+          throw new Error("Falha ao consultar estados das mensagens.");
+        }
+        for (const existingMessage of existingMessages ?? []) {
+          if (existingMessage.provider_message_id) {
+            existingStatusByProviderId.set(
+              existingMessage.provider_message_id,
+              existingMessage.status,
+            );
+          }
+        }
+      }
+
+      const rows = messages.map((message) => {
+        const syncedStatus = mapSyncedStatus(message.status);
+        const existingStatus = existingStatusByProviderId.get(
+          message.providerMessageId,
+        );
+        return {
+          remote_jid: message.remoteJid,
+          client_id: clientId,
+          from_me: message.fromMe,
+          conteudo: message.content,
+          status:
+            message.fromMe && existingStatus
+              ? chooseMostAdvancedOutgoingStatus(
+                  existingStatus,
+                  syncedStatus,
+                )
+              : syncedStatus,
+          provider_message_id: message.providerMessageId,
+          created_at: message.createdAt,
+          reactions: [],
+          // O contador do chat já veio consolidado da Evolution durante o
+          // sync; webhooks posteriores não devem contabilizar este histórico.
+          unread_counted: true,
+        };
+      });
 
       const { error, count } = await supabase
         .from("crm_whatsapp_mensagens")
@@ -589,7 +731,7 @@ export async function syncWhatsAppInbox() {
 
       const last = messages[messages.length - 1];
       if (last) {
-        await supabase
+        const { error: chatUpdateError } = await supabase
           .from("crm_whatsapp_chats")
           .update({
             last_message_at: last.createdAt,
@@ -597,6 +739,11 @@ export async function syncWhatsAppInbox() {
             updated_at: new Date().toISOString(),
           })
           .eq("remote_jid", chat.remoteJid);
+        if (chatUpdateError) {
+          messageErrors.push(
+            `${chat.remoteJid}: falha ao atualizar resumo da conversa`,
+          );
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -604,6 +751,123 @@ export async function syncWhatsAppInbox() {
     }
   });
 
+  let reconciliation;
+  try {
+    reconciliation = await reconcilePendingOutgoingMessages({
+      listPending: async () => {
+        const { data, error } = await supabase
+          .from("crm_whatsapp_mensagens")
+          .select(
+            "id, remote_jid, client_id, conteudo, created_at, provider_message_id",
+          )
+          .eq("from_me", true)
+          .eq("status", "pending");
+        if (error) throw new Error("pending_lookup_failed");
+        return (data ?? []).map((pending) => ({
+          id: pending.id,
+          remoteJid: pending.remote_jid,
+          clientId: pending.client_id,
+          text: pending.conteudo ?? "",
+          createdAt: pending.created_at,
+          providerMessageId: pending.provider_message_id,
+        }));
+      },
+      findRecent: async (remoteJid) => {
+        const cached = recentMessagesByJid.get(remoteJid);
+        if (cached) return cached;
+        const messages = await findWhatsAppMessages(remoteJid, 100);
+        recentMessagesByJid.set(remoteJid, messages);
+        return messages;
+      },
+      finalizeMatch: async (pending, match) => {
+        const matchedStatus = mapSyncedStatus(match.status);
+        await finalizeOutgoingMessageIdempotently({
+          providerMessageId: match.providerMessageId,
+          finalizePending: async () => {
+            const { data, error } = await supabase
+              .from("crm_whatsapp_mensagens")
+              .update({
+                status: chooseFinalOutgoingStatus(matchedStatus),
+                provider_message_id: match.providerMessageId,
+                erro: null,
+              })
+              .eq("id", pending.id)
+              .eq("from_me", true)
+              .eq("status", "pending")
+              .select(
+                "id, remote_jid, client_id, from_me, conteudo, status, erro, created_at, provider_message_id, reactions",
+              )
+              .single();
+            if (error || !data) throw new Error("pending_finalize_failed");
+            return mapMessage(data);
+          },
+          findProviderMessage: async () => {
+            const { data, error } = await supabase
+              .from("crm_whatsapp_mensagens")
+              .select(
+                "id, remote_jid, client_id, from_me, conteudo, status, erro, created_at, provider_message_id, reactions",
+              )
+              .eq("provider_message_id", match.providerMessageId)
+              .maybeSingle();
+            if (error) throw new Error("provider_lookup_failed");
+            return data ? mapMessage(data) : null;
+          },
+          adoptProviderMessage: async (providerMessage) => {
+            if (
+              providerMessage.remote_jid !== pending.remoteJid ||
+              !providerMessage.from_me
+            ) {
+              throw new Error("provider_message_mismatch");
+            }
+            const { data, error } = await supabase
+              .from("crm_whatsapp_mensagens")
+              .update({
+                client_id: pending.clientId ?? providerMessage.client_id,
+                conteudo: pending.text,
+                status: chooseMostAdvancedOutgoingStatus(
+                  providerMessage.status,
+                  matchedStatus,
+                ),
+                erro: null,
+              })
+              .eq("id", providerMessage.id)
+              .eq("provider_message_id", match.providerMessageId)
+              .select(
+                "id, remote_jid, client_id, from_me, conteudo, status, erro, created_at, provider_message_id, reactions",
+              )
+              .single();
+            if (error || !data) throw new Error("provider_adopt_failed");
+            return mapMessage(data);
+          },
+          removePendingDuplicate: async () => {
+            const admin = createAdminClient();
+            const { error } = await admin
+              .from("crm_whatsapp_mensagens")
+              .delete()
+              .eq("id", pending.id)
+              .eq("from_me", true)
+              .eq("status", "pending");
+            if (error) throw new Error("pending_duplicate_delete_failed");
+          },
+        });
+      },
+      markExpired: async (pending, safeError) => {
+        const { data, error } = await supabase
+          .from("crm_whatsapp_mensagens")
+          .update({ status: "error", erro: safeError })
+          .eq("id", pending.id)
+          .eq("from_me", true)
+          .eq("status", "pending")
+          .select("id")
+          .single();
+        if (error || !data) throw new Error("pending_expire_failed");
+      },
+    });
+  } catch {
+    return { error: "Não foi possível reconciliar mensagens pendentes." };
+  }
+
+  messageErrors.push(...reconciliation.errors);
   revalidatePath("/crm");
 
   return {
@@ -612,6 +876,8 @@ export async function syncWhatsAppInbox() {
     chatsUpserted,
     messagesUpserted,
     linkedClients,
+    messagesReconciled: reconciliation.reconciled,
+    messagesExpired: reconciliation.expired,
     messageErrors: messageErrors.slice(0, 5),
   };
 }

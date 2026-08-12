@@ -69,7 +69,11 @@ export default async function CrmClientPage({
           </div>
 
           <div className="flex items-center gap-2">
-            <CrmStageSelect clientId={client.id} currentStage={client.stage} />
+            <CrmStageSelect
+              clientId={client.id}
+              currentStage={client.stage}
+              lostReason={client.lost_reason}
+            />
             <CrmEditClientSheet client={client} />
             <CrmDeleteClientButton clientId={client.id} />
           </div>

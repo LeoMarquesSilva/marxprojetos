@@ -18,6 +18,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { BriefingQuestion } from "@/types/briefing";
 import { groupQuestionsBySection } from "@/lib/briefing-utils";
+import {
+  getBriefingAnswerValidationError,
+  isBriefingAnswerFilled,
+  isValidEmailAddress,
+  normalizeBriefingAnswers,
+  toggleMultiselectAnswer,
+} from "@/lib/flow-utils";
 import { submitBriefing, type PublicBriefing } from "@/app/actions/briefing";
 
 type Props = {
@@ -40,7 +47,7 @@ export function PublicBriefingForm({ token, briefing }: Props) {
   const filledRequired = useMemo(() => {
     return requiredQuestions.filter((q) => {
       const value = answers[q.id];
-      return value !== undefined && value !== null && value !== "";
+      return isBriefingAnswerFilled(value);
     }).length;
   }, [answers, requiredQuestions]);
   const progress = requiredQuestions.length
@@ -53,13 +60,18 @@ export function PublicBriefingForm({ token, briefing }: Props) {
 
   function validate(): boolean {
     for (const q of questions) {
-      if (!q.required) continue;
-      const value = answers[q.id];
-      if (value === undefined || value === "" || value === null) {
-        toast.error(`Preencha: ${q.label}`);
+      const error = getBriefingAnswerValidationError(q, answers[q.id]);
+      if (error) {
+        toast.error(error);
         return false;
       }
     }
+
+    if (clientEmail.trim() && !isValidEmailAddress(clientEmail)) {
+      toast.error("Informe um e-mail válido em: Seus dados");
+      return false;
+    }
+
     return true;
   }
 
@@ -67,21 +79,13 @@ export function PublicBriefingForm({ token, briefing }: Props) {
     if (!validate()) return;
 
     startTransition(async () => {
-      const normalized = { ...answers };
-      for (const q of questions) {
-        if (q.type === "links" && typeof normalized[q.id] === "string") {
-          normalized[q.id] = String(normalized[q.id])
-            .split("\n")
-            .map((l) => l.trim())
-            .filter(Boolean);
-        }
-      }
+      const normalized = normalizeBriefingAnswers(questions, answers);
 
       const result = await submitBriefing({
         token,
         answers: normalized,
         clientName: clientName || undefined,
-        clientEmail: clientEmail || undefined,
+        clientEmail: clientEmail.trim() || undefined,
       });
 
       if (result.error) {
@@ -257,6 +261,45 @@ function QuestionField({
     );
   }
 
+  if (question.type === "multiselect") {
+    const selected = Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === "string")
+      : [];
+
+    return (
+      <fieldset className="space-y-3">
+        <legend className="text-sm font-medium leading-none">
+          {question.label}
+          {question.required ? " *" : ""}
+        </legend>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {(question.options ?? []).map((option, index) => {
+            const optionId = `${id}-option-${index}`;
+            return (
+              <div
+                key={option}
+                className="flex items-center gap-3 rounded-xl border border-[var(--insyt-border)] px-3 py-2.5"
+              >
+                <Checkbox
+                  id={optionId}
+                  checked={selected.includes(option)}
+                  onCheckedChange={(checked) =>
+                    onChange(
+                      toggleMultiselectAnswer(value, option, Boolean(checked)),
+                    )
+                  }
+                />
+                <Label htmlFor={optionId} className="flex-1 cursor-pointer">
+                  {option}
+                </Label>
+              </div>
+            );
+          })}
+        </div>
+      </fieldset>
+    );
+  }
+
   if (question.type === "boolean") {
     return (
       <div className="flex items-center gap-3">
@@ -266,6 +309,29 @@ function QuestionField({
           onCheckedChange={(checked) => onChange(Boolean(checked))}
         />
         <Label htmlFor={id}>{question.label}</Label>
+      </div>
+    );
+  }
+
+  if (question.type === "file") {
+    return (
+      <div className="space-y-2">
+        <Label htmlFor={id}>
+          {question.label} — link do arquivo
+          {question.required ? " *" : ""}
+        </Label>
+        <Input
+          id={id}
+          type="url"
+          inputMode="url"
+          placeholder="https://drive.google.com/..."
+          value={String(value ?? "")}
+          onChange={(e) => onChange(e.target.value)}
+        />
+        <p className="text-xs text-[var(--insyt-muted)]">
+          Cole um link compartilhável do Google Drive ou de outro serviço. Não
+          envie o arquivo diretamente.
+        </p>
       </div>
     );
   }

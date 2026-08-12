@@ -4,9 +4,15 @@ import Link from "next/link";
 import { motion } from "motion/react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { formatDistanceToNowStrict } from "date-fns";
+import { format, formatDistanceToNowStrict, isValid } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { FileText, GripVertical, MessageCircle, MoreHorizontal } from "lucide-react";
+import {
+  CalendarClock,
+  FileText,
+  GripVertical,
+  MessageCircle,
+  MoreHorizontal,
+} from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { classifyNextStep } from "@/lib/flow-utils";
 import {
   STAGE_COLUMNS,
   STAGE_LABELS,
@@ -47,6 +54,10 @@ function CrmClientCardContent({
 }) {
   const chat = client.chat;
   const hasUnread = (chat?.unreadCount ?? 0) > 0;
+  const nextStepDate = client.next_step_at
+    ? new Date(client.next_step_at)
+    : null;
+  const nextStepTiming = classifyNextStep(client.next_step_at);
 
   return (
     <>
@@ -122,6 +133,30 @@ function CrmClientCardContent({
               Briefing
             </span>
           ) : null}
+        </div>
+      ) : null}
+
+      {client.next_step ? (
+        <div
+          className={cn(
+            "flex items-start gap-2 rounded-xl border px-2.5 py-2",
+            nextStepTiming === "overdue"
+              ? "border-red-200 bg-red-50 text-red-800"
+              : "border-[var(--insyt-border)] bg-[var(--insyt-canvas)] text-[var(--insyt-slate)]",
+          )}
+        >
+          <CalendarClock className="mt-0.5 size-3.5 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-semibold">{client.next_step}</p>
+            {nextStepDate && isValid(nextStepDate) ? (
+              <p className="mt-0.5 text-[10px] font-medium">
+                {nextStepTiming === "overdue" ? "Atrasado" : "Próximo"} ·{" "}
+                {format(nextStepDate, "dd 'de' MMM", { locale: ptBR })}
+              </p>
+            ) : (
+              <p className="mt-0.5 text-[10px]">Próximo passo</p>
+            )}
+          </div>
         </div>
       ) : null}
 

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { MessageCircle, Search, UserPlus, Users, X } from "lucide-react";
 import {
@@ -15,6 +16,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CrmClientCard, CrmClientCardStatic } from "@/components/crm-client-card";
+import { CrmLostReasonDialog } from "@/components/crm-lost-reason-dialog";
 import { CrmNewClientSheet } from "@/components/crm-new-client-sheet";
 import { CrmWhatsappSheet } from "@/components/crm-whatsapp-sheet";
 import { updateCrmClientStage } from "@/app/actions/crm";
@@ -46,7 +48,13 @@ export function CrmBoard({ initialClients }: { initialClients: CrmBoardClient[] 
   const [query, setQuery] = useState("");
   const [onlyUnread, setOnlyUnread] = useState(false);
   const [chatClient, setChatClient] = useState<CrmBoardClient | null>(null);
+  const [lostClientId, setLostClientId] = useState<string | null>(null);
+  const [lostReason, setLostReason] = useState("");
   const [, startTransition] = useTransition();
+  const pendingStages = useRef(
+    new Map<string, { stage: CrmStage; operation: symbol }>(),
+  );
+  const router = useRouter();
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -59,6 +67,22 @@ export function CrmBoard({ initialClients }: { initialClients: CrmBoardClient[] 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    // O refresh do App Router preserva o estado deste Client Component.
+    // Reaplicamos apenas stages cuja action ainda não foi confirmada, para
+    // receber clientes novos sem desfazer um drag otimista em andamento.
+    setClients(
+      initialClients.map((client) => {
+        const pending = pendingStages.current.get(client.id);
+        if (pending && pending.stage === client.stage) {
+          pendingStages.current.delete(client.id);
+          return client;
+        }
+        return pending ? { ...client, stage: pending.stage } : client;
+      }),
+    );
+  }, [initialClients]);
 
   const unreadTotal = useMemo(
     () => clients.filter((client) => (client.chat?.unreadCount ?? 0) > 0).length,
@@ -91,23 +115,78 @@ export function CrmBoard({ initialClients }: { initialClients: CrmBoardClient[] 
   const boardEmpty = clients.length === 0;
   const filterEmpty = !boardEmpty && visibleClients.length === 0;
 
-  function moveClient(clientId: string, destStage: CrmStage) {
+  function commitClientMove(
+    clientId: string,
+    destStage: CrmStage,
+    reason?: string,
+  ) {
     const prevStage = clients.find((c) => c.id === clientId)?.stage;
+    const prevLostReason =
+      clients.find((c) => c.id === clientId)?.lost_reason ?? null;
     if (!prevStage || prevStage === destStage) return;
 
+    const operation = Symbol(clientId);
+    pendingStages.current.set(clientId, { stage: destStage, operation });
     setClients((prev) =>
-      prev.map((c) => (c.id === clientId ? { ...c, stage: destStage } : c)),
+      prev.map((c) =>
+        c.id === clientId
+          ? {
+              ...c,
+              stage: destStage,
+              lost_reason:
+                destStage === "perdido"
+                  ? reason?.trim() || c.lost_reason
+                  : c.lost_reason,
+            }
+          : c,
+      ),
     );
 
     startTransition(async () => {
-      const result = await updateCrmClientStage(clientId, destStage);
-      if (result.error) {
+      const result = await updateCrmClientStage(clientId, destStage, reason);
+      if ("error" in result) {
         toast.error(result.error);
-        setClients((prev) =>
-          prev.map((c) => (c.id === clientId ? { ...c, stage: prevStage } : c)),
-        );
+        if (pendingStages.current.get(clientId)?.operation === operation) {
+          pendingStages.current.delete(clientId);
+          setClients((prev) =>
+            prev.map((c) =>
+              c.id === clientId
+                ? { ...c, stage: prevStage, lost_reason: prevLostReason }
+                : c,
+            ),
+          );
+        }
+        return;
       }
+      router.refresh();
     });
+  }
+
+  function moveClient(clientId: string, destStage: CrmStage) {
+    const client = clients.find((item) => item.id === clientId);
+    if (!client || client.stage === destStage) return;
+
+    if (destStage === "perdido") {
+      setLostClientId(clientId);
+      setLostReason(client.lost_reason ?? "");
+      return;
+    }
+
+    commitClientMove(clientId, destStage);
+  }
+
+  function confirmLostMove() {
+    if (!lostClientId) return;
+    const reason = lostReason.trim();
+    if (!reason) {
+      toast.error("Informe o motivo da perda.");
+      return;
+    }
+
+    const clientId = lostClientId;
+    setLostClientId(null);
+    setLostReason("");
+    commitClientMove(clientId, "perdido", reason);
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -298,6 +377,18 @@ export function CrmBoard({ initialClients }: { initialClients: CrmBoardClient[] 
         onOpenChange={(open) => {
           if (!open) setChatClient(null);
         }}
+      />
+
+      <CrmLostReasonDialog
+        open={Boolean(lostClientId)}
+        inputId="crm-board-lost-reason"
+        reason={lostReason}
+        onReasonChange={setLostReason}
+        onCancel={() => {
+          setLostClientId(null);
+          setLostReason("");
+        }}
+        onConfirm={confirmLostMove}
       />
     </div>
   );
