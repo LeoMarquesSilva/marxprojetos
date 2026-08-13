@@ -3,6 +3,8 @@ const ADMIN_ROUTE_PREFIXES = [
   "/projects",
   "/crm",
   "/prospeccao",
+  // Só a área de montar propostas é privada; /p/<token> é o link do cliente.
+  "/propostas",
   "/portfolio/gerenciar",
   "/configuracoes",
   "/sites",

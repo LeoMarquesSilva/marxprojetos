@@ -18,8 +18,12 @@ export default function robots(): MetadataRoute.Robots {
         "/configuracoes",
         "/portfolio/gerenciar",
         "/login",
+        "/propostas",
         "/r/",
         "/b/",
+        // Proposta comercial é documento privado do cliente: o link é para
+        // ser aberto por quem recebeu, não encontrado numa busca.
+        "/p/",
         "/sites/",
       ],
     },

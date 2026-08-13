@@ -54,6 +54,7 @@ export const config = {
     "/projects/:path*",
     "/crm/:path*",
     "/prospeccao/:path*",
+    "/propostas/:path*",
     "/portfolio/gerenciar/:path*",
     "/configuracoes/:path*",
     "/sites/:path*",
