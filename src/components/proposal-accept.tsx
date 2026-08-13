@@ -5,7 +5,6 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { AnimatePresence, motion } from "motion/react";
 import { Check, Loader2 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 
 export function ProposalAccept({
   token,
@@ -35,18 +34,26 @@ export function ProposalAccept({
 
     setError(null);
     startTransition(async () => {
-      const supabase = createClient();
-      const { data, error: rpcError } = await supabase.rpc("accept_proposal", {
-        p_token: token,
-        p_name: trimmed,
-      });
+      // Passa pelo servidor (e não direto na RPC) porque o aceite também
+      // dispara o aviso no meu WhatsApp — chave da Evolution não vai para o
+      // navegador. O envio acontece depois da resposta, então o cliente não
+      // espera a Evolution para ver a confirmação.
+      const response = await fetch("/api/propostas/aceite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, name: trimmed }),
+      }).catch(() => null);
 
-      if (rpcError || !data) {
+      const data = (await response?.json().catch(() => null)) as {
+        acceptedAt?: string;
+      } | null;
+
+      if (!response?.ok || !data?.acceptedAt) {
         setError("Não consegui registrar agora. Tente de novo em instantes.");
         return;
       }
 
-      setAcceptedAt(data as string);
+      setAcceptedAt(data.acceptedAt);
       setAcceptedBy(trimmed);
     });
   }

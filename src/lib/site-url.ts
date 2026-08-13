@@ -1,6 +1,5 @@
-// Origem pública do site, usada por metadata, robots e sitemap.
-// Em produção vem de NEXT_PUBLIC_APP_URL; sem ela, o build ainda funciona
-// apontando para o localhost do desenvolvimento.
+// Origem pública do site, usada por metadata, robots, sitemap e por qualquer
+// link que sai daqui para fora (aviso de aceite no WhatsApp, por exemplo).
 //
 // Já aconteceu duas vezes (uma vez com um link em formato markdown colado
 // por engano, outra com o nome de outra variável colado no lugar do valor)
@@ -10,7 +9,12 @@
 // /_not-found — um valor inválido aqui derruba o build inteiro, não só
 // uma página. Por isso valida e cai para um padrão seguro em vez de deixar
 // o `new URL(...)` de quem consome isso estourar.
-const FALLBACK_SITE_URL = "http://localhost:3000";
+//
+// O padrão é o domínio de produção, e não localhost: quando a variável falta
+// ou vem quebrada, um link para o site real ainda serve para alguém clicar —
+// um para localhost não serve para ninguém. Com "www" porque o domínio nu
+// responde com 308 para ele.
+const FALLBACK_SITE_URL = "https://www.insytstudio.com.br";
 
 function resolveSiteUrl(): string {
   const raw = process.env.NEXT_PUBLIC_APP_URL?.trim();
