@@ -2,6 +2,7 @@ import { ExternalLink } from "lucide-react";
 import { PortfolioProjectCover } from "@/components/portfolio-project-cover";
 import {
   getPortfolioCoverSources,
+  getPortfolioProjectLink,
   type PortfolioCase,
   type PortfolioCaseChapter,
 } from "@/lib/portfolio-cases";
@@ -78,9 +79,13 @@ function CaseChapter({
   index: number;
   priority: boolean;
 }) {
-  const href = chapter.project.site_path
-    ? `/sites/${chapter.project.site_path}/index.html`
-    : null;
+  const link = getPortfolioProjectLink(chapter.project);
+  const href = link?.href ?? null;
+  // Preview interno é do mesmo domínio; site publicado do cliente é externo
+  // e precisa de rel de segurança.
+  const externalProps = link?.isExternal
+    ? { target: "_blank", rel: "noopener noreferrer" }
+    : {};
   const sources = getPortfolioCoverSources(chapter.project);
 
   return (
@@ -113,8 +118,7 @@ function CaseChapter({
         {href ? (
           <a
             href={href}
-            target="_blank"
-            rel="noopener noreferrer"
+            {...externalProps}
             aria-label={`Abrir ${chapter.project.title}`}
             className="absolute inset-0 rounded-[1.75rem] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--insyt-primary)]"
           >
@@ -174,8 +178,7 @@ function CaseChapter({
         {href ? (
           <a
             href={href}
-            target="_blank"
-            rel="noopener noreferrer"
+            {...externalProps}
             className="mt-8 inline-flex items-center gap-2 border-b border-black pb-1 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--insyt-primary)]"
           >
             Visitar projeto

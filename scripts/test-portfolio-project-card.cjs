@@ -45,6 +45,7 @@ try {
         clientLabel: "Bismarchi | Pires",
         description: "Presença digital institucional.",
         href: "https://www.bismarchipires.com.br/",
+        isExternal: true,
         coverSources: ["/portfolio/covers/bismarchi-pires.webp"],
         imageAlt: "Hero do site Bismarchi Pires",
         highlights: [],
@@ -70,6 +71,7 @@ try {
         clientLabel: "Projeto INSYT",
         description: null,
         href: null,
+        isExternal: false,
         coverSources: ["/portfolio/covers/reserved.webp"],
         imageAlt: "Capa do case reservado",
         highlights: [],
@@ -91,6 +93,7 @@ try {
         clientLabel: "Confiara",
         description: "Uma plataforma SaaS multiempresa.",
         href: "https://www.confiara.com.br/",
+        isExternal: true,
         coverSources: ["/portfolio/covers/confiara.webp"],
         imageAlt: "Hero da plataforma Confiara",
         highlights: [
@@ -101,6 +104,28 @@ try {
       index: 2,
     }),
   );
+
+  // Preview interno é do mesmo domínio: abre na mesma aba, sem rel externo.
+  const internalHtml = renderToStaticMarkup(
+    React.createElement(loadedModule.exports.PortfolioProjectCardView, {
+      project: {
+        id: "internal:preview",
+        title: "Projeto em revisão",
+        clientLabel: "Cliente",
+        description: null,
+        href: "/sites/em-revisao/index.html",
+        isExternal: false,
+        coverSources: ["/portfolio/covers/em-revisao.webp"],
+        imageAlt: "Capa",
+        highlights: [],
+      },
+      index: 3,
+    }),
+  );
+
+  assert.match(internalHtml, /href="\/sites\/em-revisao\/index\.html"/);
+  assert.doesNotMatch(internalHtml, /target="_blank"/);
+  assert.doesNotMatch(internalHtml, /rel="noopener noreferrer"/);
 
   assert.match(saasHtml, /aria-label="Diferenciais"/);
   assert.match(saasHtml, /Diagnóstico de riscos psicossociais \(NR-1\)/);

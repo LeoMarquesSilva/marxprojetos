@@ -70,6 +70,7 @@ export type Project = {
   portfolio_published: boolean;
   portfolio_description: string | null;
   portfolio_cover_url: string | null;
+  portfolio_live_url: string | null;
   portfolio_case_id: string | null;
   portfolio_eyebrow: string | null;
   portfolio_objective: string | null;

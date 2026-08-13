@@ -33,6 +33,12 @@ Module._load = function load(request, parent, isMain) {
       getPortfolioCoverSources: (project) => [
         `/portfolio/covers/${project.site_path}.webp`,
       ],
+      getPortfolioProjectLink: (project) =>
+        project.portfolio_live_url
+          ? { href: project.portfolio_live_url, isExternal: true }
+          : project.site_path
+            ? { href: `/sites/${project.site_path}/index.html`, isExternal: false }
+            : null,
     };
   }
   if (request === "@/lib/utils") {

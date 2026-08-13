@@ -54,6 +54,15 @@ Module._load = function load(request, parent, isMain) {
       getPortfolioCoverSources: (item) => [
         `/portfolio/covers/${item.site_path}.webp`,
       ],
+      // A precedência real (site publicado > preview interno) é exercitada
+      // contra o módulo de verdade em test-portfolio-cases.cjs; aqui só
+      // precisamos que o contrato bata.
+      getPortfolioProjectLink: (item) =>
+        item.portfolio_live_url
+          ? { href: item.portfolio_live_url, isExternal: true }
+          : item.site_path
+            ? { href: `/sites/${item.site_path}/index.html`, isExternal: false }
+            : null,
     };
   }
   return originalLoad.call(this, request, parent, isMain);
@@ -73,6 +82,7 @@ try {
     portfolio_description: "Descrição do projeto interno.",
     portfolio_cover_url: null,
     site_path: "internal-site",
+    portfolio_live_url: null,
     portfolio_case_id: null,
     portfolio_eyebrow: null,
     portfolio_objective: null,

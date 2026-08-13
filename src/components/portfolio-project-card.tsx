@@ -9,6 +9,12 @@ export function PortfolioProjectCardView({
   project: PortfolioProjectCard;
   index: number;
 }): React.JSX.Element {
+  // Preview interno é do mesmo domínio; site publicado do cliente é externo
+  // e precisa de rel de segurança.
+  const externalProps = project.isExternal
+    ? { target: "_blank", rel: "noopener noreferrer" }
+    : {};
+
   return (
     <article className="group grid gap-7 py-10 lg:grid-cols-[90px_1fr] lg:py-16">
       <p className="pt-2 text-sm font-bold text-black/35">
@@ -25,8 +31,7 @@ export function PortfolioProjectCardView({
           {project.href ? (
             <a
               href={project.href}
-              target="_blank"
-              rel="noopener noreferrer"
+              {...externalProps}
               className="absolute inset-0 rounded-[1.75rem] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--insyt-primary)]"
               aria-label={`Abrir projeto ${project.title}`}
             />
@@ -63,8 +68,7 @@ export function PortfolioProjectCardView({
           {project.href ? (
             <a
               href={project.href}
-              target="_blank"
-              rel="noopener noreferrer"
+              {...externalProps}
               className="mt-7 inline-flex items-center gap-2 border-b border-black pb-1 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--insyt-primary)]"
             >
               Visitar projeto

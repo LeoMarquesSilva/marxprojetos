@@ -2,7 +2,10 @@ import type {
   PortfolioExternalProject,
   PortfolioItem,
 } from "@/app/actions/portfolio";
-import { getPortfolioCoverSources } from "@/lib/portfolio-cases";
+import {
+  getPortfolioCoverSources,
+  getPortfolioProjectLink,
+} from "@/lib/portfolio-cases";
 
 export type PortfolioProjectCard = {
   id: string;
@@ -10,6 +13,8 @@ export type PortfolioProjectCard = {
   clientLabel: string;
   description: string | null;
   href: string | null;
+  /** Preview interno abre na mesma aba; site do cliente abre em nova. */
+  isExternal: boolean;
   coverSources: string[];
   imageAlt: string;
   highlights: string[];
@@ -21,16 +26,20 @@ export function buildPortfolioProjectCards(
   internalItems: PortfolioItem[],
   externalProjects: PortfolioExternalProject[] = [],
 ): PortfolioProjectCard[] {
-  const internalCards = internalItems.map((item) => ({
-    id: `internal:${item.id}`,
-    title: item.title,
-    clientLabel: item.client_company || item.client_name || "Projeto INSYT",
-    description: item.portfolio_description,
-    href: item.site_path ? `/sites/${item.site_path}/index.html` : null,
-    coverSources: getPortfolioCoverSources(item),
-    imageAlt: item.portfolio_image_alt ?? `Hero do projeto ${item.title}`,
-    highlights: [],
-  }));
+  const internalCards = internalItems.map((item) => {
+    const link = getPortfolioProjectLink(item);
+    return {
+      id: `internal:${item.id}`,
+      title: item.title,
+      clientLabel: item.client_company || item.client_name || "Projeto INSYT",
+      description: item.portfolio_description,
+      href: link?.href ?? null,
+      isExternal: link?.isExternal ?? false,
+      coverSources: getPortfolioCoverSources(item),
+      imageAlt: item.portfolio_image_alt ?? `Hero do projeto ${item.title}`,
+      highlights: [],
+    };
+  });
 
   const externalCards = externalProjects.map((project) => ({
     id: `external:${project.id}`,
@@ -38,6 +47,7 @@ export function buildPortfolioProjectCards(
     clientLabel: project.client_label,
     description: project.description,
     href: project.url,
+    isExternal: true,
     coverSources: project.cover_url ? [project.cover_url] : [],
     imageAlt: project.image_alt ?? `Capa do projeto ${project.title}`,
     highlights: project.highlights ?? [],

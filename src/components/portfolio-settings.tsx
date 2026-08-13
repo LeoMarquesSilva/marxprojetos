@@ -15,6 +15,7 @@ export function PortfolioSettings({ project }: { project: Project }) {
   const [published, setPublished] = useState(project.portfolio_published);
   const [description, setDescription] = useState(project.portfolio_description ?? "");
   const [coverUrl, setCoverUrl] = useState(project.portfolio_cover_url ?? "");
+  const [liveUrl, setLiveUrl] = useState(project.portfolio_live_url ?? "");
   const [isPending, startTransition] = useTransition();
 
   function handleSave() {
@@ -23,6 +24,7 @@ export function PortfolioSettings({ project }: { project: Project }) {
         published,
         description,
         coverUrl,
+        liveUrl,
       });
       if (result.error) {
         toast.error(result.error);
@@ -68,6 +70,21 @@ export function PortfolioSettings({ project }: { project: Project }) {
         <p className="text-xs text-[var(--insyt-muted)]">
           Link de uma imagem já hospedada (ex: print do site). Sem imagem, mostra um
           fundo com a cor da marca.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="portfolio-live-url">Site publicado do cliente</Label>
+        <Input
+          id="portfolio-live-url"
+          type="url"
+          placeholder="https://www.dominiodocliente.com.br/"
+          value={liveUrl}
+          onChange={(e) => setLiveUrl(e.target.value)}
+        />
+        <p className="text-xs text-[var(--insyt-muted)]">
+          Com o site no ar, o card do portfólio leva para cá em vez da cópia
+          interna de revisão. Vazio mantém o preview.
         </p>
       </div>
 

@@ -84,6 +84,28 @@ export function buildPortfolioPresentation(
   return { cases: builtCases, ungroupedItems };
 }
 
+/**
+ * Para onde o card do portfólio leva. O site publicado do cliente tem
+ * precedência sobre a cópia interna de revisão: depois que o projeto entra
+ * no ar, mandar o visitante para o preview mostra uma versão congelada e
+ * ainda concorre com o domínio do cliente na busca.
+ *
+ * Retorna também se o destino é externo, porque link externo precisa de
+ * target/rel — e antes esse cálculo estava repetido em dois lugares.
+ */
+export function getPortfolioProjectLink(
+  item: Pick<PortfolioItem, "site_path" | "portfolio_live_url">,
+): { href: string; isExternal: boolean } | null {
+  const liveUrl = item.portfolio_live_url?.trim();
+  if (liveUrl) return { href: liveUrl, isExternal: true };
+
+  if (item.site_path) {
+    return { href: `/sites/${item.site_path}/index.html`, isExternal: false };
+  }
+
+  return null;
+}
+
 export function getPortfolioCoverSources(item: PortfolioItem): string[] {
   const localCover = item.site_path
     ? `/portfolio/covers/${item.site_path}.webp`

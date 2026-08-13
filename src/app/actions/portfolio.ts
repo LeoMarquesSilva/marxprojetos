@@ -12,6 +12,8 @@ export type PortfolioItem = {
   portfolio_description: string | null;
   portfolio_cover_url: string | null;
   site_path: string | null;
+  /** Site publicado do cliente; tem precedência sobre o preview interno. */
+  portfolio_live_url: string | null;
   portfolio_case_id: string | null;
   portfolio_eyebrow: string | null;
   portfolio_objective: string | null;
@@ -70,6 +72,7 @@ export type PortfolioAdminItem = Pick<
   | "portfolio_published"
   | "portfolio_description"
   | "portfolio_cover_url"
+  | "portfolio_live_url"
   | "portfolio_case_id"
   | "portfolio_eyebrow"
   | "portfolio_objective"
@@ -131,7 +134,7 @@ export async function getPortfolioProjects(): Promise<PortfolioAdminItem[]> {
   const { data, error } = await supabase
     .from("projects")
     .select(
-      "id, title, client_name, client_company, review_enabled, review_site_path, portfolio_published, portfolio_description, portfolio_cover_url, portfolio_case_id, portfolio_eyebrow, portfolio_objective, portfolio_solution, portfolio_deliverables, portfolio_image_alt, portfolio_sort_order, created_at",
+      "id, title, client_name, client_company, review_enabled, review_site_path, portfolio_published, portfolio_description, portfolio_cover_url, portfolio_live_url, portfolio_case_id, portfolio_eyebrow, portfolio_objective, portfolio_solution, portfolio_deliverables, portfolio_image_alt, portfolio_sort_order, created_at",
     )
     .order("portfolio_published", { ascending: false })
     .order("portfolio_sort_order", { ascending: true })
@@ -185,7 +188,12 @@ export async function getExternalProjects(): Promise<
 
 export async function updatePortfolioSettings(
   projectId: string,
-  input: { published: boolean; description: string; coverUrl: string },
+  input: {
+    published: boolean;
+    description: string;
+    coverUrl: string;
+    liveUrl: string;
+  },
 ) {
   const supabase = await createClient();
   const {
@@ -194,12 +202,26 @@ export async function updatePortfolioSettings(
 
   if (!user) return { error: "Sessão expirada. Faça login novamente." };
 
+  // O link vai para uma página pública: recusa esquemas que não sejam http(s).
+  const liveUrl = input.liveUrl.trim();
+  if (liveUrl) {
+    try {
+      const parsed = new URL(liveUrl);
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        return { error: "O endereço do site precisa começar com http:// ou https://." };
+      }
+    } catch {
+      return { error: "O endereço do site não é uma URL válida." };
+    }
+  }
+
   const { error } = await supabase
     .from("projects")
     .update({
       portfolio_published: input.published,
       portfolio_description: input.description.trim() || null,
       portfolio_cover_url: input.coverUrl.trim() || null,
+      portfolio_live_url: liveUrl || null,
     })
     .eq("id", projectId);
 

@@ -23,6 +23,7 @@ loadedModule._compile(compiled, modulePath);
 const {
   buildPortfolioPresentation,
   getPortfolioCoverSources,
+  getPortfolioProjectLink,
 } = loadedModule.exports;
 
 const CASE_ID = "11111111-1111-1111-1111-111111111111";
@@ -145,5 +146,41 @@ const orphan = buildPortfolioPresentation(
 assert.deepEqual(orphan.cases, []);
 assert.equal(orphan.ungroupedItems.length, 1);
 assert.equal(orphan.ungroupedItems[0].id, "orphan");
+
+// Destino do card: o site publicado do cliente ganha do preview interno.
+// Enquanto o projeto não está no ar, o preview continua valendo.
+assert.deepEqual(
+  getPortfolioProjectLink({
+    site_path: "pereira-garcia-site",
+    portfolio_live_url: "https://www.pereiragarciaadvocacia.com.br/",
+  }),
+  { href: "https://www.pereiragarciaadvocacia.com.br/", isExternal: true },
+);
+
+assert.deepEqual(
+  getPortfolioProjectLink({ site_path: "so-preview", portfolio_live_url: null }),
+  { href: "/sites/so-preview/index.html", isExternal: false },
+);
+
+// URL só com espaços não conta como publicada.
+assert.deepEqual(
+  getPortfolioProjectLink({ site_path: "so-preview", portfolio_live_url: "   " }),
+  { href: "/sites/so-preview/index.html", isExternal: false },
+);
+
+// Sem preview e sem site publicado, o card fica sem link ("Case reservado").
+assert.equal(
+  getPortfolioProjectLink({ site_path: null, portfolio_live_url: null }),
+  null,
+);
+
+// Site publicado vale mesmo sem preview interno.
+assert.deepEqual(
+  getPortfolioProjectLink({
+    site_path: null,
+    portfolio_live_url: "https://exemplo.com.br/",
+  }),
+  { href: "https://exemplo.com.br/", isExternal: true },
+);
 
 console.log("Portfolio case tests passed.");

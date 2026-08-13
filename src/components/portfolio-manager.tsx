@@ -57,6 +57,7 @@ export function PortfolioManager({
         published,
         description: project.portfolio_description ?? "",
         coverUrl: project.portfolio_cover_url ?? "",
+        liveUrl: project.portfolio_live_url ?? "",
       });
       setUpdatingId(null);
 
@@ -282,6 +283,7 @@ function PortfolioEditor({
     project.portfolio_description ?? "",
   );
   const [coverUrl, setCoverUrl] = useState(project.portfolio_cover_url ?? "");
+  const [liveUrl, setLiveUrl] = useState(project.portfolio_live_url ?? "");
   const [caseId, setCaseId] = useState(project.portfolio_case_id);
   const [eyebrow, setEyebrow] = useState(project.portfolio_eyebrow ?? "");
   const [objective, setObjective] = useState(project.portfolio_objective ?? "");
@@ -300,6 +302,7 @@ function PortfolioEditor({
         published,
         description,
         coverUrl,
+        liveUrl,
       });
 
       if (settings.error) {
@@ -388,6 +391,22 @@ function PortfolioEditor({
           />
           <p className="text-xs leading-relaxed text-[var(--insyt-muted)]">
             Use um print horizontal do site, de preferência com proporção 16:10.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="manager-live-url">Site publicado do cliente</Label>
+          <Input
+            id="manager-live-url"
+            type="url"
+            value={liveUrl}
+            onChange={(event) => setLiveUrl(event.target.value)}
+            placeholder="https://www.dominiodocliente.com.br/"
+          />
+          <p className="text-xs leading-relaxed text-[var(--insyt-muted)]">
+            Depois que o site entra no ar, o card passa a levar para cá em vez
+            da cópia interna de revisão — que fica congelada e ainda concorre
+            com o domínio do cliente na busca. Vazio mantém o preview.
           </p>
         </div>
 
