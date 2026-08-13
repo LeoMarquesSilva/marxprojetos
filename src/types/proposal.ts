@@ -81,6 +81,8 @@ export type Proposal = {
   published: boolean;
   content: ProposalBlock[];
   valid_until: string | null;
+  accepted_at: string | null;
+  accepted_by_name: string | null;
   sent_at: string | null;
   decided_at: string | null;
   created_at: string;
@@ -96,6 +98,8 @@ export type PublicProposal = {
   status: ProposalStatus;
   content: ProposalBlock[];
   valid_until: string | null;
+  accepted_at: string | null;
+  accepted_by_name: string | null;
   created_at: string;
 };
 

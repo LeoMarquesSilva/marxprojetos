@@ -2,8 +2,12 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { ArrowDown, Check } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
+import { ProposalAccept } from "@/components/proposal-accept";
 import { ProposalBlockView } from "@/components/proposal-blocks";
+import { ProposalProgress } from "@/components/proposal-progress";
+import { ProposalReveal } from "@/components/proposal-reveal";
 import { ProposalTracker } from "@/components/proposal-tracker";
 import { getProposalByToken } from "@/app/actions/proposals";
 import { getPublicSiteSettings } from "@/app/actions/portfolio";
@@ -22,9 +26,7 @@ export async function generateMetadata({
   const proposal = await getProposalByToken(token);
 
   return {
-    title: proposal
-      ? `${proposal.title} · ${proposal.client_name}`
-      : "Proposta",
+    title: proposal ? `${proposal.title} · ${proposal.client_name}` : "Proposta",
     // Documento comercial privado: fica fora de buscador mesmo com o link
     // em mãos.
     robots: { index: false, follow: false },
@@ -53,83 +55,105 @@ export default async function ProposalPage({
 
   return (
     <div className="min-h-screen bg-[#f4f0e8] text-[#11100f] selection:bg-[var(--insyt-primary)] selection:text-white">
+      <ProposalProgress />
       <ProposalTracker token={token} />
 
-      <header className="bg-[#11100f] px-5 pb-20 pt-6 text-white sm:px-10 lg:px-16 lg:pb-28">
-        <div className="mx-auto max-w-5xl">
-          <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-6">
-            <BrandLogo href="/" variant="horizontal-light" showProduct={false} />
-            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
-              Proposta comercial
-            </span>
-          </div>
+      <header className="relative flex min-h-svh flex-col overflow-hidden bg-[#11100f] px-5 text-white sm:px-10 lg:px-16">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.05]"
+          style={{
+            backgroundImage:
+              "linear-gradient(to right, white 1px, transparent 1px), linear-gradient(to bottom, white 1px, transparent 1px)",
+            backgroundSize: "64px 64px",
+          }}
+        />
+        <div className="pointer-events-none absolute -right-40 -top-56 size-[40rem] rounded-full bg-[var(--insyt-primary)] opacity-20 blur-[130px]" />
 
-          <div className="pt-16 lg:pt-24">
+        <div className="relative mx-auto flex w-full max-w-5xl items-center justify-between gap-4 border-b border-white/10 py-6">
+          <BrandLogo href="/" variant="horizontal-light" showProduct={false} />
+          <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
+            Proposta comercial
+          </span>
+        </div>
+
+        <div className="relative mx-auto flex w-full max-w-5xl flex-1 flex-col justify-between gap-12 py-14 sm:py-20">
+          <ProposalReveal>
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--insyt-primary)]">
               {proposal.client_name}
             </p>
-            <h1 className="mt-6 max-w-3xl text-balance text-4xl font-bold leading-[1.02] tracking-[-0.045em] sm:text-6xl">
-              {proposal.title}
-            </h1>
+          </ProposalReveal>
+
+          <div>
+            <ProposalReveal delay={0.08}>
+              <h1 className="max-w-4xl text-balance text-[clamp(2.5rem,7vw,5rem)] font-bold leading-[1] tracking-[-0.05em]">
+                {proposal.title}
+              </h1>
+            </ProposalReveal>
             {proposal.subtitle ? (
-              <p className="mt-6 max-w-2xl text-pretty text-lg leading-relaxed text-white/60">
-                {proposal.subtitle}
-              </p>
+              <ProposalReveal delay={0.16}>
+                <p className="mt-8 max-w-2xl text-pretty text-lg leading-relaxed text-white/55 sm:text-xl">
+                  {proposal.subtitle}
+                </p>
+              </ProposalReveal>
             ) : null}
 
-            <div className="mt-12 flex flex-wrap gap-x-10 gap-y-3 border-t border-white/10 pt-6 text-[11px] font-medium uppercase tracking-[0.16em] text-white/40">
+            {proposal.accepted_at ? (
+              <ProposalReveal delay={0.24}>
+                <span className="mt-10 inline-flex items-center gap-2 rounded-full bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-400">
+                  <Check className="size-4" />
+                  Proposta aceita
+                </span>
+              </ProposalReveal>
+            ) : (
+              <ProposalReveal delay={0.24}>
+                <a
+                  href="#bloco-0"
+                  className="mt-10 inline-flex items-center gap-3 text-sm font-semibold text-white"
+                >
+                  Ler a proposta
+                  <span className="flex size-9 items-center justify-center rounded-full border border-white/20">
+                    <ArrowDown className="size-4" />
+                  </span>
+                </a>
+              </ProposalReveal>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-8 gap-y-2 border-t border-white/10 pt-6 text-[11px] font-medium uppercase tracking-[0.16em] text-white/35">
+            <span>
+              {format(new Date(proposal.created_at), "d 'de' MMMM 'de' yyyy", {
+                locale: ptBR,
+              })}
+            </span>
+            {proposal.valid_until ? (
               <span>
-                {format(new Date(proposal.created_at), "d 'de' MMMM 'de' yyyy", {
+                Válida até{" "}
+                {format(new Date(`${proposal.valid_until}T12:00:00`), "d MMM yyyy", {
                   locale: ptBR,
                 })}
               </span>
-              {proposal.valid_until ? (
-                <span>
-                  Válida até{" "}
-                  {format(new Date(`${proposal.valid_until}T12:00:00`), "d MMM yyyy", {
-                    locale: ptBR,
-                  })}
-                </span>
-              ) : null}
-              <span className="ml-auto">{insytBrand.name} Studio</span>
-            </div>
+            ) : null}
+            <span className="sm:ml-auto">{insytBrand.name} Studio</span>
           </div>
         </div>
       </header>
 
-      <main className="px-5 sm:px-10 lg:px-16">
-        <div className="mx-auto max-w-5xl">
-          {proposal.content.map((block, index) => (
-            <ProposalBlockView key={block.id} block={block} index={index} />
-          ))}
-        </div>
+      <main>
+        {proposal.content.map((block, index) => (
+          <ProposalBlockView key={block.id} block={block} index={index} />
+        ))}
       </main>
 
-      <section className="bg-[var(--insyt-primary)] px-5 py-20 text-white sm:px-10 lg:px-16 lg:py-24">
-        <div className="mx-auto flex max-w-5xl flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl">
-            <h2 className="text-4xl font-bold leading-[0.95] tracking-[-0.045em] sm:text-5xl">
-              Vamos conversar?
-            </h2>
-            <p className="mt-5 text-lg leading-relaxed text-white/75">
-              Qualquer ponto desta proposta pode ser ajustado. É só me chamar.
-            </p>
-          </div>
-          {whatsappUrl ? (
-            <a
-              href={whatsappUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex w-fit shrink-0 items-center gap-2 rounded-full bg-white px-7 py-4 text-sm font-bold text-black transition-colors hover:bg-[#11100f] hover:text-white"
-            >
-              Falar no WhatsApp
-            </a>
-          ) : null}
-        </div>
-      </section>
+      <ProposalAccept
+        token={token}
+        clientName={proposal.client_name}
+        initialAcceptedAt={proposal.accepted_at}
+        initialAcceptedBy={proposal.accepted_by_name}
+        whatsappUrl={whatsappUrl}
+      />
 
-      <footer className="bg-[#11100f] px-5 py-8 text-white sm:px-10 lg:px-16">
-        <div className="mx-auto flex max-w-5xl flex-col gap-4 border-t border-white/10 pt-8 text-xs text-white/40 sm:flex-row sm:items-center sm:justify-between">
+      <footer className="bg-[#0b0a0a] px-5 py-10 text-white sm:px-10 lg:px-16">
+        <div className="mx-auto flex max-w-5xl flex-col gap-4 text-xs text-white/35 sm:flex-row sm:items-center sm:justify-between">
           <BrandLogo href="/" variant="horizontal-light" showProduct={false} />
           <p>Proposta preparada para {proposal.client_name}</p>
           <p>

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, FileText } from "lucide-react";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { ArrowLeft, Check, FileText } from "lucide-react";
 import { AdminShell } from "@/components/admin-shell";
 import { ProposalActions } from "@/components/proposal-actions";
 import { ProposalContentEditor } from "@/components/proposal-content-editor";
@@ -45,11 +47,24 @@ export default async function ProposalDetailPage({
             <ArrowLeft className="size-4" />
             Voltar
           </Link>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <FileText className="size-5 text-[var(--insyt-muted)]" />
             <h1 className="text-3xl font-bold tracking-tight text-[var(--insyt-black)]">
               {proposal.client_name}
             </h1>
+            {proposal.accepted_at ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
+                <Check className="size-3.5" />
+                Aceita
+                {proposal.accepted_by_name
+                  ? ` por ${proposal.accepted_by_name}`
+                  : ""}{" "}
+                em{" "}
+                {format(new Date(proposal.accepted_at), "d MMM 'às' HH:mm", {
+                  locale: ptBR,
+                })}
+              </span>
+            ) : null}
           </div>
         </div>
 
