@@ -16,7 +16,41 @@ const SYNC_TIMEOUT_MS = 60_000;
 
 type EvolutionSendTextResponse = {
   key?: { id?: string };
+  // Em recusa, a Evolution devolve o resultado da checagem de cada número.
+  response?: { message?: { jid?: string; exists?: boolean; number?: string }[] };
 };
+
+/**
+ * Erro de envio que carrega uma explicação exibível para o usuário.
+ *
+ * O motivo real vinha da Evolution e morria num `catch` — a tela mostrava
+ * sempre "Não foi possível enviar", inclusive no caso mais comum de todos:
+ * o número simplesmente não ter WhatsApp. Sem saber disso, a única leitura
+ * possível era "o sistema está quebrado".
+ */
+export class WhatsAppSendError extends Error {
+  readonly safeMessage: string;
+
+  constructor(message: string, safeMessage: string) {
+    super(message);
+    this.name = "WhatsAppSendError";
+    this.safeMessage = safeMessage;
+  }
+}
+
+function describeSendFailure(
+  status: number,
+  data: EvolutionSendTextResponse | null,
+): string {
+  const checked = data?.response?.message;
+  if (Array.isArray(checked) && checked.some((item) => item?.exists === false)) {
+    return "Este número não tem WhatsApp.";
+  }
+  if (status === 401 || status === 403) {
+    return "A conexão com o WhatsApp está sem autorização. Verifique a instância.";
+  }
+  return "Não foi possível enviar a mensagem pelo WhatsApp.";
+}
 
 export type EvolutionContactProfile = {
   name: string | null;
@@ -265,7 +299,10 @@ export async function sendWhatsAppText(
 
   if (!result.ok) {
     const detail = data ? JSON.stringify(data) : `HTTP ${result.status}`;
-    throw new Error(`Evolution recusou o envio: ${detail}`);
+    throw new WhatsAppSendError(
+      `Evolution recusou o envio: ${detail}`,
+      describeSendFailure(result.status, data),
+    );
   }
 
   return { providerMessageId: data?.key?.id ?? null };

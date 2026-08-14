@@ -91,6 +91,21 @@ export function chooseMostAdvancedOutgoingStatus(
     : current;
 }
 
+/**
+ * Explicação exibível que o erro de envio traga consigo.
+ *
+ * Contrato por formato, e não por importação: esta caixa de saída não conhece
+ * a Evolution, mas qualquer erro que traga um `safeMessage` de texto tem essa
+ * mensagem repassada para a tela no lugar do aviso genérico.
+ */
+function safeMessageOf(error: unknown): string | null {
+  if (error && typeof error === "object" && "safeMessage" in error) {
+    const safe = (error as { safeMessage?: unknown }).safeMessage;
+    if (typeof safe === "string" && safe.trim()) return safe;
+  }
+  return null;
+}
+
 async function retryPersistence<T>(operation: () => Promise<T>): Promise<T> {
   let lastError: unknown;
   for (let attempt = 0; attempt < PERSISTENCE_ATTEMPTS; attempt += 1) {
@@ -285,11 +300,16 @@ export async function runOutgoingMessageOutbox<TMessage extends OutboxMessage>({
   let providerMessageId: string | null;
   try {
     ({ providerMessageId } = await send());
-  } catch {
-    await retryPersistence(() => markError(pending.id, SAFE_SEND_ERROR)).catch(
+  } catch (sendError) {
+    // O motivo real morria aqui: sem log e sem repassar a explicação, um
+    // número sem WhatsApp virava "não foi possível enviar" — indistinguível
+    // de integração quebrada.
+    console.error("[whatsapp] envio recusado:", sendError);
+    const safeError = safeMessageOf(sendError) ?? SAFE_SEND_ERROR;
+    await retryPersistence(() => markError(pending.id, safeError)).catch(
       () => undefined,
     );
-    return { error: SAFE_SEND_ERROR };
+    return { error: safeError };
   }
 
   try {
