@@ -196,8 +196,10 @@ export function AdminShell({
 
         <main
           className={cn(
-            "mx-auto w-full px-6 py-12 sm:px-10 sm:py-24 lg:py-32",
-            wide ? "max-w-[1600px]" : "max-w-5xl",
+            "mx-auto w-full px-6 sm:px-10",
+            wide
+              ? "max-w-[1600px] py-10 sm:py-14"
+              : "max-w-5xl py-12 sm:py-24 lg:py-32",
           )}
         >
           {children}

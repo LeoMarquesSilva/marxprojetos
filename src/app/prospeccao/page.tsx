@@ -16,7 +16,7 @@ export default async function ProspectingPage() {
   ]);
 
   return (
-    <AdminShell userEmail={user?.email}>
+    <AdminShell userEmail={user?.email} wide>
       <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-1000 ease-fluid">
         <AdminPageHeader
           icon={Radar}

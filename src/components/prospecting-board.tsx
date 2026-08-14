@@ -443,7 +443,7 @@ export function ProspectingBoard({
                   key={p.id}
                   className="group border-[var(--insyt-border)] transition-colors hover:bg-[var(--insyt-canvas-alt)]/50"
                 >
-                  <TableCell className="max-w-[280px] py-4 pl-6">
+                  <TableCell className="max-w-[520px] py-4 pl-6">
                     <p className="truncate font-semibold text-[var(--insyt-black)]">
                       {p.name}
                     </p>
