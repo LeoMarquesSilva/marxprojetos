@@ -22,26 +22,20 @@ import {
 import { buildWaMeUrl, fillTemplate } from "@/lib/phone";
 import { INSYT_STUDIO_URL, type Prospect } from "@/types/prospecting";
 
-function withStudioLink(text: string) {
-  const trimmed = text.trim();
-  if (trimmed.includes("insytstudio.com.br")) return trimmed;
-  return `${trimmed}\n\nAlguns projetos nossos: ${INSYT_STUDIO_URL}`;
-}
-
+// O rascunho é o modelo com as variáveis preenchidas, ou a mensagem que já
+// foi salva para este lead. Nada é acrescentado por fora: o que aparece na
+// caixa é exatamente o que vai sair.
 function buildProspectMessage(prospect: Prospect, template: string) {
-  const fromTemplate = fillTemplate(template, {
+  if (prospect.custom_message?.trim()) {
+    return prospect.custom_message.trim();
+  }
+
+  return fillTemplate(template, {
     nome: prospect.name,
     cidade: prospect.city,
     hasSite: Boolean(prospect.website),
     portfolioUrl: INSYT_STUDIO_URL,
   });
-
-  // custom_message antiga pode ter sido salva sem o link — completa na hora.
-  if (prospect.custom_message?.trim()) {
-    return withStudioLink(prospect.custom_message);
-  }
-
-  return withStudioLink(fromTemplate);
 }
 
 export function ProspectingMessageSheet({
@@ -76,8 +70,7 @@ export function ProspectingMessageSheet({
   const router = useRouter();
 
   function handleSave() {
-    const finalMessage = withStudioLink(message);
-    setMessage(finalMessage);
+    const finalMessage = message.trim();
     startSaveTransition(async () => {
       const result = await updateProspectMessage(prospect.id, finalMessage);
       if (result.error) {
@@ -96,29 +89,26 @@ export function ProspectingMessageSheet({
         toast.error(result.error);
         return;
       }
-      setMessage(withStudioLink(result.message ?? ""));
+      setMessage((result.message ?? "").trim());
       toast.success("Mensagem personalizada gerada!");
       router.refresh();
     });
   }
 
   function handleCopy() {
-    const finalMessage = withStudioLink(message);
-    setMessage(finalMessage);
+    const finalMessage = message.trim();
     navigator.clipboard.writeText(finalMessage);
     toast.success("Mensagem copiada!");
   }
 
   function handleOpenWhatsApp() {
     if (!prospect.phone_e164) return;
-    const finalMessage = withStudioLink(message);
-    setMessage(finalMessage);
+    const finalMessage = message.trim();
     window.open(buildWaMeUrl(prospect.phone_e164, finalMessage), "_blank");
   }
 
   function handleSendToConversas() {
-    const finalMessage = withStudioLink(message);
-    setMessage(finalMessage);
+    const finalMessage = message.trim();
     startSendTransition(async () => {
       const result = await sendProspectToConversas(prospect.id, finalMessage);
       if (result.error) {
@@ -154,7 +144,7 @@ export function ProspectingMessageSheet({
           />
 
           <p className="text-xs text-[var(--insyt-muted)]">
-            Portfólio no modelo:{" "}
+            Vai exatamente este texto. Para incluir o portfólio, cole{" "}
             <a
               href={portfolioUrl}
               target="_blank"

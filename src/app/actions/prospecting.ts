@@ -21,13 +21,6 @@ function portfolioUrlForTemplate() {
   return INSYT_STUDIO_URL;
 }
 
-function ensureStudioLinkInMessage(message: string) {
-  const trimmed = message.trim();
-  if (!trimmed) return trimmed;
-  if (trimmed.includes("insytstudio.com.br")) return trimmed;
-  return `${trimmed}\n\nAlguns projetos nossos: ${INSYT_STUDIO_URL}`;
-}
-
 export async function getProspects() {
   const { supabase } = await requireAuthenticatedUser();
   const { data, error } = await supabase
@@ -40,13 +33,12 @@ export async function getProspects() {
 }
 
 export async function getProspectingTemplate() {
-  const { supabase, user } = await requireAuthenticatedUser();
-  return loadProspectingTemplate(supabase, user.id);
+  const { supabase } = await requireAuthenticatedUser();
+  return loadProspectingTemplate(supabase);
 }
 
 async function loadProspectingTemplate(
   supabase: AuthenticatedContext["supabase"],
-  userId: string,
 ) {
   const { data, error } = await supabase
     .from("prospecting_settings")
@@ -57,24 +49,11 @@ async function loadProspectingTemplate(
 
   if (error) throw new Error(error.message);
 
-  const stored = data?.template?.trim();
-  if (!stored) return DEFAULT_PROSPECTING_TEMPLATE;
-
-  // Qualquer modelo sem o link do estúdio recebe a linha do portfólio —
-  // sem isso a mensagem de prospecção sai sem URL clicável no WhatsApp.
-  const hasStudioLink =
-    stored.includes("insytstudio.com.br") || stored.includes("{{portfolio}}");
-  if (!hasStudioLink) {
-    const migrated = `${stored}\n\nAlguns projetos nossos: ${INSYT_STUDIO_URL}`;
-    await supabase.from("prospecting_settings").upsert({
-      owner_id: userId,
-      template: migrated,
-      updated_at: new Date().toISOString(),
-    });
-    return migrated;
-  }
-
-  return stored;
+  // Devolve o que está salvo, sem tocar em nada. Antes, um modelo sem o link
+  // do portfólio era reescrito com a linha do estúdio colada no fim — e
+  // gravado por cima no banco. Quem editava o modelo para tirar o link via a
+  // própria edição desfeita no próximo carregamento.
+  return data?.template?.trim() || DEFAULT_PROSPECTING_TEMPLATE;
 }
 
 export async function saveProspectingTemplate(template: string) {
@@ -392,7 +371,7 @@ export async function deleteProspect(id: string) {
 }
 
 export async function personalizeMessage(id: string) {
-  const { supabase, user } = await requireAuthenticatedUser();
+  const { supabase } = await requireAuthenticatedUser();
 
   const apiKey =
     process.env.OPENAI_API_KEY ||
@@ -412,7 +391,7 @@ export async function personalizeMessage(id: string) {
   if (prospectError) return { error: prospectError.message };
   if (!prospect) return { error: "Lead não encontrado." };
 
-  const template = await loadProspectingTemplate(supabase, user.id);
+  const template = await loadProspectingTemplate(supabase);
   const portfolioUrl = portfolioUrlForTemplate();
   const baseMessage = fillTemplate(template, {
     nome: prospect.name,
@@ -443,7 +422,13 @@ Regras:
 1) Máximo ~650 caracteres.
 2) Sem markdown, sem emojis em excesso (no máximo 1), sem assinatura formal.
 3) Personalize com um detalhe real do contexto (nicho, cidade, avaliação ou ausência de site).
-4) Inclua o link do portfólio exatamente assim: ${portfolioUrl}
+4) ${
+    // O link só é pedido se o modelo tiver um. Se o texto de referência não
+    // traz link nenhum, a IA não pode inventar um.
+    baseMessage.includes(portfolioUrl)
+      ? `Inclua o link do portfólio exatamente assim: ${portfolioUrl}`
+      : "Não inclua nenhum link que não esteja na mensagem de referência."
+  }
 5) Termine com uma pergunta leve que convide resposta.
 6) Retorne APENAS o texto da mensagem, nada mais.
 `;
@@ -475,7 +460,7 @@ Regras:
     return { error: "A IA não retornou uma mensagem. Tente novamente." };
   }
 
-  const message = ensureStudioLinkInMessage(rawMessage);
+  const message = rawMessage;
 
   const { error: saveError } = await supabase
     .from("prospects")
@@ -546,7 +531,8 @@ export async function promoteToCrm(id: string): Promise<PromoteToCrmResult> {
 // Envia a mensagem pelo WhatsApp (Evolution), coloca o lead no CRM, marca
 // como contatado e devolve o JID para abrir a inbox de Conversas.
 export async function sendProspectToConversas(id: string, message: string) {
-  const trimmed = ensureStudioLinkInMessage(message);
+  // O que veio da tela é o que sai — sem completar nada por fora.
+  const trimmed = message.trim();
   if (!trimmed) return { error: "Escreva a mensagem antes de enviar." };
 
   const { supabase, user } = await requireAuthenticatedUser();

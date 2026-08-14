@@ -24,14 +24,15 @@ export const PROSPECT_STATUS_ACCENT: Record<
   descartado: { dot: "bg-rose-400", pillBg: "bg-rose-50", pillText: "text-rose-700" },
 };
 
-/** Site público do estúdio — usado no {{portfolio}} das mensagens de prospecção. */
+/** Site público do estúdio — é o que {{portfolio}} vira na mensagem. */
 export const INSYT_STUDIO_URL = "https://www.insytstudio.com.br/";
 
+// Ponto de partida para quem ainda não salvou um modelo. Vale só isso: o
+// modelo salvo é usado como está, sem nada acrescentado. Para mandar o
+// portfólio, escreva {{portfolio}} onde ele deve aparecer.
 export const DEFAULT_PROSPECTING_TEMPLATE = `Olá! Tudo bem?
 
-Me chamo Leonardo, da INSYT (criamos sites para negócios de {{cidade}}). {{site}} Posso te mostrar em 2 minutos como ficaria o site, sem compromisso?
-
-Alguns projetos nossos: https://www.insytstudio.com.br/`;
+Me chamo Leonardo, da INSYT (criamos sites para negócios de {{cidade}}). {{site}} Posso te mostrar em 2 minutos como ficaria o site, sem compromisso?`;
 
 export type Prospect = {
   id: string;

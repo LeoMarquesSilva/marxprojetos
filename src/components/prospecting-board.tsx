@@ -204,6 +204,8 @@ export function ProspectingBoard({
   }
 
   function messageFor(p: Prospect) {
+    // Sai o que está escrito: a mensagem salva do lead, ou o modelo com as
+    // variáveis preenchidas. Sem nenhuma linha acrescentada por fora.
     const base =
       p.custom_message ??
       fillTemplate(template, {
@@ -212,8 +214,7 @@ export function ProspectingBoard({
         hasSite: Boolean(p.website),
         portfolioUrl: INSYT_STUDIO_URL,
       });
-    if (base.includes("insytstudio.com.br")) return base;
-    return `${base.trim()}\n\nAlguns projetos nossos: ${INSYT_STUDIO_URL}`;
+    return base.trim();
   }
 
   function handleOpenWhatsApp(p: Prospect) {
