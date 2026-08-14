@@ -42,6 +42,9 @@ export type Prospect = {
   phone: string | null;
   phone_e164: string | null;
   is_mobile: boolean;
+  /** null = ainda não verificado. Ver supabase/sql/prospects-whatsapp-check.sql */
+  has_whatsapp: boolean | null;
+  whatsapp_checked_at: string | null;
   website: string | null;
   address: string | null;
   rating: number | null;

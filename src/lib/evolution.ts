@@ -308,6 +308,47 @@ export async function sendWhatsAppText(
   return { providerMessageId: data?.key?.id ?? null };
 }
 
+// Docs: POST /chat/whatsappNumbers/:instance
+//
+// Responde quais números existem no WhatsApp sem enviar nada — é o jeito de
+// saber antes de gastar uma tentativa. Em lotes porque a base tem centenas
+// de leads e uma chamada só estoura o tempo limite.
+const WHATSAPP_CHECK_BATCH = 50;
+
+export async function checkWhatsAppNumbers(
+  numbers: string[],
+): Promise<Map<string, boolean>> {
+  const instance = requireEnv("EVOLUTION_INSTANCE");
+  const result = new Map<string, boolean>();
+
+  for (let i = 0; i < numbers.length; i += WHATSAPP_CHECK_BATCH) {
+    const batch = numbers.slice(i, i + WHATSAPP_CHECK_BATCH);
+    const response = await evolutionFetch(
+      `/chat/whatsappNumbers/${encodeURIComponent(instance)}`,
+      { body: { numbers: batch }, timeoutMs: SYNC_TIMEOUT_MS },
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        `Evolution whatsappNumbers falhou (HTTP ${response.status}): ${JSON.stringify(response.data)}`,
+      );
+    }
+
+    const rows = Array.isArray(response.data)
+      ? (response.data as { number?: string; jid?: string; exists?: boolean }[])
+      : [];
+
+    for (const row of rows) {
+      // A Evolution devolve o número como foi perguntado; o jid é a garantia
+      // quando ela normaliza (o nono dígito, por exemplo).
+      const key = row.number ?? (row.jid ? row.jid.split("@")[0] : null);
+      if (key) result.set(key, Boolean(row.exists));
+    }
+  }
+
+  return result;
+}
+
 // Docs: POST /chat/fetchProfilePictureUrl/:instance
 export async function fetchWhatsAppProfilePicture(
   remoteJid: string,

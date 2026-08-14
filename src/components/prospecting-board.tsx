@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
+  BadgeCheck,
   ExternalLink,
   Globe,
   Loader2,
@@ -63,6 +64,7 @@ import { ProspectingImportSheet } from "@/components/prospecting-import-sheet";
 import {
   deleteProspect,
   promoteToCrm,
+  checkProspectsWhatsapp,
   refreshEnrichment,
   searchPlaces,
   sendProspectToConversas,
@@ -96,6 +98,7 @@ export function ProspectingBoard({
   const [prospects, setProspects] = useState(initialProspects);
   const [isSearching, startSearchTransition] = useTransition();
   const [isEnriching, startEnrichTransition] = useTransition();
+  const [isChecking, startCheckTransition] = useTransition();
   const [, startTransition] = useTransition();
   const pendingStatuses = useRef(
     new Map<string, { status: ProspectStatus; operation: symbol }>(),
@@ -200,6 +203,26 @@ export function ProspectingBoard({
         return;
       }
       toast.success(`${result.updated ?? 0} lead(s) atualizado(s) com dados enriquecidos.`);
+    });
+  }
+
+  function handleCheckWhatsapp() {
+    startCheckTransition(async () => {
+      // Só quem nunca foi verificado. Rodar de novo não repete a base
+      // inteira — quem tiver telefone novo entra na próxima rodada.
+      const result = await checkProspectsWhatsapp();
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      if (result.verificados === 0) {
+        toast.info("Todos os leads com telefone já estavam verificados.");
+        return;
+      }
+      toast.success(
+        `${result.verificados} verificado(s): ${result.comWhatsapp} com WhatsApp, ${result.semWhatsapp} sem.`,
+      );
+      router.refresh();
     });
   }
 
@@ -374,6 +397,20 @@ export function ProspectingBoard({
                 Atualizar dados
               </Button>
             ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCheckWhatsapp}
+              disabled={isChecking}
+              title="Consultar quais leads têm WhatsApp (não envia mensagem)"
+            >
+              {isChecking ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <BadgeCheck className="size-4" />
+              )}
+              Verificar WhatsApp
+            </Button>
             <ProspectingImportSheet />
             <ProspectingTemplateSheet template={template} />
           </div>
@@ -457,7 +494,19 @@ export function ProspectingBoard({
                         {p.phone ? (
                           <>
                             <p className="text-sm text-[var(--insyt-black)]">{p.phone}</p>
-                            {p.is_mobile ? (
+                            {/* Verificado na Evolution ganha do palpite por
+                                dígitos: escritório com WhatsApp Business em
+                                linha fixa aparecia como "Fixo" e era pulado. */}
+                            {p.has_whatsapp === true ? (
+                              <Badge className="bg-emerald-50 text-emerald-700">
+                                <BadgeCheck className="size-3" />
+                                Tem WhatsApp
+                              </Badge>
+                            ) : p.has_whatsapp === false ? (
+                              <Badge className="bg-rose-50 text-rose-700">
+                                Sem WhatsApp
+                              </Badge>
+                            ) : p.is_mobile ? (
                               <Badge className="bg-emerald-50 text-emerald-700">
                                 <MessageCircle className="size-3" />
                                 WhatsApp provável

@@ -5,6 +5,7 @@ import { fillTemplate, normalizeBrPhone, phoneToRemoteJid } from "@/lib/phone";
 import { inferWebsiteFromRow, parseCsv, slugify } from "@/lib/csv";
 import { requireAuthenticatedUser } from "@/lib/supabase/require-authenticated-user";
 import { sendCrmWhatsappMessage } from "@/app/actions/crm-whatsapp";
+import { checkWhatsAppNumbers } from "@/lib/evolution";
 import {
   DEFAULT_PROSPECTING_TEMPLATE,
   INSYT_STUDIO_URL,
@@ -219,6 +220,85 @@ export async function searchPlaces(niche: string, city: string, state?: string) 
 
   revalidatePath("/prospeccao");
   return { imported, total: rows.length };
+}
+
+/**
+ * Pergunta à Evolution quais leads realmente têm WhatsApp.
+ *
+ * Nenhuma mensagem é enviada: é só a consulta de existência. Serve para
+ * parar de descobrir isso no erro de um envio — `is_mobile` é palpite pela
+ * contagem de dígitos, e escritório com WhatsApp Business em linha fixa
+ * quebra esse palpite nos dois sentidos.
+ *
+ * Por padrão verifica só quem nunca foi verificado, para uma segunda rodada
+ * não pagar de novo pela base inteira. `todos` refaz tudo.
+ */
+export async function checkProspectsWhatsapp({ todos = false } = {}) {
+  const { supabase } = await requireAuthenticatedUser();
+
+  let query = supabase
+    .from("prospects")
+    .select("id, phone_e164")
+    .not("phone_e164", "is", null);
+
+  if (!todos) query = query.is("whatsapp_checked_at", null);
+
+  const { data: leads, error } = await query;
+  if (error) return { error: error.message };
+  if (!leads || leads.length === 0) {
+    return { verificados: 0, comWhatsapp: 0, semWhatsapp: 0 };
+  }
+
+  let existencia: Map<string, boolean>;
+  try {
+    existencia = await checkWhatsAppNumbers(
+      // Números repetidos entre leads viram uma pergunta só.
+      [...new Set(leads.map((lead) => lead.phone_e164 as string))],
+    );
+  } catch (checkError) {
+    console.error("[prospecção] falha ao verificar números:", checkError);
+    return {
+      error:
+        "Não consegui consultar o WhatsApp agora. Verifique a conexão da instância e tente de novo.",
+    };
+  }
+
+  const agora = new Date().toISOString();
+  let comWhatsapp = 0;
+  let semWhatsapp = 0;
+  const erros: string[] = [];
+
+  for (const lead of leads) {
+    const tem = existencia.get(lead.phone_e164 as string);
+    // Número que a Evolution não respondeu fica sem veredito em vez de
+    // virar "não tem" — marcar errado esconderia um lead bom.
+    if (tem === undefined) continue;
+
+    const { error: updateError } = await supabase
+      .from("prospects")
+      .update({
+        has_whatsapp: tem,
+        whatsapp_checked_at: agora,
+        updated_at: agora,
+      })
+      .eq("id", lead.id);
+
+    if (updateError) {
+      erros.push(updateError.message);
+      continue;
+    }
+
+    if (tem) comWhatsapp += 1;
+    else semWhatsapp += 1;
+  }
+
+  revalidatePath("/prospeccao");
+  return {
+    verificados: comWhatsapp + semWhatsapp,
+    comWhatsapp,
+    semWhatsapp,
+    naoSalvos: erros.length,
+  };
 }
 
 // Aplica o enriquecimento assíncrono do LocalProspects (email, tipo de
