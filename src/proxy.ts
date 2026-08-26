@@ -57,7 +57,11 @@ export const config = {
     "/propostas/:path*",
     "/portfolio/gerenciar/:path*",
     "/configuracoes/:path*",
-    "/sites/:path*",
+    // Só a listagem e a página de configuração de um projeto — não o
+    // build estático em /sites/<slug>/..., que precisa ficar público (ver
+    // proxy-route-policy.ts).
+    "/sites",
+    "/sites/:id",
     "/login",
   ],
 };
