@@ -1,0 +1,20 @@
+{
+  "name": "Outeiral Advocacia",
+  "short_name": "Outeiral",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f2f2f2",
+  "theme_color": "#2e5c80",
+  "icons": [
+    {
+      "src": "/favicon/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

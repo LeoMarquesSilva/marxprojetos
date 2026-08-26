@@ -1,0 +1,10 @@
+# Bloqueia acesso direto a arquivos sensíveis do endpoint de contato.
+<FilesMatch "^(\.env.*|.*\.log)$">
+  Require all denied
+</FilesMatch>
+
+<IfModule mod_php.c>
+  php_flag display_errors Off
+</IfModule>
+
+Options -Indexes
