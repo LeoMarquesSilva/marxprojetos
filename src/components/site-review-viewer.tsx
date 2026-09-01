@@ -31,6 +31,7 @@ import { BrandLogo } from "@/components/brand-logo";
 import { SiteReviewTour, type TourTarget } from "@/components/site-review-tour";
 import { addReviewComment, approveReview } from "@/app/actions/review";
 import { cn } from "@/lib/utils";
+import { reviewPageLabel } from "@/lib/review-page-label";
 import type { SiteComment } from "@/types/briefing";
 
 const TOUR_TARGET_ACTIVE = "relative z-[201]";
@@ -192,8 +193,15 @@ export function SiteReviewViewer({
 
     const scrollWidth = doc.documentElement.scrollWidth;
     const scrollHeight = doc.documentElement.scrollHeight;
+    // Um site tem várias páginas, e todo comentário tem uma posição em
+    // percentual (x_pct/y_pct) relativa à página em que foi feito. Sem
+    // filtrar por página, um comentário do "Contato" reaparecia projetado
+    // (na posição errada) em cima do "Início" — o cliente via um pino sem
+    // relação nenhuma com o que estava vendo na tela.
+    const currentPath = doc.location.pathname;
 
     commentsRef.current.forEach((c, i) => {
+      if (c.page_path !== currentPath) return;
       const color = c.status === "resolved" ? "#8b909d" : "#f74211";
       const left = (c.x_pct / 100) * scrollWidth;
       const top = (c.y_pct / 100) * scrollHeight;
@@ -445,12 +453,40 @@ export function SiteReviewViewer({
     });
   }
 
-  function scrollToComment(c: SiteComment) {
+  function scrollWithinCurrentPage(c: SiteComment) {
     const win = iframeRef.current?.contentWindow;
     const doc = iframeRef.current?.contentDocument;
     if (!win || !doc) return;
     const y = (c.y_pct / 100) * doc.documentElement.scrollHeight - 160;
     win.scrollTo({ top: Math.max(y, 0), behavior: "smooth" });
+  }
+
+  function scrollToComment(c: SiteComment) {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+
+    // O comentário pode ter sido feito numa página diferente da que está
+    // aberta agora — sem trocar o iframe primeiro, a rolagem usava o y_pct
+    // de uma página no corpo de outra, caindo num ponto sem relação com o
+    // comentário.
+    if (iframe.contentDocument?.location.pathname !== c.page_path) {
+      const onLoaded = () => {
+        iframe.removeEventListener("load", onLoaded);
+        setupIframe();
+        // Duas rodadas de rAF: a primeira garante que o layout da página
+        // recém-carregada já assentou (fontes, imagens) antes de medir
+        // scrollHeight; sem a espera, a rolagem pousava mais cedo do que
+        // deveria.
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => scrollWithinCurrentPage(c));
+        });
+      };
+      iframe.addEventListener("load", onLoaded);
+      iframe.src = c.page_path;
+      return;
+    }
+
+    scrollWithinCurrentPage(c);
   }
 
   const openComments = comments.filter((c) => c.status === "open");
@@ -688,6 +724,9 @@ export function SiteReviewViewer({
                         {idx}
                       </span>
                       <div className="flex gap-1">
+                        <Badge variant="secondary" className="text-[10px]">
+                          {reviewPageLabel(c.page_path)}
+                        </Badge>
                         {isArea ? (
                           <Badge variant="secondary" className="text-[10px]">
                             Área

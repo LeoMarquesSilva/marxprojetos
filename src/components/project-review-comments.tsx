@@ -8,6 +8,7 @@ import { Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { resolveComment } from "@/app/actions/review";
+import { reviewPageLabel } from "@/lib/review-page-label";
 import type { SiteComment } from "@/types/briefing";
 
 export function ProjectReviewComments({
@@ -69,7 +70,7 @@ export function ProjectReviewComments({
               <p className="text-sm text-[var(--insyt-black)]">{c.comment}</p>
             </div>
             <p className="text-xs text-[var(--insyt-muted)]">
-              {c.author_name || "Anônimo"} · {c.page_path} ·{" "}
+              {c.author_name || "Anônimo"} · {reviewPageLabel(c.page_path)} ·{" "}
               {format(new Date(c.created_at), "d MMM yyyy 'às' HH:mm", {
                 locale: ptBR,
               })}
