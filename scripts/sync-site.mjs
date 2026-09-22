@@ -85,6 +85,32 @@ function rewriteKnownRouteLiterals(content, knownRoutes) {
   return content.replace(pattern, (_m, quote, route) => `${quote}${rewritePageOrAssetPath(route)}${quote}`);
 }
 
+// Some pages swap an asset at runtime from a plain JS string literal baked
+// into an inline <script> — e.g. a scroll-triggered header logo swap — set
+// via setAttribute()/Image() rather than a static HTML attribute. Those
+// never go through the href/src rewrite below, so they kept pointing at
+// the site's own root instead of /sites/<slug>/ and 404'd as soon as the
+// script ran (immediately, for a preloaded image). Unlike page routes,
+// asset literals are unambiguous: a leading "/" plus a known file
+// extension is never a false positive worth guarding with a known-list.
+const ASSET_LITERAL_EXTENSIONS =
+  "png|jpe?g|gif|svg|webp|avif|ico|woff2?|ttf|otf|mp4|webm|pdf";
+// Runs on the same file as the href/src attribute rewrite above, so an
+// attribute value already rewritten to "/sites/<slug>/..." is just another
+// quoted string matching this same shape — without excluding it here, it
+// gets prefixed a second time ("/sites/<slug>/sites/<slug>/...").
+const assetLiteralPattern = new RegExp(
+  `(['"])\\/(?!\\/)(?!sites\\/)([^'"]+?\\.(?:${ASSET_LITERAL_EXTENSIONS}))\\1`,
+  "g",
+);
+
+function rewriteAssetPathLiterals(content) {
+  return content.replace(
+    assetLiteralPattern,
+    (_m, quote, path) => `${quote}${prefix}/${path}${quote}`,
+  );
+}
+
 // Top-level page routes that exist in this build (e.g. "sobre", "contato"),
 // used to safely rewrite bare JS string literals that reference them.
 const knownRoutes = readdirSync(dest)
@@ -122,6 +148,7 @@ function walk(dir) {
     }
 
     if (ext === ".html" || ext === ".js") {
+      updated = rewriteAssetPathLiterals(updated);
       updated = rewriteKnownRouteLiterals(updated, knownRoutes);
     }
 
