@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://walvesadvocacia.com.br/sitemap-index.xml
