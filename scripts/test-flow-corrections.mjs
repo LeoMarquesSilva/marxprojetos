@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   classifyNextStep,
+  getBriefingQuestionsValidationError,
   getBriefingAnswerValidationError,
   isBriefingAnswerFilled,
   isValidEmailAddress,
   normalizeBriefingAnswers,
+  repairBriefingQuestions,
   toggleMultiselectAnswer,
   validateAndNormalizeBriefingAnswers,
 } from "../src/lib/flow-utils.ts";
@@ -278,5 +280,56 @@ test("próximo passo usa a virada do dia civil de São Paulo entre 21h e 24h BRT
     classifyNextStep(dueOnAugust11, new Date("2026-08-12T03:00:00.000Z")),
     "overdue",
     "meia-noite BRT inicia 12 de agosto",
+  );
+});
+
+test("perguntas que o cliente não conseguiria responder são barradas na criação", () => {
+  const valid = [
+    { id: "nome", type: "text", label: "Nome da empresa", required: true },
+    { id: "plano", type: "select", label: "Plano", options: ["A", "B"] },
+  ];
+  assert.equal(getBriefingQuestionsValidationError(valid), null);
+
+  assert.match(getBriefingQuestionsValidationError([]), /pelo menos uma/);
+  assert.match(
+    getBriefingQuestionsValidationError([{ ...valid[0], label: "  " }]),
+    /sem texto/,
+  );
+  assert.match(
+    getBriefingQuestionsValidationError([{ ...valid[1], options: undefined }]),
+    /opções válidas/,
+  );
+  assert.match(
+    getBriefingQuestionsValidationError([{ ...valid[1], options: ["A", "A"] }]),
+    /opções válidas/,
+  );
+  assert.match(
+    getBriefingQuestionsValidationError([valid[0], { ...valid[1], id: "nome" }]),
+    /duplicada/,
+  );
+});
+
+test("perguntas geradas pela IA são consertadas até passarem na validação pública", () => {
+  const repaired = repairBriefingQuestions([
+    { id: "areas", type: "multiselect", label: "Áreas", options: [" Cível", "Cível", " "] },
+    { id: "areas", type: "select", label: "Outra pergunta", options: [] },
+    { id: "referencias_visuais", type: "textarea", label: "Referências" },
+    { id: "referencias_visuais", type: "links", label: "Sites de referência" },
+  ]);
+
+  assert.deepEqual(
+    repaired.map((q) => q.id),
+    ["areas", "areas_2", "referencias_visuais", "referencias_visuais_2"],
+  );
+  assert.deepEqual(repaired[0].options, ["Cível"]);
+  assert.equal(repaired[1].type, "text");
+  assert.equal(repaired[1].options, undefined);
+  assert.equal(getBriefingQuestionsValidationError(repaired), null);
+  assert.deepEqual(
+    validateAndNormalizeBriefingAnswers(repaired, {
+      areas: ["Cível"],
+      areas_2: "texto",
+    }),
+    { answers: { areas: ["Cível"], areas_2: "texto" } },
   );
 });

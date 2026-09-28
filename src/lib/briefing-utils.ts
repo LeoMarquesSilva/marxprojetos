@@ -1,3 +1,4 @@
+import { absoluteUrl } from "@/lib/site-url";
 import type { BriefingQuestion } from "@/types/briefing";
 
 export function groupQuestionsBySection(questions: BriefingQuestion[]) {
@@ -13,22 +14,17 @@ export function groupQuestionsBySection(questions: BriefingQuestion[]) {
   return Array.from(sections.entries());
 }
 
-export function getAppUrl() {
-  if (process.env.NEXT_PUBLIC_APP_URL) {
-    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
-  }
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`;
-  }
-  return "http://localhost:3000";
-}
-
+// Os links vão para o cliente e são montados em componentes client-side.
+// VERCEL_URL não chega ao navegador (sem prefixo NEXT_PUBLIC_), então o
+// fallback antigo gerava um link no SSR e "http://localhost:3000" na
+// hidratação — e um NEXT_PUBLIC_APP_URL malformado saía copiado como veio.
+// SITE_URL valida a variável e cai para o domínio de produção.
 export function getBriefingLink(token: string) {
-  return `${getAppUrl()}/b/${token}`;
+  return absoluteUrl(`/b/${token}`);
 }
 
 export function getReviewLink(token: string) {
-  return `${getAppUrl()}/r/${token}`;
+  return absoluteUrl(`/r/${token}`);
 }
 
 export function formatAnswer(value: unknown): string {

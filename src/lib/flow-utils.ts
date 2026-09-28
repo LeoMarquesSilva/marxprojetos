@@ -185,15 +185,98 @@ function isBriefingQuestion(value: unknown): value is BriefingQuestion {
   );
 }
 
+function areBriefingQuestions(
+  questions: unknown,
+): questions is BriefingQuestion[] {
+  return (
+    Array.isArray(questions) &&
+    questions.every(isBriefingQuestion) &&
+    new Set(questions.map((question) => question.id)).size === questions.length
+  );
+}
+
+// Mesma regra que o envio público aplica (validateAndNormalizeBriefingAnswers):
+// um briefing salvo com uma pergunta que não passa aqui nunca poderia ser
+// respondido — o cliente abria o link, preenchia tudo e recebia "Não foi
+// possível validar as perguntas deste briefing." Por isso a criação do
+// projeto barra antes de gerar o link.
+export function getBriefingQuestionsValidationError(
+  questions: unknown,
+): string | null {
+  if (!Array.isArray(questions) || questions.length === 0) {
+    return "O briefing precisa ter pelo menos uma pergunta.";
+  }
+
+  const seenIds = new Set<string>();
+  for (const [index, question] of questions.entries()) {
+    const label =
+      question && typeof question.label === "string" && question.label.trim()
+        ? question.label.trim()
+        : `pergunta ${index + 1}`;
+    if (!isBriefingQuestion(question)) {
+      const isSelectLike =
+        question?.type === "select" || question?.type === "multiselect";
+      return isSelectLike
+        ? `Informe opções válidas e sem repetição em: ${label}`
+        : `Pergunta inválida ou sem texto: ${label}`;
+    }
+    if (seenIds.has(question.id)) {
+      return `Pergunta duplicada: ${label}`;
+    }
+    seenIds.add(question.id);
+  }
+
+  return null;
+}
+
+// Conserta o que a IA costuma devolver fora da regra acima: ids repetidos
+// (ou que colidem após a sanitização), opções com espaços ou duplicadas, e
+// select/multiselect sem nenhuma opção — que viram texto livre em vez de
+// um campo que o cliente não conseguiria preencher.
+export function repairBriefingQuestions(
+  questions: BriefingQuestion[],
+): BriefingQuestion[] {
+  const usedIds = new Set<string>();
+
+  return questions.map((question, index) => {
+    const baseId = question.id.trim() || `pergunta_${index + 1}`;
+    let id = baseId;
+    for (let suffix = 2; usedIds.has(id); suffix++) {
+      id = `${baseId}_${suffix}`;
+    }
+    usedIds.add(id);
+
+    const repaired: BriefingQuestion = {
+      ...question,
+      id,
+      label: question.label.trim() || `Pergunta ${index + 1}`,
+    };
+
+    if (question.type === "select" || question.type === "multiselect") {
+      const options = Array.from(
+        new Set(
+          (question.options ?? [])
+            .map((option) => option.trim())
+            .filter(Boolean),
+        ),
+      );
+      if (options.length > 0) {
+        repaired.options = options;
+      } else {
+        repaired.type = "text";
+        delete repaired.options;
+      }
+    }
+
+    return repaired;
+  });
+}
+
 export function validateAndNormalizeBriefingAnswers(
   questions: unknown,
   answers: unknown,
 ): { error: string } | { answers: Record<string, unknown> } {
-  if (
-    !Array.isArray(questions) ||
-    !questions.every(isBriefingQuestion) ||
-    new Set(questions.map((question) => question.id)).size !== questions.length
-  ) {
+  if (!areBriefingQuestions(questions)) {
     return { error: "Não foi possível validar as perguntas deste briefing." };
   }
 

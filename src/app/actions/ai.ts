@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { repairBriefingQuestions } from "@/lib/flow-utils";
 import type { BriefingQuestion, QuestionType } from "@/types/briefing";
 
 const questionSchema = z.object({
@@ -25,7 +26,7 @@ const questionSchema = z.object({
 });
 
 const payloadSchema = z.object({
-  questions: z.array(questionSchema).min(8).max(24),
+  questions: z.array(questionSchema).min(8).max(28),
 });
 
 type RawQuestion = {
@@ -134,7 +135,7 @@ function coerceQuestion(raw: RawQuestion, index: number): BriefingQuestion {
     id: sanitizeId(String(raw.id ?? label)) || `pergunta_${index + 1}`,
     type,
     label,
-    required: toBoolean(raw.required, true),
+    required: toBoolean(raw.required, false),
     section: String(raw.section ?? "Geral").trim() || "Geral",
     placeholder: raw.placeholder ? String(raw.placeholder).trim().slice(0, 180) : undefined,
     options: type === "select" || type === "multiselect" ? options : undefined,
@@ -154,7 +155,9 @@ function normalizeQuestion(q: z.infer<typeof questionSchema>, index: number): Br
     id,
     type,
     label: q.label.trim(),
-    required: q.required ?? true,
+    // Sem indicação explícita, opcional: formulário com tudo obrigatório
+    // é o que mais faz o cliente abandonar o briefing no meio.
+    required: q.required ?? false,
     section: q.section?.trim() || "Geral",
     placeholder: q.placeholder?.trim() || undefined,
     options: isSelectLike && options && options.length > 0 ? options : undefined,
@@ -166,6 +169,7 @@ export async function generateBriefingQuestionsWithAI(input: {
   productType: string;
   goal?: string;
   tone?: string;
+  context?: string;
 }) {
   const supabase = await createClient();
   const {
@@ -187,27 +191,33 @@ export async function generateBriefingQuestionsWithAI(input: {
 
   const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
+  const context = input.context?.trim().slice(0, 4000);
   const prompt = `
-Gere perguntas de briefing em português para um projeto web.
+Gere perguntas de briefing em português para um projeto web. O briefing é
+respondido pelo próprio cliente, num formulário, sem ninguém para explicar.
 
 Contexto:
 - Nicho do cliente: ${input.niche}
 - Tipo de produto: ${input.productType}
 - Objetivo do projeto: ${input.goal || "Não informado"}
 - Tom desejado: ${input.tone || "Profissional e claro"}
+${context ? `- O que já sabemos do cliente (não pergunte de novo; peça só confirmação ou ajuste):\n${context}` : ""}
 
 Requisitos:
 1) Retorne APENAS JSON válido no formato { "questions": [...] }.
-2) Crie entre 10 e 16 perguntas.
-3) Misture tipos: text, textarea, select, url, links, boolean.
-4) Inclua seções úteis (ex: Negócio, Público, Oferta, Visual, Conteúdo, Técnico).
-5) Para "select", sempre inclua "options".
-6) NÃO use upload de arquivo. Para coletar logo, imagens, PDFs ou qualquer material de marca, peça um LINK do Google Drive usando o tipo "url" (ex.: "Link do Google Drive com o logo e materiais visuais").
-7) IDs devem ser curtos, sem espaços, em snake_case.
-8) Perguntas devem ser objetivas e úteis para criação de site/LP.
-9) Se o cliente for um negócio de serviços/profissional (ex.: advocacia, clínica, consultoria, contabilidade, agência), SEMPRE inclua uma pergunta sobre as áreas de atuação / especialidades / serviços oferecidos (id sugerido "areas_atuacao").
-10) SEMPRE inclua um campo do tipo "links" (id "referencias_visuais", seção "Visual") para o cliente colar sites/LPs de referência visual que admira.
-11) Não inclua markdown, comentários ou texto fora do JSON.
+2) Crie entre 14 e 22 perguntas, em seções nesta ordem: Negócio / Posicionamento, Público, Serviços ou Oferta, Conteúdo, Contato e conversão, Identidade visual, Parte técnica, Prazos e aprovação.
+3) Cada pergunta deve gerar algo que vira conteúdo ou decisão do site. Nada de perguntas genéricas ("fale sobre sua empresa") nem duas perguntas pedindo a mesma coisa.
+4) Quando a resposta for previsível, use "select" ou "multiselect" com 3 a 7 opções concretas e distintas. Use "textarea" só para o que vira texto do site (diferenciais, descrição de serviços, equipe).
+5) Toda pergunta aberta precisa de "placeholder" com um exemplo concreto do nicho. Nas demais, placeholder null.
+6) Marque "required": true só no essencial (no máximo 1/3 das perguntas): o que o cliente faz, para quem, diferenciais, ação principal do site e quem aprova. O resto é false.
+7) Peça fatos, não adjetivos: diferenciais com números, anos de atuação, certificações, clientes atendidos.
+8) Sempre cubra: ação principal do visitante (WhatsApp, formulário, agendamento…), quem escreve os textos, situação das fotos, situação da identidade visual, acesso ao domínio e onde ficam os e-mails do domínio.
+9) NÃO use upload de arquivo nem o tipo "boolean". Para logo, fotos ou materiais, peça um LINK do Google Drive com o tipo "url". Para sim/não, use "select" com as opções.
+10) Se o cliente for serviço profissional (advocacia, clínica, consultoria, contabilidade, agência), inclua uma pergunta sobre as áreas de atuação/serviços (id "areas_atuacao") e uma sobre quem aparece na página de equipe.
+11) Se for advocacia, respeite o Provimento 205/2021 da OAB: não pergunte preços, honorários, promessas de resultado nem casos de clientes para divulgação.
+12) SEMPRE inclua um campo do tipo "links" (id "referencias_visuais", seção "Identidade visual") para o cliente colar sites de referência que admira.
+13) IDs curtos, sem espaços, em snake_case e únicos.
+14) Não inclua markdown, comentários ou texto fora do JSON.
 `;
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -305,7 +315,11 @@ Requisitos:
     if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
       return { error: "Não foi possível interpretar o JSON da IA." };
     }
-    parsed = JSON.parse(raw.slice(firstBrace, lastBrace + 1));
+    try {
+      parsed = JSON.parse(raw.slice(firstBrace, lastBrace + 1));
+    } catch {
+      return { error: "Não foi possível interpretar o JSON da IA." };
+    }
   }
 
   // Primeiro tenta validar diretamente; se falhar, aplica coerção tolerante.
@@ -313,7 +327,7 @@ Requisitos:
   if (!validated.success) {
     const candidates = extractQuestionCandidates(parsed);
     if (candidates.length > 0) {
-      const coerced = candidates.slice(0, 24).map(coerceQuestion);
+      const coerced = candidates.slice(0, 28).map(coerceQuestion);
       validated = payloadSchema.safeParse({ questions: coerced });
     }
   }
@@ -325,8 +339,8 @@ Requisitos:
     };
   }
 
-  const questions = ensureVisualReferences(
-    validated.data.questions.map(normalizeQuestion),
+  const questions = repairBriefingQuestions(
+    ensureVisualReferences(validated.data.questions.map(normalizeQuestion)),
   );
   return {
     questions,
@@ -350,10 +364,10 @@ function ensureVisualReferences(
     {
       id: "referencias_visuais",
       type: "links",
-      label: "Sites de referência visual (links)",
+      label: "Sites que você admira (um link por linha) e o que gosta em cada um",
       required: false,
-      section: "Visual",
-      placeholder: "Cole links de sites/LPs que você admira (um por linha)",
+      section: "Identidade visual",
+      placeholder: "https://exemplo.com.br (gosto das fotos grandes)",
     },
   ];
 }

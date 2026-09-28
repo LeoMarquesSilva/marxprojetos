@@ -58,6 +58,7 @@ export function CreateProjectForm({
   const [productType, setProductType] = useState("");
   const [goal, setGoal] = useState("");
   const [tone, setTone] = useState("");
+  const [aiContext, setAiContext] = useState("");
   const [defaultLabels, setDefaultLabels] = useState<Record<string, string>>(() =>
     Object.fromEntries((templates[0]?.questions ?? []).map((q) => [q.id, q.label])),
   );
@@ -103,17 +104,27 @@ export function CreateProjectForm({
   }
 
   function handleSubmit(formData: FormData) {
+    // O campo de pergunta é zerado no foco e só volta ao texto padrão no
+    // blur. Enviar com Enter a partir dele pula o blur e gravaria a pergunta
+    // sem texto — o que deixa o briefing impossível de responder.
+    const submittedQuestions = questions.map((q) =>
+      q.label.trim() ? q : { ...q, label: defaultLabels[q.id] ?? q.label },
+    );
+
     startTransition(async () => {
-      await createProject({
+      // Em caso de sucesso a action redireciona; só volta aqui com erro.
+      const result = await createProject({
         title: String(formData.get("title")),
         templateId,
         clientName,
         clientEmail,
         clientCompany,
         welcomeMessage: String(formData.get("welcome_message") || ""),
-        questions,
+        questions: submittedQuestions,
         crmClientId: selectedClient?.id ?? null,
       });
+
+      if (result?.error) toast.error(result.error);
     });
   }
 
@@ -129,6 +140,7 @@ export function CreateProjectForm({
         productType,
         goal,
         tone,
+        context: aiContext,
       });
 
       if ("error" in result && result.error) {
@@ -224,6 +236,17 @@ export function CreateProjectForm({
               onChange={(e) => setTone(e.target.value)}
               placeholder="Ex: premium, direto, técnico, humanizado..."
              
+            />
+          </div>
+          <div className="space-y-3 sm:col-span-2">
+            <Label htmlFor="ai_context" className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-slate)]">O que já sabemos do cliente (opcional)</Label>
+            <Textarea
+              id="ai_context"
+              rows={4}
+              value={aiContext}
+              onChange={(e) => setAiContext(e.target.value)}
+              placeholder="Cole textos do site atual, áreas de atuação, equipe, contatos… A IA evita perguntar o que já está aqui e pede só confirmação."
+              className="rounded-xl bg-[var(--insyt-canvas)] border-transparent focus-visible:bg-white transition-colors duration-300"
             />
           </div>
           <div className="sm:col-span-2 mt-2">

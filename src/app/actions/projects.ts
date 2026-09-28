@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAuthenticatedUser } from "@/lib/supabase/require-authenticated-user";
+import { getBriefingQuestionsValidationError } from "@/lib/flow-utils";
 import type { BriefingQuestion, ProjectStatus } from "@/types/briefing";
 
 export async function getTemplates() {
@@ -122,12 +123,16 @@ type CreateProjectInput = {
 export async function createProject(input: CreateProjectInput) {
   const { supabase, user } = await requireAuthenticatedUser();
 
+  if (!input.title?.trim()) return { error: "Informe o título do projeto." };
+  const questionsError = getBriefingQuestionsValidationError(input.questions);
+  if (questionsError) return { error: questionsError };
+
   const { data, error } = await supabase
     .from("projects")
     .insert({
       owner_id: user.id,
       template_id: input.templateId,
-      title: input.title,
+      title: input.title.trim(),
       client_name: input.clientName || null,
       client_email: input.clientEmail || null,
       client_company: input.clientCompany || null,
@@ -183,6 +188,9 @@ export async function updateProjectQuestions(
   questions: BriefingQuestion[],
 ) {
   const { supabase } = await requireAuthenticatedUser();
+  const questionsError = getBriefingQuestionsValidationError(questions);
+  if (questionsError) return { error: questionsError };
+
   const { error } = await supabase
     .from("projects")
     .update({ questions })

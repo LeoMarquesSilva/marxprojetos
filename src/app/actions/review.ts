@@ -78,6 +78,18 @@ export async function addReviewComment(input: {
 export async function enableSiteReview(projectId: string, sitePath: string) {
   const { supabase } = await requireAuthenticatedUser();
 
+  // Mesma regra de scripts/sync-site.mjs: o slug vira a pasta
+  // public/sites/<slug>/ carregada no iframe de /r/<token>. Qualquer outra
+  // coisa ("Pereira Garcia", "../x", "/pereira-garcia/") abria a revisão
+  // do cliente num 404.
+  const slug = sitePath.trim();
+  if (!/^[a-z0-9-]+$/.test(slug)) {
+    return {
+      error:
+        "Slug inválido: use só letras minúsculas, números e hífens (o mesmo usado no sync-site).",
+    };
+  }
+
   const { data: existing } = await supabase
     .from("projects")
     .select("review_enabled_at")
@@ -87,7 +99,7 @@ export async function enableSiteReview(projectId: string, sitePath: string) {
   const { error } = await supabase
     .from("projects")
     .update({
-      review_site_path: sitePath,
+      review_site_path: slug,
       review_enabled: true,
       review_enabled_at: existing?.review_enabled_at ?? new Date().toISOString(),
     })
