@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="none">
+  <defs>
+    <linearGradient id="clinke-c" x1="40" y1="8" x2="40" y2="72" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00C853"/>
+      <stop offset="0.48" stop-color="#00B4C8"/>
+      <stop offset="1" stop-color="#007BFF"/>
+    </linearGradient>
+  </defs>
+  <path
+    d="M56.7 59.9 A 26 26 0 1 1 56.7 20.1"
+    stroke="url(#clinke-c)"
+    stroke-width="12"
+    stroke-linecap="round"
+  />
+  <path
+    d="M40 26 v28 M26 40 h28"
+    stroke="#00A8C8"
+    stroke-width="8"
+    stroke-linecap="round"
+  />
+</svg>

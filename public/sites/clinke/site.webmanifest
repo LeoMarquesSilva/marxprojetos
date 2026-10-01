@@ -1,0 +1,14 @@
+{
+  "name": "Clinke",
+  "short_name": "Clinke",
+  "description": "Sistema de gestão para clínicas médicas: agenda, prontuário, WhatsApp e financeiro.",
+  "lang": "pt-BR",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#F5F7F6",
+  "theme_color": "#002B5B",
+  "icons": [
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/clinke-mark.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
