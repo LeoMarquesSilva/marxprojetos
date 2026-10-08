@@ -1,36 +1,36 @@
 import { Settings, ShieldAlert } from "lucide-react";
+import { AccountPasswordCard } from "@/components/account-password-card";
 import { AdminShell } from "@/components/admin-shell";
 import { AdminPageHeader } from "@/components/admin-page-header";
 import { UsersBoard } from "@/components/users-board";
 import { getMyRole, listUsers } from "@/app/actions/users";
-import { createClient } from "@/lib/supabase/server";
+import { requireAuthenticatedUser } from "@/lib/supabase/require-authenticated-user";
 
 export default async function ConfiguracoesPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { user } = await requireAuthenticatedUser();
   const role = await getMyRole();
 
   return (
-    <AdminShell userEmail={user?.email}>
+    <AdminShell userEmail={user.email}>
       <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-1000 ease-fluid">
         <AdminPageHeader
           icon={Settings}
           title="Configurações"
-          description="Gerencie os usuários que têm acesso ao Briefing Studio."
+          description="Sua senha e os usuários que têm acesso ao Briefing Studio."
           activeHref="/configuracoes"
         />
+
+        <AccountPasswordCard email={user.email ?? ""} />
 
         {role !== "admin" ? (
           <div className="insyt-card flex flex-col items-center gap-3 px-6 py-20 text-center">
             <ShieldAlert className="size-8 text-[var(--insyt-muted)]" />
             <p className="text-[var(--insyt-slate)]">
-              Apenas administradores têm acesso a esta página.
+              Apenas administradores gerenciam usuários.
             </p>
           </div>
         ) : (
-          <UsersBoardLoader currentUserId={user!.id} />
+          <UsersBoardLoader currentUserId={user.id} />
         )}
       </div>
     </AdminShell>
