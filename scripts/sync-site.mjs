@@ -63,6 +63,11 @@ function rewritePageOrAssetPath(rawPath) {
   const isAsset = lastSegment.includes(".");
 
   if (isAsset) return `${prefix}/${path}${suffix}`;
+  // Builds with `build.format: "file"` emit /sobre as sobre.html instead of
+  // sobre/index.html.
+  if (withoutTrailingSlash && existsSync(join(dest, `${withoutTrailingSlash}.html`))) {
+    return `${prefix}/${withoutTrailingSlash}.html${suffix}`;
+  }
   return withoutTrailingSlash
     ? `${prefix}/${withoutTrailingSlash}/index.html${suffix}`
     : `${prefix}/index.html${suffix}`;
@@ -116,6 +121,12 @@ function rewriteAssetPathLiterals(content) {
 const knownRoutes = readdirSync(dest)
   .filter((entry) => statSync(join(dest, entry)).isDirectory())
   .filter((entry) => existsSync(join(dest, entry, "index.html")));
+// ...and the same routes for `build.format: "file"` builds (sobre.html).
+for (const entry of readdirSync(dest)) {
+  if (!entry.endsWith(".html")) continue;
+  const route = entry.slice(0, -".html".length);
+  if (route !== "index" && route !== "404" && !knownRoutes.includes(route)) knownRoutes.push(route);
+}
 
 function walk(dir) {
   for (const entry of readdirSync(dir)) {

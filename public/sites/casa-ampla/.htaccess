@@ -1,0 +1,90 @@
+# Gerado no build (src/config/htaccess.ts). Não editar à mão.
+Options -Indexes -MultiViews
+DirectorySlash Off
+ErrorDocument 404 /404.html
+
+<IfModule mod_rewrite.c>
+RewriteEngine On
+
+RewriteCond %{HTTPS} off [OR]
+RewriteCond %{HTTP_HOST} ^www\. [NC]
+RewriteRule ^ https://casaampla.com.br%{REQUEST_URI} [R=301,L]
+
+# Site antigo
+RewriteRule ^quem-somos/nossa-historia/?$ /a-casa [R=301,L,NE]
+RewriteRule ^equipe/17/mente-ativa/?$ /equipes/mente-ativa [R=301,L,NE]
+RewriteRule ^equipe/18/vitalidade-em-foco/?$ /equipes/vitalidade-em-foco [R=301,L,NE]
+RewriteRule ^equipe/21/saude-da-mulher/?$ /equipes/saude-da-mulher [R=301,L,NE]
+RewriteRule ^equipe/22/plenos-pulmoes/?$ /equipes/plenos-pulmoes [R=301,L,NE]
+RewriteRule ^equipe/23/dor-nao-e-normal/?$ /equipes/dor-nao-e-normal [R=301,L,NE]
+RewriteRule ^profissional/17/daniela-gracioli-de-almeida-bacha/?$ /profissionais/daniela-gracioli-de-almeida-bacha [R=301,L,NE]
+RewriteRule ^profissional/62/mariana-da-silva-soares-peron/?$ /profissionais/mariana-da-silva-soares-peron [R=301,L,NE]
+RewriteRule ^profissional/1/ana-paula-chibeni-fernandez/?$ /profissionais/ana-paula-chibeni-fernandez [R=301,L,NE]
+RewriteRule ^profissional/33/paula-perin-glatt/?$ /profissionais/paula-perin-glatt [R=301,L,NE]
+RewriteRule ^profissional/38/thais-roque/?$ /profissionais/thais-roque [R=301,L,NE]
+RewriteRule ^profissional/24/henrique-soares-assis/?$ /profissionais/henrique-soares-assis [R=301,L,NE]
+RewriteRule ^profissional/54/julia-penha-marostica/?$ /profissionais/julia-penha-marostica [R=301,L,NE]
+RewriteRule ^profissional/25/emilianne-salomao/?$ /profissionais/emilianne-salomao [R=301,L,NE]
+RewriteRule ^profissional/48/laura-pazinato-ritter/?$ /profissionais/laura-pazinato-ritter [R=301,L,NE]
+RewriteRule ^profissional/32/mariana-ito/?$ /profissionais/mariana-ito [R=301,L,NE]
+RewriteRule ^profissional/63/breno-perpetuo-lourenco/?$ /profissionais/breno-perpetuo-lourenco [R=301,L,NE]
+RewriteRule ^profissional/57/constanza-deyanu-alvear-perez/?$ /profissionais/constanza-deyanu-alvear-perez [R=301,L,NE]
+RewriteRule ^profissional/30/leticia-martinelli/?$ /profissionais/leticia-martinelli [R=301,L,NE]
+RewriteRule ^profissional/43/reabili/?$ /profissionais/reabili [R=301,L,NE]
+RewriteRule ^profissional/19/amanda-hernandez/?$ /profissionais/amanda-hernandez [R=301,L,NE]
+RewriteRule ^profissional/50/thalita-stafocher/?$ /profissionais/thalita-stafocher [R=301,L,NE]
+RewriteRule ^profissional/41/iolanda-corselli/?$ /profissionais/iolanda-corselli [R=301,L,NE]
+RewriteRule ^profissional/53/maria-laura-alves-de-melo-silva/?$ /profissionais/maria-laura-alves-de-melo-silva [R=301,L,NE]
+RewriteRule ^profissional/64/carollyne-rodovalho-guerra-carneiro/?$ /profissionais/carollyne-rodovalho-guerra-carneiro [R=301,L,NE]
+RewriteRule ^profissional/21/bruno-deltreggia-benites/?$ /profissionais/bruno-deltreggia-benites [R=301,L,NE]
+RewriteRule ^profissional/44/livia-conz/?$ /profissionais/livia-conz [R=301,L,NE]
+RewriteRule ^profissional/59/andre-santana-alcantara/?$ /profissionais/andre-santana-alcantara [R=301,L,NE]
+RewriteRule ^profissional/36/vitor-godinho/?$ /profissionais/vitor-godinho [R=301,L,NE]
+RewriteRule ^profissional/40/vanessa-campoy/?$ /profissionais/vanessa-campoy [R=301,L,NE]
+RewriteRule ^profissional/18/italo-karmann-aventurato/?$ /profissionais/italo-karmann-aventurato [R=301,L,NE]
+RewriteRule ^profissional/56/ksdy-maiara-m-sousa/?$ /profissionais/ksdy-maiara-m-sousa [R=301,L,NE]
+RewriteRule ^profissional/27/juliana-ferrer/?$ /profissionais/juliana-ferrer [R=301,L,NE]
+RewriteRule ^profissional/28/larissa-mayumi-morimoto-menegale/?$ /profissionais/larissa-mayumi-morimoto-menegale [R=301,L,NE]
+RewriteRule ^profissional/49/marina-neri/?$ /profissionais/marina-neri [R=301,L,NE]
+RewriteRule ^profissional/60/julia-modugno-leite/?$ /profissionais/julia-modugno-leite [R=301,L,NE]
+RewriteRule ^profissional/45/pedro-couri/?$ /profissionais/pedro-couri [R=301,L,NE]
+RewriteRule ^profissional/37/silvana-gracioli/?$ /profissionais/silvana-gracioli [R=301,L,NE]
+RewriteRule ^profissional/39/jorge-paez/?$ /profissionais/jorge-paez [R=301,L,NE]
+RewriteRule ^profissional/34/pedro-maximink-esteves-villar/?$ /profissionais/pedro-maximink-esteves-villar [R=301,L,NE]
+RewriteRule ^profissional/20/amos-vinicius-afonso-dos-santos/?$ /profissionais/amos-vinicius-afonso-dos-santos [R=301,L,NE]
+RewriteRule ^profissional/61/carla-de-oliveira-augusto-antonio/?$ /profissionais/carla-de-oliveira-augusto-antonio [R=301,L,NE]
+RewriteRule ^profissional/22/daniela-chicre/?$ /profissionais/daniela-chicre [R=301,L,NE]
+RewriteRule ^profissional/23/daniela-medeiros-dos-santos/?$ /profissionais/daniela-medeiros-dos-santos [R=301,L,NE]
+RewriteRule ^profissional/35/tiago-biasoli/?$ /profissionais/tiago-biasoli [R=301,L,NE]
+RewriteRule ^profissional/55/claudia-brogioni/?$ /profissionais/claudia-brogioni [R=301,L,NE]
+RewriteRule ^profissional/26/juliana-fazzolari/?$ /profissionais/juliana-fazzolari [R=301,L,NE]
+RewriteRule ^oficinas/3/cafe-com-memoria/?$ /oficinas-e-terapias\#cafe-com-memoria [R=301,L,NE]
+RewriteRule ^oficinas/4/espiritualidade/?$ /oficinas-e-terapias\#espiritualidade [R=301,L,NE]
+RewriteRule ^oficinas/5/natureza-e-bem-estar/?$ /oficinas-e-terapias\#natureza-e-bem-estar [R=301,L,NE]
+RewriteRule ^oficinas/2/yoga/?$ /oficinas-e-terapias\#yoga [R=301,L,NE]
+RewriteRule ^terapias-integrativas/1/acupuntura-e-auriculoterapia/?$ /oficinas-e-terapias\#acupuntura-e-auriculoterapia [R=301,L,NE]
+RewriteRule ^terapias-integrativas/6/aromaterapia/?$ /oficinas-e-terapias\#aromaterapia [R=301,L,NE]
+RewriteRule ^terapias-integrativas/7/mentoria-de-meditacao/?$ /oficinas-e-terapias\#mentoria-de-meditacao [R=301,L,NE]
+RewriteRule ^terapias-integrativas/8/reiki/?$ /oficinas-e-terapias\#reiki [R=301,L,NE]
+RewriteRule ^terapias-integrativas/9/shiatsu/?$ /oficinas-e-terapias\#shiatsu [R=301,L,NE]
+
+# /pagina → /pagina.html
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME}.html -f
+RewriteRule ^(.+?)/?$ $1.html [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+<FilesMatch "\.(avif|webp|jpg|png|svg|woff2|js|css)$">
+Header set Cache-Control "public, max-age=31536000, immutable"
+</FilesMatch>
+<FilesMatch "\.html$">
+Header set Cache-Control "public, max-age=0, must-revalidate"
+</FilesMatch>
+Header set X-Content-Type-Options "nosniff"
+Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+<IfModule mod_deflate.c>
+AddOutputFilterByType DEFLATE text/html text/css application/javascript image/svg+xml application/json
+</IfModule>
