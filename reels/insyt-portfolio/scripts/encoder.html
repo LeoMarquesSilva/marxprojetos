@@ -1,0 +1,69 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>encoder</title>
+<script type="module">
+  // Codifica os frames JPEG em H.264 e os efeitos sonoros em AAC dentro do
+  // Chrome (WebCodecs), via Mediabunny. Chamado por scripts/render.ts.
+  import {
+    AudioBufferSource,
+    BufferTarget,
+    CanvasSource,
+    Mp4OutputFormat,
+    Output,
+  } from "/mediabunny.mjs";
+
+  window.encode = async ({ frames, fps, width, height, cues }) => {
+    const output = new Output({
+      format: new Mp4OutputFormat({ fastStart: "in-memory" }),
+      target: new BufferTarget(),
+    });
+
+    const canvas = new OffscreenCanvas(width, height);
+    const ctx = canvas.getContext("2d");
+    // Bitrate alto de propósito: o Instagram recomprime, e textos finos dos
+    // sites sofrem menos partindo de uma fonte limpa.
+    const video = new CanvasSource(canvas, {
+      codec: "avc",
+      bitrate: 14_000_000,
+      keyFrameInterval: 1,
+    });
+    output.addVideoTrack(video, { frameRate: fps });
+
+    const audio = new AudioBufferSource({ codec: "aac", bitrate: 192_000 });
+    output.addAudioTrack(audio);
+    await output.start();
+
+    // Mixagem dos efeitos sonoros numa trilha estéreo com a duração do vídeo.
+    const duration = frames.length / fps;
+    const rate = 48000;
+    const mix = new OfflineAudioContext(2, Math.ceil(duration * rate), rate);
+    const cache = new Map();
+    for (const cue of cues) {
+      if (!cache.has(cue.file)) {
+        const buf = await (await fetch(`/sfx/${cue.file}.wav`)).arrayBuffer();
+        cache.set(cue.file, await mix.decodeAudioData(buf));
+      }
+      const src = mix.createBufferSource();
+      src.buffer = cache.get(cue.file);
+      const gain = mix.createGain();
+      gain.gain.value = cue.volume;
+      src.connect(gain).connect(mix.destination);
+      src.start(cue.frame / fps);
+    }
+    const mixed = await mix.startRendering();
+
+    for (let i = 0; i < frames.length; i++) {
+      const blob = await (await fetch(`/frames/${frames[i]}`)).blob();
+      const bmp = await createImageBitmap(blob);
+      ctx.drawImage(bmp, 0, 0, width, height);
+      bmp.close();
+      await video.add(i / fps, 1 / fps);
+      if (i % 200 === 0) console.log(`codificando ${i}/${frames.length}`);
+    }
+    await audio.add(mixed);
+    await output.finalize();
+
+    await fetch("/save", { method: "POST", body: output.target.buffer });
+    console.log(`mp4 salvo (${(output.target.buffer.byteLength / 1e6).toFixed(1)} MB)`);
+  };
+</script>

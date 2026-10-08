@@ -13,6 +13,8 @@ const eslintConfig = defineConfig([
     "build/**",
     ".worktrees/**",
     "public/sites/**",
+    // Projetos de vídeo (Remotion) têm dependências e tsconfig próprios.
+    "reels/**",
     "next-env.d.ts",
   ]),
 ]);
