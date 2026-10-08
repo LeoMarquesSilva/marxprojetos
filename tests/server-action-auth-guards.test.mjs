@@ -56,6 +56,7 @@ const guardedActions = {
     "registerSubscriptionPayment",
     "deleteSubscriptionPayment",
   ],
+  "src/app/actions/finance.ts": ["getFinanceEntries", "createFinanceEntry", "deleteFinanceEntry"],
   "src/app/actions/review.ts": [
     "enableSiteReview",
     "getSitesOverview",

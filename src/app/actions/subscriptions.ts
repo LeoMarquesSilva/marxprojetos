@@ -331,6 +331,7 @@ export async function registerSubscriptionPayment(input: {
   }
 
   revalidatePath("/recorrencia");
+  revalidatePath("/financas");
   return { success: true };
 }
 
@@ -344,5 +345,6 @@ export async function deleteSubscriptionPayment(id: string) {
   if (error) return { error: error.message };
 
   revalidatePath("/recorrencia");
+  revalidatePath("/financas");
   return { success: true };
 }

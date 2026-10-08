@@ -19,6 +19,8 @@ export default function robots(): MetadataRoute.Robots {
         "/portfolio/gerenciar",
         "/login",
         "/propostas",
+        "/recorrencia",
+        "/financas",
         "/r/",
         "/b/",
         // Proposta comercial é documento privado do cliente: o link é para

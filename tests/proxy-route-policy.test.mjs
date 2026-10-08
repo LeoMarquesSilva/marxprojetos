@@ -14,6 +14,12 @@ test("mantém público o build estático em /sites/<slug>/... usado pelo iframe 
   assert.equal(isAdminRoute("/sites/acme/_astro/app.css"), false);
 });
 
+test("trata finanças e recorrência como área autenticada", () => {
+  assert.equal(isAdminRoute("/financas"), true);
+  assert.equal(isAdminRoute("/financas/qualquer"), true);
+  assert.equal(isAdminRoute("/recorrencia"), true);
+});
+
 test("não classifica prefixos parecidos com /sites como área autenticada", () => {
   assert.equal(isAdminRoute("/sites-publicos"), false);
 });

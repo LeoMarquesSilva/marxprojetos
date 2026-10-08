@@ -51,7 +51,7 @@ export function dueDateFor(month: string, billingDay: number): string {
 }
 
 /** Mês é cobrado se o vencimento cai dentro da vigência da assinatura. */
-function isBillableMonth(subscription: BillingSubscription, month: string) {
+export function isBillableMonth(subscription: BillingSubscription, month: string) {
   const due = dueDateFor(month, subscription.billing_day);
   if (due < subscription.started_on) return false;
   if (subscription.ended_on && due >= subscription.ended_on) return false;
@@ -253,4 +253,165 @@ export function splitSitesForClient<
     (matches ? suggested : others).push(site);
   }
   return { suggested, others };
+}
+
+export type LedgerLine = {
+  id: string;
+  kind: "entrada" | "saida";
+  amount: number;
+  occurredOn: string;
+  category: string;
+  description: string;
+  /** Texto curto embaixo, como o mês de referência de uma recorrência. */
+  detail: string | null;
+  source: "lancamento" | "recorrencia";
+};
+
+export type ForecastTiming = "atrasado" | "a_vencer" | "futuro";
+
+export type ForecastCharge = {
+  id: string;
+  subscriptionId: string;
+  clientName: string;
+  amount: number;
+  dueOn: string;
+  month: string;
+  timing: ForecastTiming;
+};
+
+export type FinanceSubscription = BillingSubscription & {
+  id: string;
+  client_name: string;
+};
+
+type ManualEntry = {
+  id: string;
+  kind: "entrada" | "saida";
+  amount: number | string;
+  occurred_on: string;
+  category: string;
+  description: string;
+};
+
+type ReceivedPayment = BillingPayment & {
+  id: string;
+  subscription_id: string;
+  paid_on: string;
+  clientName: string;
+  referenceLabel: string;
+};
+
+export function buildLedger(entries: ManualEntry[], payments: ReceivedPayment[]): LedgerLine[] {
+  const manual: LedgerLine[] = entries.map((entry) => ({
+    id: entry.id,
+    kind: entry.kind,
+    amount: toAmount(entry.amount),
+    occurredOn: entry.occurred_on,
+    category: entry.category,
+    description: entry.description,
+    detail: null,
+    source: "lancamento",
+  }));
+
+  const received: LedgerLine[] = payments.map((payment) => ({
+    id: payment.id,
+    kind: "entrada",
+    amount: toAmount(payment.amount),
+    occurredOn: payment.paid_on,
+    category: "Recorrência",
+    description: payment.clientName,
+    detail: payment.referenceLabel,
+    source: "recorrencia",
+  }));
+
+  return [...manual, ...received].sort((a, b) => {
+    if (a.occurredOn !== b.occurredOn) return b.occurredOn.localeCompare(a.occurredOn);
+    return a.description.localeCompare(b.description, "pt-BR");
+  });
+}
+
+export function linesInMonth(lines: LedgerLine[], month: string): LedgerLine[] {
+  const start = monthStartOf(month);
+  return lines.filter((line) => monthStartOf(line.occurredOn) === start);
+}
+
+export function monthTotals(lines: LedgerLine[]) {
+  let income = 0;
+  let expense = 0;
+  for (const line of lines) {
+    if (line.kind === "entrada") income += line.amount;
+    else expense += line.amount;
+  }
+  return {
+    income: roundMoney(income),
+    expense: roundMoney(expense),
+    balance: roundMoney(income - expense),
+  };
+}
+
+/**
+ * Cobranças de recorrência ainda não pagas, do início de cada assinatura
+ * até `horizon` meses à frente do mês atual. O que já entrou fica no
+ * caixa (paid_on); aqui só o que ainda vai entrar ou já deveria ter entrado.
+ */
+export function forecastCharges(
+  subscriptions: FinanceSubscription[],
+  payments: Array<{ subscription_id: string; reference_month: string }>,
+  today: string,
+  horizon: number,
+): ForecastCharge[] {
+  const current = monthStartOf(today);
+  const horizonMonth = addMonths(current, horizon);
+  const paidBySubscription = new Map<string, Set<string>>();
+  for (const payment of payments) {
+    const paid = paidBySubscription.get(payment.subscription_id) ?? new Set<string>();
+    paid.add(monthStartOf(payment.reference_month));
+    paidBySubscription.set(payment.subscription_id, paid);
+  }
+
+  const charges: ForecastCharge[] = [];
+  for (const subscription of subscriptions) {
+    const paid = paidBySubscription.get(subscription.id) ?? new Set<string>();
+    for (
+      let month = monthStartOf(subscription.started_on);
+      month <= horizonMonth;
+      month = addMonths(month, 1)
+    ) {
+      if (!isBillableMonth(subscription, month)) continue;
+      if (paid.has(month)) continue;
+
+      const dueOn = dueDateFor(month, subscription.billing_day);
+      const timing: ForecastTiming =
+        dueOn < today ? "atrasado" : month === current ? "a_vencer" : "futuro";
+
+      charges.push({
+        id: `${subscription.id}:${month}`,
+        subscriptionId: subscription.id,
+        clientName: subscription.client_name,
+        amount: toAmount(subscription.amount),
+        dueOn,
+        month,
+        timing,
+      });
+    }
+  }
+
+  charges.sort((a, b) => {
+    if (a.dueOn !== b.dueOn) return a.dueOn.localeCompare(b.dueOn);
+    return a.clientName.localeCompare(b.clientName, "pt-BR");
+  });
+  return charges;
+}
+
+export function chargesInMonth(charges: ForecastCharge[], month: string) {
+  const start = monthStartOf(month);
+  return charges.filter((charge) => charge.month === start);
+}
+
+export function sumCharges(charges: ForecastCharge[]) {
+  return roundMoney(charges.reduce((sum, charge) => sum + charge.amount, 0));
+}
+
+function roundMoney(value: number) {
+  return Math.round(value * 100) / 100;
 }
