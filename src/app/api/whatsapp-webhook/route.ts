@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { adSourceLabel, extractAdReferral, type AdReferral } from "@/lib/ad-referral";
 import { resolveEvolutionMessageJid } from "@/lib/evolution-payload";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isGroupJid, normalizeBrPhone, remoteJidToDigits } from "@/lib/phone";
@@ -267,7 +268,7 @@ export async function POST(request: NextRequest) {
       const text = extractText(item.message) ?? "[mensagem sem texto]";
       const normalized = normalizeBrPhone(remoteJidToDigits(remoteJid));
 
-      const clientId = normalized.e164
+      let clientId = normalized.e164
         ? await matchClientByPhone(supabase, normalized.e164)
         : null;
 
@@ -278,6 +279,19 @@ export async function POST(request: NextRequest) {
         .maybeSingle();
       requireSupabaseSuccess(existingChatResult, "message.chat_lookup");
       const { data: existingChat } = existingChatResult;
+
+      // Lead que chamou pelo botão de um anúncio: vira cliente no CRM já
+      // marcado com o anúncio, para o painel de tráfego cruzar gasto × lead.
+      const adReferral = fromMe ? null : extractAdReferral(item);
+      if (adReferral) {
+        clientId = await attachAdLead(supabase, {
+          referral: adReferral,
+          clientId: clientId ?? existingChat?.client_id ?? null,
+          e164: normalized.e164,
+          pushName: item.pushName ?? existingChat?.push_name ?? null,
+          seenAt: timestampToIso(item.messageTimestamp) ?? new Date().toISOString(),
+        });
+      }
       const effectiveClientId = resolveClientId(
         clientId,
         existingChat?.client_id,
@@ -340,6 +354,17 @@ export async function POST(request: NextRequest) {
           })
           .eq("remote_jid", remoteJid);
         requireSupabaseSuccess(chatUpdateResult, "message.chat_update");
+      }
+
+      // Decide pela origem de ANTES desta mensagem: a ingestão acima já
+      // marca conversa nova com cliente como "prospeccao". Quem nasceu de
+      // um disparo seu e depois clicou no anúncio continua prospecção.
+      if (adReferral && existingChat?.origem !== "prospeccao") {
+        const origemResult = await supabase
+          .from("crm_whatsapp_chats")
+          .update({ origem: "anuncio" })
+          .eq("remote_jid", remoteJid);
+        requireSupabaseSuccess(origemResult, "message.chat_ad_origin");
       }
 
       // Resposta do lead move o funil sozinho — sem depender de arrastar card.
@@ -419,6 +444,86 @@ async function promoteStageOnReply(supabase: SupabaseClient, clientId: string) {
     .eq("id", clientId)
     .eq("stage", "enviado");
   requireSupabaseSuccess(promotionResult, "promotion.update");
+}
+
+// Primeiro toque vale: se o cliente já tinha um anúncio de origem, não troca
+// (senão o fechamento iria para o último anúncio clicado, não o que trouxe).
+// Cliente novo nasce em "respondeu" — ele mandou a primeira mensagem.
+async function attachAdLead(
+  supabase: SupabaseClient,
+  {
+    referral,
+    clientId,
+    e164,
+    pushName,
+    seenAt,
+  }: {
+    referral: AdReferral;
+    clientId: string | null;
+    e164: string | null;
+    pushName: string | null;
+    /** Hora da mensagem — um sync de histórico não pode datar o lead de hoje. */
+    seenAt: string;
+  },
+): Promise<string | null> {
+  const adFields = {
+    ad_id: referral.adId,
+    ad_title: referral.title,
+    ad_source_url: referral.sourceUrl,
+    ad_ctwa_clid: referral.ctwaClid,
+    ad_first_seen_at: seenAt,
+  };
+
+  if (clientId) {
+    const attributionResult = await supabase
+      .from("crm_clients")
+      .update({ ...adFields, updated_at: new Date().toISOString() })
+      .eq("id", clientId)
+      .is("ad_id", null);
+    requireSupabaseSuccess(attributionResult, "ad_lead.attribute");
+    return clientId;
+  }
+
+  if (!e164) return null;
+  const ownerId = await resolveAdLeadOwner(supabase);
+  if (!ownerId) return null;
+
+  const createResult = await supabase
+    .from("crm_clients")
+    .insert({
+      owner_id: ownerId,
+      name: pushName?.trim() || `+${e164}`,
+      phone: e164,
+      source: adSourceLabel(referral),
+      stage: "respondeu",
+      ...adFields,
+    })
+    .select("id")
+    .single();
+  requireSupabaseSuccess(createResult, "ad_lead.create");
+  return (createResult.data as { id: string } | null)?.id ?? null;
+}
+
+// Dono do lead: quem conectou a Meta; sem conexão, o primeiro admin.
+async function resolveAdLeadOwner(supabase: SupabaseClient): Promise<string | null> {
+  const connectionResult = await supabase
+    .from("marketing_connection")
+    .select("connected_by")
+    .maybeSingle();
+  requireSupabaseSuccess(connectionResult, "ad_lead.owner_connection");
+  const connectedBy = (connectionResult.data as { connected_by: string | null } | null)
+    ?.connected_by;
+  if (connectedBy) return connectedBy;
+
+  const adminResult = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("role", "admin")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  requireSupabaseSuccess(adminResult, "ad_lead.owner_admin");
+  return (adminResult.data as { id: string } | null)?.id ?? null;
 }
 
 async function matchClientByPhone(

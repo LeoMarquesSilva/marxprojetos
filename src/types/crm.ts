@@ -97,6 +97,9 @@ export type CrmClient = {
   /** Substitui as antigas tarefas/anotações: uma única ação combinada. */
   next_step: string | null;
   next_step_at: string | null;
+  /** Anúncio da Meta de onde o lead chamou no WhatsApp (Click-to-WhatsApp). */
+  ad_id?: string | null;
+  ad_title?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -169,8 +172,11 @@ export type CrmInboxChat = {
   lastMessagePreview: string | null;
   unreadCount: number;
   inboxNote: string | null;
-  /** "prospeccao" = nasceu de um disparo seu; "pessoal" = já existia no celular. */
-  origem: "prospeccao" | "pessoal" | null;
+  /**
+   * "prospeccao" = nasceu de um disparo seu; "pessoal" = já existia no
+   * celular; "anuncio" = o lead chamou pelo botão de um anúncio da Meta.
+   */
+  origem: "prospeccao" | "pessoal" | "anuncio" | null;
   client: {
     id: string;
     name: string;

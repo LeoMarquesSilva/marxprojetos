@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BriefcaseBusiness, FileText, Repeat, Globe, LayoutDashboard, LogOut, Plus, Radar, Settings, Sparkles, Pin, PinOff, Users, Wallet } from "lucide-react";
+import { BriefcaseBusiness, FileText, Repeat, Globe, LayoutDashboard, LogOut, Megaphone, Plus, Radar, Settings, Sparkles, Pin, PinOff, Users, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BrandLogo } from "@/components/brand-logo";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,7 @@ const nav = [
   { href: "/propostas", label: "Propostas", icon: FileText },
   { href: "/recorrencia", label: "Recorrência", icon: Repeat },
   { href: "/financas", label: "Finanças", icon: Wallet },
+  { href: "/marketing", label: "Marketing", icon: Megaphone },
   { href: "/portfolio/gerenciar", label: "Portfólio", icon: BriefcaseBusiness },
   { href: "/configuracoes", label: "Configurações", icon: Settings },
   { href: "/projects/new", label: "Novo briefing", icon: Plus },

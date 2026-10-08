@@ -24,3 +24,9 @@ test("não classifica prefixos parecidos com /sites como área autenticada", () 
   assert.equal(isAdminRoute("/sites-publicos"), false);
 });
 
+
+test("trata marketing como área autenticada", () => {
+  assert.equal(isAdminRoute("/marketing"), true);
+  assert.equal(isAdminRoute("/marketing/posts"), true);
+  assert.equal(isAdminRoute("/marketing-externo"), false);
+});

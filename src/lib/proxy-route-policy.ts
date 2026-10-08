@@ -7,6 +7,7 @@ const ADMIN_ROUTE_PREFIXES = [
   "/propostas",
   "/recorrencia",
   "/financas",
+  "/marketing",
   "/portfolio/gerenciar",
   "/configuracoes",
 ] as const;

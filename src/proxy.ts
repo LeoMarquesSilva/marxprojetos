@@ -57,6 +57,7 @@ export const config = {
     "/propostas/:path*",
     "/recorrencia/:path*",
     "/financas/:path*",
+    "/marketing/:path*",
     "/portfolio/gerenciar/:path*",
     "/configuracoes/:path*",
     // Só a listagem e a página de configuração de um projeto — não o
