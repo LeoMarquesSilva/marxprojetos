@@ -112,6 +112,45 @@ export async function enableSiteReview(projectId: string, sitePath: string) {
   return { success: true };
 }
 
+// Site feito sem briefing: cria o projeto só para hospedar a revisão, já
+// vinculado ao slug e com o link /r/<token> ativo. Fica como rascunho, então
+// o link do questionário nunca abre para o cliente.
+export async function createSiteReview(input: {
+  title: string;
+  clientName?: string;
+  sitePath: string;
+}) {
+  const { supabase, user } = await requireAuthenticatedUser();
+
+  const title = input.title.trim();
+  if (!title) return { error: "Informe o nome do site." };
+  const slug = input.sitePath.trim();
+  if (!/^[a-z0-9-]+$/.test(slug)) {
+    return {
+      error:
+        "Slug inválido: use só letras minúsculas, números e hífens (o mesmo usado no sync-site).",
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("projects")
+    .insert({
+      owner_id: user.id,
+      title,
+      client_name: input.clientName?.trim() || null,
+      status: "draft",
+      review_site_path: slug,
+      review_enabled: true,
+      review_enabled_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+
+  if (error) return { error: error.message };
+  revalidatePath("/sites");
+  return { id: data.id as string };
+}
+
 export async function getSitesOverview() {
   const { supabase } = await requireAuthenticatedUser();
   const { data: projects, error } = await supabase

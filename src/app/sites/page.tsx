@@ -4,6 +4,7 @@ import { ptBR } from "date-fns/locale";
 import { ArrowUpRight, CheckCircle2, Globe } from "lucide-react";
 import { AdminShell } from "@/components/admin-shell";
 import { AdminPageHeader } from "@/components/admin-page-header";
+import { SiteReviewCreateDialog } from "@/components/site-review-create-dialog";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -33,6 +34,7 @@ export default async function SitesPage() {
           title="Sites em revisão"
           description="Vincule um site já construído a um briefing e acompanhe os comentários do cliente."
           activeHref="/sites"
+          actions={<SiteReviewCreateDialog />}
         />
 
         <div className="insyt-card overflow-hidden">
