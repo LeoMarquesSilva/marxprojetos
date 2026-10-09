@@ -86,7 +86,7 @@ function rewriteKnownRouteLiterals(content, knownRoutes) {
   const alternation = knownRoutes
     .map((r) => r.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
     .join("|");
-  const pattern = new RegExp(`(['"])\\/(${alternation})\\/?\\1`, "g");
+  const pattern = new RegExp(`(['"]|&quot;)\\/(${alternation})\\/?\\1`, "g");
   return content.replace(pattern, (_m, quote, route) => `${quote}${rewritePageOrAssetPath(route)}${quote}`);
 }
 
@@ -99,21 +99,36 @@ function rewriteKnownRouteLiterals(content, knownRoutes) {
 // asset literals are unambiguous: a leading "/" plus a known file
 // extension is never a false positive worth guarding with a known-list.
 const ASSET_LITERAL_EXTENSIONS =
-  "png|jpe?g|gif|svg|webp|avif|ico|woff2?|ttf|otf|mp4|webm|pdf";
+  // js/css: <astro-island component-url="/_astro/X.js" renderer-url="...">
+  // isn't an href/src, and with it unprefixed the island never hydrates.
+  "png|jpe?g|gif|svg|webp|avif|ico|woff2?|ttf|otf|mp4|webm|pdf|m?js|css";
 // Runs on the same file as the href/src attribute rewrite above, so an
 // attribute value already rewritten to "/sites/<slug>/..." is just another
 // quoted string matching this same shape — without excluding it here, it
 // gets prefixed a second time ("/sites/<slug>/sites/<slug>/...").
+//
+// `&quot;` counts as a quote too: React islands get their props serialized
+// into an HTML attribute (props="{&quot;src&quot;:[0,&quot;/_astro/x.webp&quot;]}"),
+// and on hydration React re-renders the <img> from those props — so an
+// unprefixed path there undoes the attribute rewrite and the image 404s.
 const assetLiteralPattern = new RegExp(
-  `(['"])\\/(?!\\/)(?!sites\\/)([^'"]+?\\.(?:${ASSET_LITERAL_EXTENSIONS}))\\1`,
+  `(['"]|&quot;)\\/(?!\\/)(?!sites\\/)([^'"&]+?\\.(?:${ASSET_LITERAL_EXTENSIONS}))\\1`,
+  "g",
+);
+
+// A srcset value ("/a.webp 320w, /b.webp 480w") is one string holding several
+// paths, so it never matches the whole-literal pattern above. Prefix any root
+// path followed by a width/density descriptor, wherever it appears (srcSet
+// attributes written by React, island props, JS).
+const srcsetEntryPattern = new RegExp(
+  `(^|[\\s,'"]|&quot;)\\/(?!\\/)(?!sites\\/)([^\\s'"&,]+?\\.(?:${ASSET_LITERAL_EXTENSIONS}))(?=\\s+\\d+(?:\\.\\d+)?[wx]\\b)`,
   "g",
 );
 
 function rewriteAssetPathLiterals(content) {
-  return content.replace(
-    assetLiteralPattern,
-    (_m, quote, path) => `${quote}${prefix}/${path}${quote}`,
-  );
+  return content
+    .replace(assetLiteralPattern, (_m, quote, path) => `${quote}${prefix}/${path}${quote}`)
+    .replace(srcsetEntryPattern, (_m, lead, path) => `${lead}${prefix}/${path}`);
 }
 
 // Top-level page routes that exist in this build (e.g. "sobre", "contato"),
@@ -147,8 +162,9 @@ function walk(dir) {
           /(href|src)="\/(?!\/)([^"]*)"/g,
           (_m, attr, path) => `${attr}="${rewritePageOrAssetPath(path)}"`,
         )
-        .replace(/srcset="([^"]*)"/g, (_m, value) =>
-          `srcset="${value
+        // React writes the attribute as srcSet.
+        .replace(/(srcset)="([^"]*)"/gi, (_m, attr, value) =>
+          `${attr}="${value
             .split(",")
             .map((part) =>
               part.replace(/^(\s*)\/(?!\/)([^\s]*)/, (_p, lead, p) => `${lead}${prefix}/${p}`),
