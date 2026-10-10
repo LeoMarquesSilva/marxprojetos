@@ -1,0 +1,13 @@
+{
+  "name": "Dra. Daniela Gracioli, geriatra em Campinas",
+  "short_name": "Dra. Daniela",
+  "lang": "pt-BR",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#F7F9F8",
+  "theme_color": "#F7F9F8",
+  "icons": [
+    { "src": "/favicon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "/apple-touch-icon.png", "type": "image/png", "sizes": "180x180" }
+  ]
+}

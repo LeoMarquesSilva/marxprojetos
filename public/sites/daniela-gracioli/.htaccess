@@ -1,0 +1,57 @@
+# Gerado no build (src/config/htaccess.ts). Não editar à mão.
+Options -Indexes -MultiViews
+DirectorySlash Off
+ErrorDocument 404 /404.html
+
+<IfModule mod_rewrite.c>
+RewriteEngine On
+
+RewriteCond %{HTTPS} off [OR]
+RewriteCond %{HTTP_HOST} ^www\. [NC]
+RewriteRule ^ https://dradanielageriatra.com.br%{REQUEST_URI} [R=301,L]
+
+# Site antigo (WordPress)
+RewriteRule ^home/?$ / [R=301,L,NE]
+RewriteRule ^em-breve/?$ / [R=301,L,NE]
+RewriteRule ^grupovitalidade/?$ /sobre\#grupo-vitalidade [R=301,L,NE]
+RewriteRule ^telemedicina-em-campinas/?$ /avaliacao-geriatrica-ampla [R=301,L,NE]
+RewriteRule ^category/sem-categoria/?$ /geriatria [R=301,L,NE]
+RewriteRule ^a-geriatria/?$ /geriatria [R=301,L,NE]
+RewriteRule ^a-geriatria/ansiedade/?$ /geriatria/ansiedade-e-depressao [R=301,L,NE]
+RewriteRule ^a-geriatria/demencias/?$ /geriatria/alzheimer-e-demencias [R=301,L,NE]
+RewriteRule ^a-geriatria/hipertensao/?$ /geriatria/hipertensao [R=301,L,NE]
+RewriteRule ^a-geriatria/osteoporose/?$ /geriatria/osteoporose [R=301,L,NE]
+RewriteRule ^a-geriatria/parkinson/?$ /geriatria/parkinson [R=301,L,NE]
+RewriteRule ^2021/01/13/doenca-de-alzheimer-pode-ser-prevenida/?$ /blog/alzheimer-pode-ser-prevenido [R=301,L,NE]
+RewriteRule ^2021/01/13/prevencao-de-quedas-para-o-idoso/?$ /geriatria/quedas [R=301,L,NE]
+RewriteRule ^2021/01/13/idosos-e-a-pandemia-do-covid-19/?$ /blog [R=301,L,NE]
+RewriteRule ^2021/02/09/osteoporose/?$ /geriatria/osteoporose [R=301,L,NE]
+RewriteRule ^2021/05/26/vacinacao-no-idoso-coronavirus/?$ /blog/vacinas-para-idosos [R=301,L,NE]
+RewriteRule ^2022/03/24/uso-de-produtos-derivados-de-cannabis-na-medicina/?$ /blog/cannabis-medicinal [R=301,L,NE]
+RewriteRule ^author/agk_admin/?$ /sobre [R=301,L,NE]
+RewriteRule ^feed/?$ /blog [R=301,L,NE]
+
+# O WordPress usava barra no fim (/contato/). Uma URL só, sem barra.
+RewriteCond %{DOCUMENT_ROOT}/$1.html -f
+RewriteRule ^(.+)/$ /$1 [R=301,L]
+
+# /pagina → /pagina.html
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME}.html -f
+RewriteRule ^(.+?)/?$ $1.html [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+<FilesMatch "\.(avif|webp|jpg|png|svg|woff2|js|css)$">
+Header set Cache-Control "public, max-age=31536000, immutable"
+</FilesMatch>
+<FilesMatch "\.html$">
+Header set Cache-Control "public, max-age=0, must-revalidate"
+</FilesMatch>
+Header set X-Content-Type-Options "nosniff"
+Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+<IfModule mod_deflate.c>
+AddOutputFilterByType DEFLATE text/html text/css application/javascript image/svg+xml application/json text/plain
+</IfModule>
