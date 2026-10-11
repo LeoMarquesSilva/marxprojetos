@@ -108,43 +108,50 @@ async function runOnce(args) {
   const mode = ["ampla", "varredura"].includes(args.modo) ? args.modo : "padrao";
   const state = stateName(args.uf);
 
+  const supabase = args.salvar ? adminClient() : null;
+  const ownerId = supabase ? await resolveOwner(supabase, args.dono) : null;
+
   // Mesmo lugar achado por dois nichos fica com o primeiro.
   const found = new Map();
   for (const [index, niche] of niches.entries()) {
     const terms = searchTermsFor(niche, mode);
     log(`(${index + 1}/${niches.length}) Buscando ${terms.map((t) => `"${t}"`).join(", ")} em ${city}${state ? `, ${state}` : ""} (${mode})…`);
-    const { leads } = await runMapsSearch({
-      terms,
-      city,
-      state,
-      mode,
-      maxPerSearch: Number(args.max) || 120,
-      headless: !args.janela,
-      onProgress: (message) => log(message),
-    });
-    let added = 0;
+    let leads;
+    try {
+      ({ leads } = await runMapsSearch({
+        terms,
+        city,
+        state,
+        mode,
+        maxPerSearch: Number(args.max) || 120,
+        headless: !args.janela,
+        onProgress: (message) => log(message),
+      }));
+    } catch (error) {
+      if (!(error instanceof MapsBlockedError)) throw error;
+      // Não insiste: fica com o que os nichos anteriores já trouxeram.
+      log(`✖ O Google pediu verificação em "${niche}". Parando aqui; tente o resto mais tarde.`);
+      break;
+    }
+    const fresh = [];
     for (const lead of leads) {
       if (lead.closed || found.has(lead.placeId)) continue;
       found.set(lead.placeId, { niche, lead });
-      added += 1;
+      fresh.push(lead);
     }
-    log(`"${niche}": ${leads.length} encontrada(s), ${added} nova(s) nesta rodada.`);
-    if (index < niches.length - 1) await new Promise((resolve) => setTimeout(resolve, 4000));
-  }
-  const results = [...found.values()];
-  log(`${results.length} empresa(s) aberta(s) no total.`);
+    log(`"${niche}": ${leads.length} encontrada(s), ${fresh.length} nova(s) nesta rodada.`);
 
-  if (args.salvar) {
-    const supabase = adminClient();
-    const ownerId = await resolveOwner(supabase, args.dono);
-    for (const niche of niches) {
-      const leads = results.filter((item) => item.niche === niche).map((item) => item.lead);
-      const saved = await saveFoundLeads(supabase, { ownerId, leads, niche, city, source: "maps" });
+    // Grava a cada nicho: um bloqueio mais adiante não perde o que já veio.
+    if (supabase) {
+      const saved = await saveFoundLeads(supabase, { ownerId, leads: fresh, niche, city, source: "maps" });
       if ("error" in saved) throw new Error(saved.error);
       log(`Gravado "${niche}": ${saved.newIds.length} novo(s), ${saved.updated} atualizado(s).`);
       await enrichSaved(supabase, saved.newIds, { sites: !args["sem-sites"] });
     }
+    if (index < niches.length - 1) await new Promise((resolve) => setTimeout(resolve, 4000));
   }
+  const results = [...found.values()];
+  log(`${results.length} empresa(s) aberta(s) no total.`);
 
   if (args.csv || !args.salvar) {
     const scans = new Map();

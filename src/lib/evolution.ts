@@ -326,6 +326,7 @@ export async function sendWhatsAppText(
 // saber antes de gastar uma tentativa. Em lotes porque a base tem centenas
 // de leads e uma chamada só estoura o tempo limite.
 const WHATSAPP_CHECK_BATCH = 50;
+const WHATSAPP_CHECK_PAUSE_MS = 3000;
 
 export type WhatsAppNumberCheck = {
   exists: boolean;
@@ -342,23 +343,37 @@ export async function checkWhatsAppNumbers(
 ): Promise<Map<string, WhatsAppNumberCheck>> {
   const instance = requireEnv("EVOLUTION_INSTANCE");
   const result = new Map<string, WhatsAppNumberCheck>();
+  let lastError: unknown = null;
+  let answered = 0;
 
   for (let i = 0; i < numbers.length; i += WHATSAPP_CHECK_BATCH) {
     const batch = numbers.slice(i, i + WHATSAPP_CHECK_BATCH);
-    const response = await evolutionFetch(
-      `/chat/whatsappNumbers/${encodeURIComponent(instance)}`,
-      { body: { numbers: batch }, timeoutMs: SYNC_TIMEOUT_MS },
-    );
+    // Rajada de consultas é o que o WhatsApp vigia: um respiro entre lotes.
+    if (i > 0) await new Promise((resolve) => setTimeout(resolve, WHATSAPP_CHECK_PAUSE_MS));
 
-    if (!response.ok) {
-      throw new Error(
-        `Evolution whatsappNumbers falhou (HTTP ${response.status}): ${JSON.stringify(response.data)}`,
-      );
+    // Um lote lento não derruba os outros: tenta de novo uma vez e, se
+    // falhar, os números dele ficam fora do mapa (sem veredito).
+    let rows: { number?: string; jid?: string; exists?: boolean }[] | null = null;
+    for (let attempt = 0; attempt < 2 && rows === null; attempt += 1) {
+      try {
+        const response = await evolutionFetch(
+          `/chat/whatsappNumbers/${encodeURIComponent(instance)}`,
+          { body: { numbers: batch }, timeoutMs: SYNC_TIMEOUT_MS },
+        );
+        if (!response.ok) {
+          throw new Error(
+            `Evolution whatsappNumbers falhou (HTTP ${response.status}): ${JSON.stringify(response.data)}`,
+          );
+        }
+        rows = Array.isArray(response.data)
+          ? (response.data as { number?: string; jid?: string; exists?: boolean }[])
+          : [];
+      } catch (error) {
+        lastError = error;
+      }
     }
-
-    const rows = Array.isArray(response.data)
-      ? (response.data as { number?: string; jid?: string; exists?: boolean }[])
-      : [];
+    if (rows === null) continue;
+    answered += 1;
 
     for (const row of rows) {
       // A Evolution devolve o número como foi perguntado; o jid é a garantia
@@ -377,6 +392,8 @@ export async function checkWhatsAppNumbers(
     }
   }
 
+  // Nenhum lote respondeu: é a Evolution fora do ar, não um lote lento.
+  if (answered === 0 && lastError) throw lastError;
   return result;
 }
 
