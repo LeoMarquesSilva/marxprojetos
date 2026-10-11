@@ -4,8 +4,22 @@
 
 const BOM = String.fromCharCode(0xfeff);
 
+// Excel em português salva CSV com ";" (a vírgula é o separador decimal).
+// O cabeçalho diz qual separador o arquivo usa.
+function detectDelimiter(text: string): string {
+  const lineEnd = text.search(/\r?\n/);
+  const firstLine = lineEnd === -1 ? text : text.slice(0, lineEnd);
+  const counts = [",", ";", "\t"].map((delimiter) => ({
+    delimiter,
+    count: firstLine.split(delimiter).length - 1,
+  }));
+  counts.sort((a, b) => b.count - a.count);
+  return counts[0].count > 0 ? counts[0].delimiter : ",";
+}
+
 export function parseCsv(text: string): Record<string, string>[] {
   const clean = text.startsWith(BOM) ? text.slice(1) : text; // remove BOM, se houver
+  const delimiter = detectDelimiter(clean);
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";
@@ -26,7 +40,7 @@ export function parseCsv(text: string): Record<string, string>[] {
       }
     } else if (c === '"') {
       inQuotes = true;
-    } else if (c === ",") {
+    } else if (c === delimiter) {
       row.push(field);
       field = "";
     } else if (c === "\n" || c === "\r") {
@@ -97,4 +111,20 @@ export function slugify(text: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
+}
+
+/**
+ * Primeira coluna preenchida entre os nomes aceitos, sem diferenciar
+ * maiúsculas. Cada ferramenta exporta com um nome: business_name
+ * (LocalProspects), title (Apify), nome (planilha feita à mão)...
+ */
+export function pickColumn(row: Record<string, string>, aliases: string[]): string | null {
+  const byLower = new Map(
+    Object.entries(row).map(([key, value]) => [key.trim().toLowerCase(), value]),
+  );
+  for (const alias of aliases) {
+    const value = byLower.get(alias.toLowerCase())?.trim();
+    if (value) return value;
+  }
+  return null;
 }

@@ -47,3 +47,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# CSVs gerados pelo robô do Maps (dados de contato, fora do git)
+/leads/

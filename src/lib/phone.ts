@@ -27,6 +27,50 @@ export function normalizeBrPhone(raw: string): {
   return { e164: `55${digits}`, isMobile };
 }
 
+// Chave de comparação que ignora o nono dígito. O WhatsApp ainda registra
+// muitos celulares brasileiros sem o 9 (o JID chega como 551981984137 para
+// um lead cadastrado como (19) 98198-4137) — comparando e164 puro, a
+// resposta do lead não casava com o lead e o funil nunca andava.
+// Celular de 8 dígitos começa com 6–9 e fixo com 2–5, então tirar o 9 não
+// faz um celular colidir com um fixo.
+export function brPhoneMatchKey(raw: string): string | null {
+  const { e164 } = normalizeBrPhone(raw.split("@")[0]);
+  if (!e164) return null;
+  const local = e164.slice(2);
+  if (local.length === 11 && local[2] === "9") {
+    return `55${local.slice(0, 2)}${local.slice(3)}`;
+  }
+  return e164;
+}
+
+// As duas grafias possíveis de um celular (com e sem o nono dígito), para
+// consultas `in (...)` no banco. Fixo tem uma grafia só.
+export function brPhoneVariants(raw: string): string[] {
+  const { e164 } = normalizeBrPhone(raw.split("@")[0]);
+  if (!e164) return [];
+  const local = e164.slice(2);
+  if (local.length === 11 && local[2] === "9") {
+    return [e164, `55${local.slice(0, 2)}${local.slice(3)}`];
+  }
+  if (local.length === 10 && /[6-9]/.test(local[2])) {
+    return [e164, `55${local.slice(0, 2)}9${local.slice(2)}`];
+  }
+  return [e164];
+}
+
+// "5519981984137" → "(19) 98198-4137". É o formato que o CRM mostra e que
+// volta a normalizar para o mesmo e164.
+export function formatBrPhone(e164: string): string {
+  const local = e164.startsWith("55") ? e164.slice(2) : e164;
+  if (local.length === 11) {
+    return `(${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7)}`;
+  }
+  if (local.length === 10) {
+    return `(${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`;
+  }
+  return e164;
+}
+
 export function buildWaMeUrl(e164: string, message?: string): string {
   const base = `https://wa.me/${e164}`;
   return message ? `${base}?text=${encodeURIComponent(message)}` : base;
@@ -54,11 +98,20 @@ export function fillTemplate(
     cidade: string;
     hasSite: boolean;
     portfolioUrl?: string;
+    /** Frase própria para {{site}} (ex: site fora do ar); senão, a padrão. */
+    sitePhrase?: string;
+    nicho?: string;
+    /** Projeto do portfólio mais parecido com o lead, já com o link. */
+    caso?: string;
+    casoLink?: string;
+    saudacao?: string;
   },
 ): string {
-  const sitePhrase = vars.hasSite
-    ? `Vi que ${vars.nome} já tem site — talvez seja hora de dar uma modernizada nele.`
-    : `Vi que ${vars.nome} ainda não tem site, e hoje é por aí que a maioria dos clientes pesquisa e decide em quem confiar antes de ligar.`;
+  const sitePhrase =
+    vars.sitePhrase ??
+    (vars.hasSite
+      ? `Vi que ${vars.nome} já tem site — talvez seja hora de dar uma modernizada nele.`
+      : `Vi que ${vars.nome} ainda não tem site, e hoje é por aí que a maioria dos clientes pesquisa e decide em quem confiar antes de ligar.`);
 
   const portfolio =
     vars.portfolioUrl?.trim() || "https://www.insytstudio.com.br/";
@@ -71,7 +124,11 @@ export function fillTemplate(
   // conta própria.
   return template
     .replaceAll("{{site}}", sitePhrase)
+    .replaceAll("{{saudacao}}", vars.saudacao ?? "Olá")
     .replaceAll("{{nome}}", vars.nome)
     .replaceAll("{{cidade}}", vars.cidade)
+    .replaceAll("{{nicho}}", vars.nicho ?? "")
+    .replaceAll("{{caso_link}}", vars.casoLink ?? portfolio)
+    .replaceAll("{{caso}}", vars.caso ?? portfolio)
     .replaceAll("{{portfolio}}", portfolio);
 }

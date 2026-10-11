@@ -5,7 +5,7 @@ import {
   normalizeEvolutionMessagePage,
   resolveEvolutionMessageJid,
 } from "@/lib/evolution-payload";
-import { isGroupJid, remoteJidToDigits } from "@/lib/phone";
+import { brPhoneMatchKey, isGroupJid, remoteJidToDigits } from "@/lib/phone";
 import { extractWhatsAppText } from "@/lib/whatsapp-message";
 
 // Delay curto só para o indicador "digitando..." — 1,2s deixava o envio
@@ -278,11 +278,23 @@ function mapEvolutionMessage(
   };
 }
 
+// Teto do "digitando...". A Evolution segura a requisição durante o delay,
+// então ele precisa caber folgado no REQUEST_TIMEOUT_MS.
+const MAX_TYPING_MS = 6000;
+
 export async function sendWhatsAppText(
   remoteJid: string,
   text: string,
+  { typingMs }: { typingMs?: number } = {},
 ): Promise<{ providerMessageId: string | null }> {
   const instance = requireEnv("EVOLUTION_INSTANCE");
+
+  // Prospecção manda com "digitando..." proporcional ao texto — mensagem
+  // longa chegando instantânea é padrão de robô. O CRM 1:1 segue rápido.
+  const delay =
+    typingMs === undefined
+      ? SEND_DELAY_MS
+      : Math.max(SEND_DELAY_MS, Math.min(MAX_TYPING_MS, Math.round(typingMs)));
 
   const result = await evolutionFetch(
     `/message/sendText/${encodeURIComponent(instance)}`,
@@ -290,7 +302,7 @@ export async function sendWhatsAppText(
       body: {
         number: remoteJidToDigits(remoteJid),
         text,
-        delay: SEND_DELAY_MS,
+        delay,
       },
     },
   );
@@ -315,11 +327,21 @@ export async function sendWhatsAppText(
 // de leads e uma chamada só estoura o tempo limite.
 const WHATSAPP_CHECK_BATCH = 50;
 
+export type WhatsAppNumberCheck = {
+  exists: boolean;
+  /** JID real da conta — muitos celulares BR estão registrados sem o 9. */
+  jid: string | null;
+};
+
+/**
+ * Mapa número perguntado → veredito. Também indexado pela chave sem o
+ * nono dígito, porque a Evolution às vezes devolve o número já corrigido.
+ */
 export async function checkWhatsAppNumbers(
   numbers: string[],
-): Promise<Map<string, boolean>> {
+): Promise<Map<string, WhatsAppNumberCheck>> {
   const instance = requireEnv("EVOLUTION_INSTANCE");
-  const result = new Map<string, boolean>();
+  const result = new Map<string, WhatsAppNumberCheck>();
 
   for (let i = 0; i < numbers.length; i += WHATSAPP_CHECK_BATCH) {
     const batch = numbers.slice(i, i + WHATSAPP_CHECK_BATCH);
@@ -341,8 +363,17 @@ export async function checkWhatsAppNumbers(
     for (const row of rows) {
       // A Evolution devolve o número como foi perguntado; o jid é a garantia
       // quando ela normaliza (o nono dígito, por exemplo).
-      const key = row.number ?? (row.jid ? row.jid.split("@")[0] : null);
-      if (key) result.set(key, Boolean(row.exists));
+      const check: WhatsAppNumberCheck = {
+        exists: Boolean(row.exists),
+        jid: row.exists && row.jid?.endsWith("@s.whatsapp.net") ? row.jid : null,
+      };
+      for (const raw of [row.number, row.jid]) {
+        if (!raw) continue;
+        const digits = raw.split("@")[0];
+        result.set(digits, check);
+        const key = brPhoneMatchKey(digits);
+        if (key && !result.has(key)) result.set(key, check);
+      }
     }
   }
 

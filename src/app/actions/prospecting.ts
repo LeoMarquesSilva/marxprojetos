@@ -1,26 +1,135 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { fillTemplate, normalizeBrPhone, phoneToRemoteJid } from "@/lib/phone";
-import { inferWebsiteFromRow, parseCsv, slugify } from "@/lib/csv";
+import {
+  brPhoneMatchKey,
+  formatBrPhone,
+  normalizeBrPhone,
+  phoneToRemoteJid,
+} from "@/lib/phone";
+import { inferWebsiteFromRow, parseCsv, pickColumn, slugify } from "@/lib/csv";
 import { requireAuthenticatedUser } from "@/lib/supabase/require-authenticated-user";
-import { sendCrmWhatsappMessage } from "@/app/actions/crm-whatsapp";
+import { sendCrmWhatsappChatMessage } from "@/app/actions/crm-whatsapp";
 import { checkWhatsAppNumbers } from "@/lib/evolution";
 import {
+  DEFAULT_APIFY_ACTOR,
+  LP_BASE,
+  ProviderError,
+  dedupeLeads,
+  fetchGoogleCityViewport,
+  lpBusinessId,
+  runApifyGoogleMaps,
+  searchGooglePlaces,
+  searchLocalProspects,
+  splitViewport,
+  type FoundLead,
+  type LeadSource,
+  type LpEnrichedBusiness,
+} from "@/lib/prospecting/providers";
+import {
+  ID_CHUNK,
+  chunk,
+  mapWithConcurrency,
+  saveFoundLeads,
+  scanAndSaveSites,
+  verifyAndSaveWhatsapp,
+} from "@/lib/prospecting/store";
+import { matchSegment, searchTermsFor } from "@/lib/prospecting/segments";
+import { renderProspectMessage } from "@/lib/prospecting/message";
+import {
+  DEFAULT_DAILY_LIMIT,
+  DEFAULT_FOLLOWUP_TEMPLATE,
   DEFAULT_PROSPECTING_TEMPLATE,
-  INSYT_STUDIO_URL,
   type Prospect,
   type ProspectStatus,
+  type ProspectingSettings,
 } from "@/types/prospecting";
 
 type AuthenticatedContext = Awaited<ReturnType<typeof requireAuthenticatedUser>>;
+type Supabase = AuthenticatedContext["supabase"];
 type PromoteToCrmResult =
   | { crmClientId: string; error?: never }
   | { error: string; crmClientId?: never };
 
-function portfolioUrlForTemplate() {
-  return INSYT_STUDIO_URL;
+export type SearchProvider = Exclude<LeadSource, "csv">;
+export type SearchMode = "padrao" | "ampla" | "varredura";
+
+export type ProspectSearchInput = {
+  niche: string;
+  city: string;
+  /** Nome do estado por extenso ("São Paulo"). */
+  state?: string;
+  provider: SearchProvider;
+  mode?: SearchMode;
+  segmentId?: string | null;
+};
+
+export type ProspectingStatus = {
+  providers: Record<SearchProvider, boolean>;
+  whatsapp: boolean;
+  ai: boolean;
+  sentToday: number;
+  dailyLimit: number;
+};
+
+export type WhatsappCheckSummary = {
+  error?: string;
+  verificados: number;
+  comWhatsapp: number;
+  semWhatsapp: number;
+  naoSalvos: number;
+  /** O disparo em lote usa os ids para tirar da fila quem não tem WhatsApp. */
+  comIds: string[];
+  semIds: string[];
+};
+
+export type MapsSearchJob = {
+  id: string;
+  niche: string;
+  city: string;
+  state: string | null;
+  mode: SearchMode;
+  status: "pendente" | "rodando" | "concluido" | "erro" | "cancelado";
+  progress: string | null;
+  found: number;
+  imported: number;
+  updated: number;
+  new_ids: string[];
+  error: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+};
+
+// Início do dia em Brasília (sem horário de verão desde 2019). É a régua do
+// limite diário de envios.
+function startOfTodayInSaoPaulo(now = new Date()) {
+  const date = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+  return new Date(`${date}T00:00:00-03:00`).toISOString();
 }
+
+function apifyToken() {
+  return process.env.APIFY_TOKEN || process.env.APIFY_API_TOKEN || null;
+}
+
+function googleKey() {
+  return process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY || null;
+}
+
+function openAiKey() {
+  return (
+    process.env.OPENAI_API_KEY || process.env.NEXT_OPENAI_API_KEY || process.env.OPENAI_KEY
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Leitura                                                             */
+/* ------------------------------------------------------------------ */
 
 export async function getProspects() {
   const { supabase } = await requireAuthenticatedUser();
@@ -33,37 +142,99 @@ export async function getProspects() {
   return data as Prospect[];
 }
 
-export async function getProspectingTemplate() {
-  const { supabase } = await requireAuthenticatedUser();
-  return loadProspectingTemplate(supabase);
-}
-
-async function loadProspectingTemplate(
-  supabase: AuthenticatedContext["supabase"],
-) {
+// O select é compartilhado no workspace: vale o modelo salvo mais recente,
+// de quem quer que seja. select("*") de propósito — antes da migration as
+// colunas novas não existem e o modelo ainda precisa carregar.
+async function loadSettings(supabase: Supabase): Promise<ProspectingSettings> {
   const { data, error } = await supabase
     .from("prospecting_settings")
-    .select("template")
+    .select("*")
     .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
   if (error) throw new Error(error.message);
 
-  // Devolve o que está salvo, sem tocar em nada. Antes, um modelo sem o link
-  // do portfólio era reescrito com a linha do estúdio colada no fim — e
-  // gravado por cima no banco. Quem editava o modelo para tirar o link via a
-  // própria edição desfeita no próximo carregamento.
-  return data?.template?.trim() || DEFAULT_PROSPECTING_TEMPLATE;
+  // Devolve o que está salvo, sem tocar em nada: o modelo é usado como está.
+  return {
+    template: data?.template?.trim() || DEFAULT_PROSPECTING_TEMPLATE,
+    followupTemplate: data?.followup_template?.trim() || DEFAULT_FOLLOWUP_TEMPLATE,
+    dailyLimit:
+      typeof data?.daily_limit === "number" && data.daily_limit > 0
+        ? data.daily_limit
+        : DEFAULT_DAILY_LIMIT,
+  };
 }
 
-export async function saveProspectingTemplate(template: string) {
+export async function getProspectingSettings() {
+  const { supabase } = await requireAuthenticatedUser();
+  return loadSettings(supabase);
+}
+
+async function countSentToday(supabase: Supabase) {
+  const since = startOfTodayInSaoPaulo();
+  const [first, followups] = await Promise.all([
+    supabase
+      .from("prospects")
+      .select("id", { count: "exact", head: true })
+      .gte("contacted_at", since),
+    supabase
+      .from("prospects")
+      .select("id", { count: "exact", head: true })
+      .gte("last_followup_at", since),
+  ]);
+  return (first.count ?? 0) + (followups.count ?? 0);
+}
+
+export async function getProspectingStatus(): Promise<ProspectingStatus> {
+  const { supabase } = await requireAuthenticatedUser();
+  const [settings, sentToday] = await Promise.all([
+    loadSettings(supabase),
+    countSentToday(supabase),
+  ]);
+
+  return {
+    providers: {
+      // O robô próprio não precisa de chave; precisa estar ligado no
+      // computador (o painel da fila mostra se está).
+      maps: true,
+      google: Boolean(googleKey()),
+      apify: Boolean(apifyToken()),
+      localprospects: Boolean(process.env.LOCALPROSPECTS_API_KEY),
+    },
+    whatsapp: Boolean(
+      process.env.EVOLUTION_API_URL &&
+        process.env.EVOLUTION_API_KEY &&
+        process.env.EVOLUTION_INSTANCE,
+    ),
+    ai: Boolean(openAiKey()),
+    sentToday,
+    dailyLimit: settings.dailyLimit,
+  };
+}
+
+export async function saveProspectingSettings(input: {
+  template: string;
+  followupTemplate: string;
+  dailyLimit: number;
+}) {
   const { supabase, user } = await requireAuthenticatedUser();
+
+  const template = input.template.trim();
+  const followupTemplate = input.followupTemplate.trim();
+  const dailyLimit = Math.round(input.dailyLimit);
+  if (!template) return { error: "A primeira mensagem não pode ficar vazia." };
+  if (!followupTemplate) return { error: "O follow-up não pode ficar vazio." };
+  if (!Number.isFinite(dailyLimit) || dailyLimit < 1 || dailyLimit > 500) {
+    return { error: "O limite diário precisa ficar entre 1 e 500 envios." };
+  }
 
   const { error } = await supabase.from("prospecting_settings").upsert(
     {
       owner_id: user.id,
       template,
+      followup_template: followupTemplate,
+      daily_limit: dailyLimit,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "owner_id" },
@@ -74,152 +245,269 @@ export async function saveProspectingTemplate(template: string) {
   return { success: true };
 }
 
-const LP_BASE = "https://localprospects.ai/api/v1";
+/* ------------------------------------------------------------------ */
+/* Busca                                                               */
+/* ------------------------------------------------------------------ */
 
-type LpBusiness = {
-  id?: string;
-  place_id?: string;
-  cid?: string;
-  name?: string;
-  phone?: string;
-  website?: string;
-  address?: string;
-  rating?: number;
-  reviews?: number;
-  gbp_url?: string;
-};
+async function collectLeads(
+  input: Required<Pick<ProspectSearchInput, "provider" | "mode">> & {
+    terms: string[];
+    city: string;
+    stateName?: string;
+  },
+): Promise<{ leads: FoundLead[]; jobByPlaceId: Map<string, string>; requests: number }> {
+  const place = input.stateName ? `${input.city}, ${input.stateName}` : input.city;
+  const jobByPlaceId = new Map<string, string>();
 
-type LpEnrichedBusiness = LpBusiness & {
-  email?: string | null;
-  phone_type?: string | null;
-  mobile_number?: string | null;
-  contact?: { address?: string | null };
-  reputation?: { rating?: number | null; reviews?: number | null };
-};
+  if (input.provider === "google") {
+    const apiKey = googleKey();
+    if (!apiKey) {
+      throw new ProviderError(
+        "Configure GOOGLE_PLACES_API_KEY (Places API New) no ambiente (.env e Vercel).",
+      );
+    }
 
-function lpKey() {
-  return process.env.LOCALPROSPECTS_API_KEY;
+    const leads: FoundLead[] = [];
+    let requests = 0;
+
+    if (input.mode === "varredura") {
+      // O Google para em 60 resultados por busca. Dividindo a cidade em 9
+      // quadrantes, cada um devolve os seus 60 — é assim que a lista passa
+      // de algumas dezenas para centenas.
+      const viewport = await fetchGoogleCityViewport({ apiKey, city: `${place}, Brasil` });
+      requests += 1;
+      if (!viewport) {
+        throw new ProviderError(`Não achei os limites de ${input.city} no Google Maps.`);
+      }
+      await mapWithConcurrency(splitViewport(viewport, 3), 3, async (tile) => {
+        const result = await searchGooglePlaces({
+          apiKey,
+          textQuery: input.terms[0],
+          locationRestriction: tile,
+        });
+        leads.push(...result.leads);
+        requests += result.requests;
+      });
+    } else {
+      await mapWithConcurrency(input.terms, 3, async (term) => {
+        const result = await searchGooglePlaces({
+          apiKey,
+          textQuery: `${term} em ${place}`,
+        });
+        leads.push(...result.leads);
+        requests += result.requests;
+      });
+    }
+
+    return { leads, jobByPlaceId, requests };
+  }
+
+  if (input.provider === "apify") {
+    const token = apifyToken();
+    if (!token) {
+      throw new ProviderError("Configure APIFY_TOKEN no ambiente (.env e Vercel).");
+    }
+    const maxPerTerm =
+      input.mode === "varredura" ? 300 : input.mode === "ampla" ? 50 : 80;
+    const leads = await runApifyGoogleMaps({
+      token,
+      terms: input.terms,
+      locationQuery: `${place}, Brasil`,
+      maxPerTerm,
+      actor: process.env.APIFY_MAPS_ACTOR || DEFAULT_APIFY_ACTOR,
+    });
+    return { leads, jobByPlaceId, requests: 1 };
+  }
+
+  const apiKey = process.env.LOCALPROSPECTS_API_KEY;
+  if (!apiKey) {
+    throw new ProviderError(
+      "Configure LOCALPROSPECTS_API_KEY no ambiente (.env local e variáveis do Vercel).",
+    );
+  }
+  const leads: FoundLead[] = [];
+  for (const term of input.terms) {
+    const result = await searchLocalProspects({
+      apiKey,
+      keyword: term,
+      city: input.city,
+      stateName: input.stateName,
+    });
+    for (const lead of result.leads) {
+      leads.push(lead);
+      if (result.jobId) jobByPlaceId.set(lead.placeId, result.jobId);
+    }
+  }
+  return { leads, jobByPlaceId, requests: input.terms.length };
 }
 
-function lpBusinessId(b: LpBusiness) {
-  return b.place_id || b.cid || b.id || null;
-}
-
-export async function searchPlaces(niche: string, city: string, state?: string) {
+export async function searchPlaces(input: ProspectSearchInput) {
   const { supabase, user } = await requireAuthenticatedUser();
 
-  const trimmedNiche = niche.trim();
-  const trimmedCity = city.trim();
-  if (!trimmedNiche || !trimmedCity) {
-    return { error: "Informe o nicho e a cidade." };
+  const niche = input.niche?.trim() ?? "";
+  const city = input.city?.trim() ?? "";
+  if (!niche || !city) return { error: "Informe o nicho e a cidade." };
+
+  const mode: SearchMode =
+    input.mode === "ampla" || input.mode === "varredura" ? input.mode : "padrao";
+  if (input.provider === "maps") {
+    return { error: "O robô do Maps trabalha pela fila — use queueMapsSearch." };
   }
+  const provider: SearchProvider =
+    input.provider === "apify" || input.provider === "localprospects"
+      ? input.provider
+      : "google";
+  const terms = searchTermsFor(niche, mode, input.segmentId);
 
-  const apiKey = lpKey();
-  if (!apiKey) {
-    return {
-      error:
-        "Configure LOCALPROSPECTS_API_KEY no ambiente (.env local e variáveis do Vercel).",
-    };
-  }
-
-  // 1) Resolve a cidade para um location_code (não consome créditos).
-  // O estado desambigua cidades homônimas (ex: 15 "Bom Jesus" pelo país).
-  const locQuery = state ? `${trimmedCity}, ${state.trim()}` : trimmedCity;
-  const locResponse = await fetch(
-    `${LP_BASE}/locations?q=${encodeURIComponent(locQuery)}`,
-    { headers: { "x-api-key": apiKey } },
-  );
-
-  if (!locResponse.ok) {
-    const text = await locResponse.text();
-    return { error: `Falha ao buscar a cidade (${locResponse.status}): ${text}` };
-  }
-
-  const locJson = (await locResponse.json()) as {
-    locations?: { location_code: number; full_name: string; country?: string }[];
-  };
-  const location =
-    locJson.locations?.find((l) => l.country === "BR") ?? locJson.locations?.[0];
-  if (!location) {
-    return { error: `Cidade "${trimmedCity}" não encontrada. Tente outro nome.` };
-  }
-
-  // 2) Busca os negócios (retorna listagem bruta + job de enriquecimento).
-  const searchResponse = await fetch(`${LP_BASE}/search`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-    },
-    body: JSON.stringify({
-      keyword: trimmedNiche,
-      location_code: location.location_code,
-    }),
-  });
-
-  if (!searchResponse.ok) {
-    const text = await searchResponse.text();
-    return { error: `Falha na busca (${searchResponse.status}): ${text}` };
-  }
-
-  const searchJson = (await searchResponse.json()) as {
-    job_id?: string;
-    businesses?: LpBusiness[];
-  };
-
-  const businesses = searchJson.businesses ?? [];
-  if (businesses.length === 0) {
-    return { imported: 0, total: 0 };
-  }
-
-  // status e custom_message ficam de fora de propósito: no upsert em conflito,
-  // colunas omitidas são preservadas — não podem ser sobrescritas por re-busca.
-  const rows = businesses
-    .filter((b) => lpBusinessId(b) && b.name)
-    .map((b) => {
-      const rawPhone = b.phone || null;
-      const { e164, isMobile } = rawPhone
-        ? normalizeBrPhone(rawPhone)
-        : { e164: null, isMobile: false };
-
-      return {
-        owner_id: user.id,
-        google_place_id: lpBusinessId(b)!,
-        name: b.name!,
-        phone: rawPhone,
-        phone_e164: e164,
-        is_mobile: isMobile,
-        website: b.website ?? null,
-        address: b.address ?? null,
-        rating: b.rating ?? null,
-        rating_count: b.reviews ?? null,
-        google_maps_uri: b.gbp_url ?? null,
-        niche: trimmedNiche,
-        city: trimmedCity,
-        enrich_job_id: searchJson.job_id ?? null,
-        updated_at: new Date().toISOString(),
-      };
+  let collected: Awaited<ReturnType<typeof collectLeads>>;
+  try {
+    collected = await collectLeads({
+      provider,
+      mode,
+      terms,
+      city,
+      stateName: input.state?.trim() || undefined,
     });
+  } catch (searchError) {
+    if (searchError instanceof ProviderError) return { error: searchError.message };
+    console.error("[prospecção] falha na busca:", searchError);
+    return { error: "A busca falhou. Tente de novo em instantes." };
+  }
 
-  const { data: existing } = await supabase
-    .from("prospects")
-    .select("google_place_id")
-    .in(
-      "google_place_id",
-      rows.map((r) => r.google_place_id),
-    );
-
-  const existingIds = new Set((existing ?? []).map((e) => e.google_place_id));
-  const imported = rows.filter((r) => !existingIds.has(r.google_place_id)).length;
-
-  const { error } = await supabase
-    .from("prospects")
-    .upsert(rows, { onConflict: "owner_id,google_place_id" });
-
-  if (error) return { error: error.message };
+  const saved = await saveFoundLeads(supabase, {
+    ownerId: user.id,
+    leads: dedupeLeads(collected.leads),
+    niche,
+    city,
+    source: provider,
+    jobByPlaceId: collected.jobByPlaceId,
+  });
+  if ("error" in saved) return { error: saved.error };
 
   revalidatePath("/prospeccao");
-  return { imported, total: rows.length };
+  return {
+    imported: saved.newIds.length,
+    updated: saved.updated,
+    total: saved.total,
+    closedSkipped: saved.closedSkipped,
+    newIds: saved.newIds,
+    terms,
+    requests: collected.requests,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Robô próprio do Maps (fila)                                         */
+/* ------------------------------------------------------------------ */
+
+// O robô roda no computador (npm run maps:robo) e avisa que está vivo a
+// cada poucos segundos. Mais de 1 minuto sem sinal = desligado.
+const WORKER_ONLINE_MS = 60_000;
+
+/**
+ * Coloca uma busca na fila do robô. Nada de API: o robô abre o Google Maps
+ * num navegador, rola a lista e lê cada empresa. A Vercel não tem navegador,
+ * por isso a busca não roda aqui — o robô pega o pedido e grava os leads.
+ */
+export async function queueMapsSearch(input: Omit<ProspectSearchInput, "provider">) {
+  const { supabase, user } = await requireAuthenticatedUser();
+
+  const niche = input.niche?.trim() ?? "";
+  const city = input.city?.trim() ?? "";
+  if (!niche || !city) return { error: "Informe o nicho e a cidade." };
+
+  const mode: SearchMode =
+    input.mode === "ampla" || input.mode === "varredura" ? input.mode : "padrao";
+
+  const { data, error } = await supabase
+    .from("prospect_search_jobs")
+    .insert({
+      owner_id: user.id,
+      niche,
+      city,
+      state: input.state?.trim() || null,
+      mode,
+      terms: searchTermsFor(niche, mode, input.segmentId),
+    })
+    .select("id")
+    .single();
+
+  if (error) return { error: error.message };
+  return { jobId: data.id as string };
+}
+
+export type MapsQueueSnapshot = {
+  jobs: MapsSearchJob[];
+  workerOnline: boolean;
+  workerSeenAt: string | null;
+};
+
+export async function getMapsSearchJobs(): Promise<MapsQueueSnapshot> {
+  const { supabase } = await requireAuthenticatedUser();
+
+  const [jobsResult, heartbeatResult] = await Promise.all([
+    supabase
+      .from("prospect_search_jobs")
+      .select(
+        "id, niche, city, state, mode, status, progress, found, imported, updated, new_ids, error, created_at, started_at, finished_at",
+      )
+      .order("created_at", { ascending: false })
+      .limit(6),
+    supabase
+      .from("prospect_worker_heartbeats")
+      .select("last_seen_at")
+      .order("last_seen_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  // Antes da migration as tabelas não existem: a tela segue sem a fila.
+  const workerSeenAt = (heartbeatResult.data?.last_seen_at as string | undefined) ?? null;
+  return {
+    jobs: (jobsResult.data ?? []) as MapsSearchJob[],
+    workerOnline: Boolean(
+      workerSeenAt && Date.now() - new Date(workerSeenAt).getTime() < WORKER_ONLINE_MS,
+    ),
+    workerSeenAt,
+  };
+}
+
+export async function cancelMapsSearch(jobId: string) {
+  const { supabase } = await requireAuthenticatedUser();
+  // Pendente sai da fila na hora; em andamento, o robô confere entre uma
+  // busca e outra e para.
+  const { error } = await supabase
+    .from("prospect_search_jobs")
+    .update({ status: "cancelado", finished_at: new Date().toISOString() })
+    .eq("id", jobId)
+    .in("status", ["pendente", "rodando"]);
+
+  if (error) return { error: error.message };
+  return { success: true };
+}
+
+/* ------------------------------------------------------------------ */
+/* Enriquecimento                                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Visita o site de cada lead atrás de e-mail, WhatsApp e redes, e anota os
+ * problemas do site (argumento de venda). Em lotes pequenos para caber no
+ * tempo de uma requisição — a tela chama de novo enquanto houver pendentes.
+ */
+export async function scanProspectSites({
+  ids,
+  limit = 12,
+}: { ids?: string[]; limit?: number } = {}) {
+  const { supabase } = await requireAuthenticatedUser();
+  const result = await scanAndSaveSites(supabase, {
+    ids,
+    limit: Math.max(1, Math.min(20, Math.round(limit))),
+  });
+  if ("error" in result) return { error: result.error };
+
+  revalidatePath("/prospeccao");
+  return result;
 }
 
 /**
@@ -231,74 +519,36 @@ export async function searchPlaces(niche: string, city: string, state?: string) 
  * quebra esse palpite nos dois sentidos.
  *
  * Por padrão verifica só quem nunca foi verificado, para uma segunda rodada
- * não pagar de novo pela base inteira. `todos` refaz tudo.
+ * não pagar de novo pela base inteira. `todos` refaz tudo; `ids` restringe
+ * aos leads recém-buscados ou selecionados.
  */
-export async function checkProspectsWhatsapp({ todos = false } = {}) {
+export async function checkProspectsWhatsapp({
+  todos = false,
+  ids,
+}: { todos?: boolean; ids?: string[] } = {}): Promise<WhatsappCheckSummary> {
   const { supabase } = await requireAuthenticatedUser();
+  const nada = {
+    verificados: 0,
+    comWhatsapp: 0,
+    semWhatsapp: 0,
+    naoSalvos: 0,
+    comIds: [],
+    semIds: [],
+  };
 
-  let query = supabase
-    .from("prospects")
-    .select("id, phone_e164")
-    .not("phone_e164", "is", null);
-
-  if (!todos) query = query.is("whatsapp_checked_at", null);
-
-  const { data: leads, error } = await query;
-  if (error) return { error: error.message };
-  if (!leads || leads.length === 0) {
-    return { verificados: 0, comWhatsapp: 0, semWhatsapp: 0 };
-  }
-
-  let existencia: Map<string, boolean>;
   try {
-    existencia = await checkWhatsAppNumbers(
-      // Números repetidos entre leads viram uma pergunta só.
-      [...new Set(leads.map((lead) => lead.phone_e164 as string))],
-    );
+    const result = await verifyAndSaveWhatsapp(supabase, { ids, todos }, checkWhatsAppNumbers);
+    if ("error" in result) return { ...nada, error: result.error };
+    revalidatePath("/prospeccao");
+    return result;
   } catch (checkError) {
     console.error("[prospecção] falha ao verificar números:", checkError);
     return {
+      ...nada,
       error:
         "Não consegui consultar o WhatsApp agora. Verifique a conexão da instância e tente de novo.",
     };
   }
-
-  const agora = new Date().toISOString();
-  let comWhatsapp = 0;
-  let semWhatsapp = 0;
-  const erros: string[] = [];
-
-  for (const lead of leads) {
-    const tem = existencia.get(lead.phone_e164 as string);
-    // Número que a Evolution não respondeu fica sem veredito em vez de
-    // virar "não tem" — marcar errado esconderia um lead bom.
-    if (tem === undefined) continue;
-
-    const { error: updateError } = await supabase
-      .from("prospects")
-      .update({
-        has_whatsapp: tem,
-        whatsapp_checked_at: agora,
-        updated_at: agora,
-      })
-      .eq("id", lead.id);
-
-    if (updateError) {
-      erros.push(updateError.message);
-      continue;
-    }
-
-    if (tem) comWhatsapp += 1;
-    else semWhatsapp += 1;
-  }
-
-  revalidatePath("/prospeccao");
-  return {
-    verificados: comWhatsapp + semWhatsapp,
-    comWhatsapp,
-    semWhatsapp,
-    naoSalvos: erros.length,
-  };
 }
 
 // Aplica o enriquecimento assíncrono do LocalProspects (email, tipo de
@@ -307,7 +557,7 @@ export async function checkProspectsWhatsapp({ todos = false } = {}) {
 export async function refreshEnrichment() {
   const { supabase } = await requireAuthenticatedUser();
 
-  const apiKey = lpKey();
+  const apiKey = process.env.LOCALPROSPECTS_API_KEY;
   if (!apiKey) {
     return {
       error:
@@ -317,7 +567,7 @@ export async function refreshEnrichment() {
 
   const { data: pending, error: pendingError } = await supabase
     .from("prospects")
-    .select("id, google_place_id, enrich_job_id")
+    .select("id, google_place_id, enrich_job_id, email, website, phone, phone_e164")
     .not("enrich_job_id", "is", null);
 
   if (pendingError) return { error: pendingError.message };
@@ -330,9 +580,17 @@ export async function refreshEnrichment() {
   let pendingJobs = 0;
 
   for (const jobId of jobIds) {
-    const statusResponse = await fetch(`${LP_BASE}/job/${jobId}`, {
-      headers: { "x-api-key": apiKey },
-    });
+    let statusResponse: Response;
+    try {
+      statusResponse = await fetch(`${LP_BASE}/job/${jobId}`, {
+        headers: { "x-api-key": apiKey },
+        signal: AbortSignal.timeout(20_000),
+        cache: "no-store",
+      });
+    } catch {
+      pendingJobs++;
+      continue;
+    }
 
     if (!statusResponse.ok) {
       // Job desconhecido/expirado: desmarca para não travar o botão pra sempre.
@@ -351,9 +609,11 @@ export async function refreshEnrichment() {
 
     const resultsResponse = await fetch(`${LP_BASE}/job/${jobId}/results`, {
       headers: { "x-api-key": apiKey },
-    });
+      signal: AbortSignal.timeout(30_000),
+      cache: "no-store",
+    }).catch(() => null);
 
-    if (!resultsResponse.ok) {
+    if (!resultsResponse?.ok) {
       pendingJobs++;
       continue;
     }
@@ -362,9 +622,12 @@ export async function refreshEnrichment() {
       businesses?: LpEnrichedBusiness[];
     };
 
+    const leadsOfJob = pending.filter((p) => p.enrich_job_id === jobId);
     for (const b of resultsJson.businesses ?? []) {
       const businessId = lpBusinessId(b);
       if (!businessId) continue;
+      const lead = leadsOfJob.find((p) => p.google_place_id === businessId);
+      if (!lead) continue;
 
       const bestPhone = b.mobile_number || b.phone || null;
       const normalized = bestPhone
@@ -374,18 +637,24 @@ export async function refreshEnrichment() {
         ? true
         : b.phone_type === "mobile" || normalized.isMobile;
 
+      // Só completa: um e-mail ou site que o enriquecimento não trouxe não
+      // pode apagar o que a análise do site (ou alguém) já tinha preenchido.
+      const patch: Record<string, unknown> = {
+        enrich_job_id: null,
+        updated_at: new Date().toISOString(),
+      };
+      if (b.email && !lead.email) patch.email = b.email;
+      if (b.website && !lead.website) patch.website = b.website;
+      if (normalized.e164 && (isMobile || !lead.phone_e164)) {
+        patch.phone = b.phone ?? bestPhone;
+        patch.phone_e164 = normalized.e164;
+        patch.is_mobile = isMobile;
+      }
+
       const { error: updateError } = await supabase
         .from("prospects")
-        .update({
-          email: b.email ?? null,
-          phone: b.phone ?? bestPhone,
-          phone_e164: normalized.e164,
-          is_mobile: isMobile,
-          website: b.website ?? null,
-          enrich_job_id: null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("google_place_id", businessId);
+        .update(patch)
+        .eq("id", lead.id);
 
       if (!updateError) updated++;
     }
@@ -401,11 +670,20 @@ export async function refreshEnrichment() {
   return { updated, pendingJobs };
 }
 
+/* ------------------------------------------------------------------ */
+/* Status, mensagem, CRM                                               */
+/* ------------------------------------------------------------------ */
+
 export async function updateProspectStatus(id: string, status: ProspectStatus) {
   const { supabase, user } = await requireAuthenticatedUser();
+  const now = new Date().toISOString();
   const { error } = await supabase
     .from("prospects")
-    .update({ status, updated_at: new Date().toISOString() })
+    .update({
+      status,
+      updated_at: now,
+      ...(status === "respondeu" ? { replied_at: now } : {}),
+    })
     .eq("id", id);
 
   if (error) return { error: error.message };
@@ -420,6 +698,9 @@ export async function updateProspectStatus(id: string, status: ProspectStatus) {
       .eq("id", id)
       .maybeSingle();
 
+    if (prospect && !prospect.contacted_at) {
+      await supabase.from("prospects").update({ contacted_at: now }).eq("id", id);
+    }
     if (prospect && !prospect.crm_client_id) {
       await promoteProspectToCrm(supabase, user.id, prospect as Prospect);
     }
@@ -427,6 +708,28 @@ export async function updateProspectStatus(id: string, status: ProspectStatus) {
 
   revalidatePath("/prospeccao");
   return { success: true };
+}
+
+/** Descartar/reabrir vários leads de uma vez (seleção da tabela). */
+export async function bulkUpdateProspectStatus(ids: string[], status: ProspectStatus) {
+  const { supabase } = await requireAuthenticatedUser();
+  if (ids.length === 0) return { updated: 0 };
+  if (status !== "descartado" && status !== "novo") {
+    return { error: "Em lote, só dá para descartar ou voltar para Novo." };
+  }
+
+  let updated = 0;
+  for (const idsChunk of chunk(ids, ID_CHUNK)) {
+    const { error, count } = await supabase
+      .from("prospects")
+      .update({ status, updated_at: new Date().toISOString() }, { count: "exact" })
+      .in("id", idsChunk);
+    if (error) return { error: error.message };
+    updated += count ?? idsChunk.length;
+  }
+
+  revalidatePath("/prospeccao");
+  return { updated };
 }
 
 export async function updateProspectMessage(id: string, message: string) {
@@ -453,11 +756,7 @@ export async function deleteProspect(id: string) {
 export async function personalizeMessage(id: string) {
   const { supabase } = await requireAuthenticatedUser();
 
-  const apiKey =
-    process.env.OPENAI_API_KEY ||
-    process.env.NEXT_OPENAI_API_KEY ||
-    process.env.OPENAI_KEY;
-
+  const apiKey = openAiKey();
   if (!apiKey) {
     return { error: "Configure OPENAI_API_KEY (ou NEXT_OPENAI_API_KEY) no ambiente." };
   }
@@ -471,14 +770,11 @@ export async function personalizeMessage(id: string) {
   if (prospectError) return { error: prospectError.message };
   if (!prospect) return { error: "Lead não encontrado." };
 
-  const template = await loadProspectingTemplate(supabase);
-  const portfolioUrl = portfolioUrlForTemplate();
-  const baseMessage = fillTemplate(template, {
-    nome: prospect.name,
-    cidade: prospect.city,
-    hasSite: Boolean(prospect.website),
-    portfolioUrl,
-  });
+  const settings = await loadSettings(supabase);
+  const baseMessage = renderProspectMessage(settings.template, prospect as Prospect);
+  const links = [...new Set(baseMessage.match(/https?:\/\/[^\s)]+/g) ?? [])];
+  const segment = matchSegment(prospect);
+  const issues = (prospect.site_issues as string[] | null) ?? [];
 
   const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
@@ -487,10 +783,17 @@ Escreva uma mensagem curta e natural de prospecção via WhatsApp, em português
 
 Contexto do lead:
 - Nome do negócio: ${prospect.name}
-- Nicho: ${prospect.niche}
+- Nicho: ${prospect.niche}${prospect.category ? ` (categoria no Google: ${prospect.category})` : ""}
 - Cidade: ${prospect.city}
-- Site: ${prospect.website ? `já tem site (${prospect.website})` : "não tem site próprio"}
+- Site: ${
+    !prospect.website
+      ? "não tem site próprio"
+      : prospect.site_status === "offline"
+        ? `o site (${prospect.website}) está fora do ar`
+        : `já tem site (${prospect.website})${issues.length ? ` com estes problemas: ${issues.join("; ")}` : ""}`
+  }
 ${prospect.rating ? `- Avaliação no Google: ${prospect.rating} (${prospect.rating_count ?? 0} avaliações)` : ""}
+${segment ? `- Projeto parecido que já fizemos: ${segment.cases[0]?.name} (${segment.angle})` : ""}
 
 Use a mensagem abaixo como referência de tom e oferta (quem envia é uma agência que cria sites e sistemas):
 
@@ -501,30 +804,36 @@ ${baseMessage}
 Regras:
 1) Máximo ~650 caracteres.
 2) Sem markdown, sem emojis em excesso (no máximo 1), sem assinatura formal.
-3) Personalize com um detalhe real do contexto (nicho, cidade, avaliação ou ausência de site).
+3) Personalize com um detalhe real do contexto (nicho, cidade, avaliação, problema do site ou ausência de site).
 4) ${
     // O link só é pedido se o modelo tiver um. Se o texto de referência não
     // traz link nenhum, a IA não pode inventar um.
-    baseMessage.includes(portfolioUrl)
-      ? `Inclua o link do portfólio exatamente assim: ${portfolioUrl}`
-      : "Não inclua nenhum link que não esteja na mensagem de referência."
+    links.length > 0
+      ? `Inclua exatamente estes links, sem alterar: ${links.join(" ")}`
+      : "Não inclua nenhum link."
   }
 5) Termine com uma pergunta leve que convide resposta.
 6) Retorne APENAS o texto da mensagem, nada mais.
 `;
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.7,
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.7,
+        messages: [{ role: "user", content: prompt }],
+      }),
+      signal: AbortSignal.timeout(45_000),
+    });
+  } catch {
+    return { error: "A IA demorou demais para responder. Tente de novo." };
+  }
 
   if (!response.ok) {
     const text = await response.text();
@@ -534,13 +843,11 @@ Regras:
   const json = (await response.json()) as {
     choices?: { message?: { content?: string } }[];
   };
-  const rawMessage = json.choices?.[0]?.message?.content?.trim();
+  const message = json.choices?.[0]?.message?.content?.trim();
 
-  if (!rawMessage) {
+  if (!message) {
     return { error: "A IA não retornou uma mensagem. Tente novamente." };
   }
-
-  const message = rawMessage;
 
   const { error: saveError } = await supabase
     .from("prospects")
@@ -553,36 +860,57 @@ Regras:
   return { message };
 }
 
-// Compartilhado entre o botão manual "Enviar ao CRM" e a promoção automática
-// ao marcar um lead como contatado/respondeu.
+// Compartilhado entre o botão manual "Enviar ao CRM", a promoção automática
+// ao marcar um lead como contatado/respondeu e o envio pelo WhatsApp.
 async function promoteProspectToCrm(
-  supabase: AuthenticatedContext["supabase"],
+  supabase: Supabase,
   userId: string,
   prospect: Prospect,
-) {
-  const { data: client, error: insertError } = await supabase
-    .from("crm_clients")
-    .insert({
-      owner_id: userId,
-      name: prospect.name,
-      phone: prospect.phone,
-      email: prospect.email,
-      source: "Prospecção",
-      stage: "enviado",
-    })
-    .select("id")
-    .single();
+): Promise<PromoteToCrmResult> {
+  // O telefone do CRM é o mesmo número que recebe o WhatsApp — pode ser o
+  // celular achado no site, não o fixo do Maps.
+  const phone = prospect.phone_e164 ? formatBrPhone(prospect.phone_e164) : prospect.phone;
 
-  if (insertError) return { error: insertError.message };
+  // Mesmo número já no CRM (lead que chamou antes, ou cadastrado à mão):
+  // vincula em vez de criar um cliente duplicado.
+  let clientId: string | null = null;
+  const targetKey = phone ? brPhoneMatchKey(phone) : null;
+  if (targetKey) {
+    const { data: clients } = await supabase
+      .from("crm_clients")
+      .select("id, phone")
+      .not("phone", "is", null);
+    clientId =
+      (clients ?? []).find((client) => brPhoneMatchKey(client.phone) === targetKey)?.id ??
+      null;
+  }
+
+  if (!clientId) {
+    const { data: client, error: insertError } = await supabase
+      .from("crm_clients")
+      .insert({
+        owner_id: userId,
+        name: prospect.name,
+        phone,
+        email: prospect.email,
+        source: "Prospecção",
+        stage: "enviado",
+      })
+      .select("id")
+      .single();
+
+    if (insertError) return { error: insertError.message };
+    clientId = client.id as string;
+  }
 
   const { error: linkError } = await supabase
     .from("prospects")
-    .update({ crm_client_id: client.id, updated_at: new Date().toISOString() })
+    .update({ crm_client_id: clientId, updated_at: new Date().toISOString() })
     .eq("id", prospect.id);
 
   if (linkError) return { error: linkError.message };
 
-  return { crmClientId: client.id as string };
+  return { crmClientId: clientId };
 }
 
 export async function promoteToCrm(id: string): Promise<PromoteToCrmResult> {
@@ -608,14 +936,34 @@ export async function promoteToCrm(id: string): Promise<PromoteToCrmResult> {
   return result;
 }
 
-// Envia a mensagem pelo WhatsApp (Evolution), coloca o lead no CRM, marca
-// como contatado e devolve o JID para abrir a inbox de Conversas.
-export async function sendProspectToConversas(id: string, message: string) {
+/**
+ * Envia pelo WhatsApp (Evolution), coloca o lead no CRM e marca como
+ * contatado. Usado no envio individual, no disparo em lote e no follow-up.
+ *
+ * `quiet` evita revalidar a página a cada envio do lote: a tela atualiza o
+ * lead na hora e recarrega uma vez no fim.
+ */
+export async function sendProspectToConversas(
+  id: string,
+  message: string,
+  { followup = false, quiet = false }: { followup?: boolean; quiet?: boolean } = {},
+) {
   // O que veio da tela é o que sai — sem completar nada por fora.
   const trimmed = message.trim();
   if (!trimmed) return { error: "Escreva a mensagem antes de enviar." };
 
   const { supabase, user } = await requireAuthenticatedUser();
+
+  const [settings, sentToday] = await Promise.all([
+    loadSettings(supabase),
+    countSentToday(supabase),
+  ]);
+  if (sentToday >= settings.dailyLimit) {
+    return {
+      error: `Limite de ${settings.dailyLimit} envios por dia atingido. Volte amanhã ou ajuste o limite em "Mensagens".`,
+      limitReached: true as const,
+    };
+  }
 
   const { data: prospect, error: prospectError } = await supabase
     .from("prospects")
@@ -628,33 +976,30 @@ export async function sendProspectToConversas(id: string, message: string) {
   if (!prospect.phone_e164) {
     return { error: "Este lead não tem um telefone válido para WhatsApp." };
   }
+  if (prospect.has_whatsapp === false) {
+    return { error: "A verificação indicou que este número não tem WhatsApp." };
+  }
 
-  await supabase
-    .from("prospects")
-    .update({
-      custom_message: trimmed,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", id);
+  if (!followup) {
+    await supabase
+      .from("prospects")
+      .update({ custom_message: trimmed, updated_at: new Date().toISOString() })
+      .eq("id", id);
+  }
 
   let crmClientId = prospect.crm_client_id as string | null;
   if (!crmClientId) {
-    const promoted = await promoteProspectToCrm(
-      supabase,
-      user.id,
-      prospect as Prospect,
-    );
+    const promoted = await promoteProspectToCrm(supabase, user.id, prospect as Prospect);
     if ("error" in promoted) {
       return { error: promoted.error ?? "Falha ao criar cliente no CRM." };
     }
     crmClientId = promoted.crmClientId;
   }
 
-  if (!crmClientId) {
-    return { error: "Não foi possível criar o cliente no CRM." };
-  }
-
-  const remoteJid = phoneToRemoteJid(prospect.phone_e164);
+  // O JID que a verificação devolveu (às vezes sem o nono dígito) é o que a
+  // resposta do lead vai usar — enviando para ele, tudo fica numa conversa.
+  const remoteJid =
+    (prospect.whatsapp_jid as string | null) ?? phoneToRemoteJid(prospect.phone_e164);
 
   await supabase.from("crm_whatsapp_chats").upsert(
     {
@@ -671,34 +1016,58 @@ export async function sendProspectToConversas(id: string, message: string) {
     { onConflict: "remote_jid" },
   );
 
-  const sendResult = await sendCrmWhatsappMessage(crmClientId, trimmed);
+  // "Digitando..." proporcional ao tamanho, como uma pessoa escrevendo.
+  const typingMs = Math.min(5000, Math.max(1500, trimmed.length * 20));
+  const sendResult = await sendCrmWhatsappChatMessage(remoteJid, trimmed, { typingMs });
   if ("error" in sendResult && sendResult.error) {
+    if (sendResult.error === "Este número não tem WhatsApp.") {
+      await supabase
+        .from("prospects")
+        .update({ has_whatsapp: false, whatsapp_checked_at: new Date().toISOString() })
+        .eq("id", id);
+    }
     return { error: sendResult.error };
   }
 
+  const now = new Date().toISOString();
+  const keepsStatus = prospect.status === "contatado" || prospect.status === "respondeu";
   await supabase
     .from("prospects")
     .update({
-      status: "contatado",
+      status: keepsStatus ? prospect.status : "contatado",
       crm_client_id: crmClientId,
-      updated_at: new Date().toISOString(),
+      updated_at: now,
+      ...(followup
+        ? {
+            followup_count: ((prospect.followup_count as number | null) ?? 0) + 1,
+            last_followup_at: now,
+          }
+        : { contacted_at: prospect.contacted_at ?? now }),
     })
     .eq("id", id);
 
-  revalidatePath("/prospeccao");
-  revalidatePath("/crm");
+  if (!quiet) {
+    revalidatePath("/prospeccao");
+    revalidatePath("/crm");
+  }
 
   return {
     success: true as const,
     remoteJid,
     crmClientId,
+    sentToday: sentToday + 1,
+    dailyLimit: settings.dailyLimit,
   };
 }
 
-// Import de CSV (ex: export do dashboard do LocalProspects) sem gastar
-// créditos da API de busca. Sem place_id real, o id de dedupe é derivado do
-// nome + telefone (ou endereço/índice como fallback) — estável entre imports
-// do mesmo arquivo, mas específico dessa origem (por isso o prefixo "csv:").
+/* ------------------------------------------------------------------ */
+/* Importação de CSV                                                   */
+/* ------------------------------------------------------------------ */
+
+// Import de CSV sem gastar créditos de busca: export do LocalProspects, do
+// Apify, do Outscraper ou planilha feita à mão — os nomes de coluna mais
+// comuns de cada um são aceitos. Sem place_id real, o id de dedupe é
+// derivado do nome + telefone (ou endereço/índice), com prefixo "csv:".
 export async function importProspectsCsv(csvText: string, niche: string, city: string) {
   const { supabase, user } = await requireAuthenticatedUser();
 
@@ -715,32 +1084,51 @@ export async function importProspectsCsv(csvText: string, niche: string, city: s
 
   const rows = parsedRows
     .map((r, index) => {
-      const name = r.business_name || r.name || "";
+      const name = pickColumn(r, ["business_name", "name", "title", "nome", "empresa"]);
       if (!name) return null;
 
-      const rawPhone = r.phone || null;
+      const rawPhone = pickColumn(r, [
+        "phone",
+        "telefone",
+        "phoneUnformatted",
+        "phone_number",
+        "celular",
+        "whatsapp",
+      ]);
       const { e164, isMobile } = rawPhone
         ? normalizeBrPhone(rawPhone)
         : { e164: null, isMobile: false };
-      const website = inferWebsiteFromRow(r);
+      const email = pickColumn(r, ["email", "e-mail", "emails", "emails/0", "email_1"]);
+      const address = pickColumn(r, ["address", "endereco", "endereço", "full_address"]);
+      const website =
+        pickColumn(r, ["website", "site", "site_url", "domain"]) ??
+        inferWebsiteFromRow({ logo_url: r.logo_url, email: email ?? undefined });
+      const placeId = pickColumn(r, ["place_id", "placeId", "google_place_id", "cid"]);
       const phoneDigits = rawPhone ? rawPhone.replace(/\D/g, "") : "";
-      const idBase = phoneDigits || slugify(r.address || "") || String(index);
+      const idBase = phoneDigits || slugify(address || "") || String(index);
+      const rating = Number(pickColumn(r, ["rating", "totalScore", "nota"])?.replace(",", "."));
+      const reviews = Number(pickColumn(r, ["reviews", "reviewsCount", "avaliacoes", "avaliações"]));
 
       return {
         owner_id: user.id,
-        google_place_id: `csv:${slugify(name)}-${idBase}`,
+        google_place_id: placeId ?? `csv:${slugify(name)}-${idBase}`,
         name,
         phone: rawPhone,
         phone_e164: e164,
         is_mobile: isMobile,
         website,
-        address: r.address || null,
-        rating: null,
-        rating_count: null,
-        google_maps_uri: null,
-        niche: trimmedNiche,
-        city: trimmedCity,
-        email: r.email || null,
+        address,
+        rating: Number.isFinite(rating) && rating > 0 ? rating : null,
+        rating_count: Number.isFinite(reviews) && reviews > 0 ? reviews : null,
+        google_maps_uri: pickColumn(r, ["url", "google_maps_url", "gbp_url", "maps_url"]),
+        category: pickColumn(r, ["category", "categoryName", "categoria", "type"]),
+        instagram: pickColumn(r, ["instagram", "instagrams", "instagrams/0"]),
+        // O CSV do robô traz nicho e cidade por linha (várias buscas num
+        // arquivo só); o que foi preenchido na tela vale para o resto.
+        niche: pickColumn(r, ["nicho", "niche"]) ?? trimmedNiche,
+        city: pickColumn(r, ["cidade", "city"]) ?? trimmedCity,
+        email,
+        source: "csv",
         enrich_job_id: null,
         updated_at: new Date().toISOString(),
       };
@@ -756,24 +1144,29 @@ export async function importProspectsCsv(csvText: string, niche: string, city: s
   // CSV real tem negócios duplicados (mesmo telefone, endereços diferentes).
   const dedupedRows = [...new Map(rows.map((r) => [r.google_place_id, r])).values()];
 
-  const { data: existing } = await supabase
-    .from("prospects")
-    .select("google_place_id")
-    .in(
-      "google_place_id",
-      dedupedRows.map((r) => r.google_place_id),
-    );
+  const existingIds = new Set<string>();
+  for (const ids of chunk(dedupedRows.map((r) => r.google_place_id), ID_CHUNK)) {
+    const { data: existing } = await supabase
+      .from("prospects")
+      .select("google_place_id")
+      .in("google_place_id", ids);
+    for (const row of existing ?? []) existingIds.add(row.google_place_id);
+  }
 
-  const existingIds = new Set((existing ?? []).map((e) => e.google_place_id));
-  const imported = dedupedRows.filter((r) => !existingIds.has(r.google_place_id)).length;
-  const noSite = dedupedRows.filter((r) => !r.website).length;
+  // Quem já está na base (de qualquer pessoa do workspace) fica como está.
+  const newRows = dedupedRows.filter((r) => !existingIds.has(r.google_place_id));
+  const noSite = newRows.filter((r) => !r.website).length;
+  const newIds: string[] = [];
 
-  const { error } = await supabase
-    .from("prospects")
-    .upsert(dedupedRows, { onConflict: "owner_id,google_place_id" });
-
-  if (error) return { error: error.message };
+  for (const batch of chunk(newRows, 200)) {
+    const { data, error } = await supabase
+      .from("prospects")
+      .upsert(batch, { onConflict: "owner_id,google_place_id", ignoreDuplicates: true })
+      .select("id");
+    if (error) return { error: error.message };
+    newIds.push(...(data ?? []).map((row) => row.id as string));
+  }
 
   revalidatePath("/prospeccao");
-  return { imported, total: dedupedRows.length, noSite };
+  return { imported: newIds.length, total: dedupedRows.length, noSite, newIds };
 }

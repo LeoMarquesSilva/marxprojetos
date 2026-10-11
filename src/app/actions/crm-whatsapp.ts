@@ -10,7 +10,13 @@ import {
   reconcilePendingOutgoingMessages,
   runOutgoingMessageOutbox,
 } from "@/lib/outgoing-message-outbox";
-import { normalizeBrPhone, phoneToRemoteJid, remoteJidToDigits } from "@/lib/phone";
+import {
+  brPhoneMatchKey,
+  brPhoneVariants,
+  normalizeBrPhone,
+  phoneToRemoteJid,
+  remoteJidToDigits,
+} from "@/lib/phone";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type {
   CrmInboxChat,
@@ -151,11 +157,14 @@ async function matchProspectByPhone(
   const supabase = await createClient();
   const normalized = normalizeBrPhone(digitsOrE164);
   if (!normalized.e164) return null;
+  const targetKey = brPhoneMatchKey(normalized.e164);
 
+  // As duas grafias do celular (com e sem o nono dígito): a conversa pode
+  // ter chegado pelo JID sem o 9 de um lead cadastrado com ele.
   const { data: byE164 } = await supabase
     .from("prospects")
     .select("id, name, website, address, niche, city, status, rating, phone_e164, phone")
-    .eq("phone_e164", normalized.e164)
+    .in("phone_e164", brPhoneVariants(normalized.e164))
     .limit(1)
     .maybeSingle();
 
@@ -171,8 +180,7 @@ async function matchProspectByPhone(
     match =
       (candidates ?? []).find(
         (prospect) =>
-          prospect.phone &&
-          normalizeBrPhone(prospect.phone).e164 === normalized.e164,
+          prospect.phone && brPhoneMatchKey(prospect.phone) === targetKey,
       ) ?? null;
   }
 
@@ -319,11 +327,13 @@ async function persistOutgoingMessage({
   remoteJid,
   clientId,
   text,
+  typingMs,
 }: {
   supabase: Awaited<ReturnType<typeof createClient>>;
   remoteJid: string;
   clientId: string | null;
   text: string;
+  typingMs?: number;
 }): Promise<{ error: string } | { success: true; message: CrmWhatsappMessage }> {
   const {
     data: { user },
@@ -364,7 +374,7 @@ async function persistOutgoingMessage({
         if (error || !data) throw new Error("outbox_create_failed");
         return mapMessage(data);
       },
-      send: () => sendWhatsAppText(remoteJid, text),
+      send: () => sendWhatsAppText(remoteJid, text, { typingMs }),
       markSent: async (id, providerMessageId) =>
         finalizeOutgoingMessageIdempotently({
           providerMessageId,
@@ -492,6 +502,7 @@ export async function sendCrmWhatsappMessage(clientId: string, text: string) {
 export async function sendCrmWhatsappChatMessage(
   remoteJid: string,
   text: string,
+  { typingMs }: { typingMs?: number } = {},
 ) {
   const trimmed = text.trim();
   if (!trimmed) return { error: "Escreva uma mensagem." };
@@ -509,6 +520,7 @@ export async function sendCrmWhatsappChatMessage(
     remoteJid,
     clientId: chat?.client_id ?? null,
     text: trimmed,
+    typingMs,
   });
 
   if (chat?.client_id) revalidatePath(`/crm/${chat.client_id}`);
@@ -544,13 +556,20 @@ async function buildPhoneClientIndex(
     .not("phone", "is", null);
   if (error) throw new Error("Não foi possível consultar os clientes.");
 
-  const byE164 = new Map<string, string>();
+  // Indexado pela chave sem o nono dígito: o JID da conversa pode não ter
+  // o 9 que o cadastro do cliente tem.
+  const byKey = new Map<string, string>();
   for (const client of clients ?? []) {
     if (!client.phone) continue;
-    const e164 = normalizeBrPhone(client.phone).e164;
-    if (e164) byE164.set(e164, client.id);
+    const key = brPhoneMatchKey(client.phone);
+    if (key) byKey.set(key, client.id);
   }
-  return byE164;
+  return {
+    get(phone: string) {
+      const key = brPhoneMatchKey(phone);
+      return key ? byKey.get(key) : undefined;
+    },
+  };
 }
 
 async function runWithConcurrency<T>(

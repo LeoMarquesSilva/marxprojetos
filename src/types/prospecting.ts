@@ -42,9 +42,11 @@ export type Prospect = {
   phone: string | null;
   phone_e164: string | null;
   is_mobile: boolean;
-  /** null = ainda não verificado. Ver supabase/sql/prospects-whatsapp-check.sql */
+  /** null = ainda não verificado pela Evolution. */
   has_whatsapp: boolean | null;
   whatsapp_checked_at: string | null;
+  /** JID real da conta no WhatsApp (pode não ter o nono dígito). */
+  whatsapp_jid: string | null;
   website: string | null;
   address: string | null;
   rating: number | null;
@@ -57,6 +59,36 @@ export type Prospect = {
   crm_client_id: string | null;
   email: string | null;
   enrich_job_id: string | null;
+  /** google | apify | localprospects | csv */
+  source: string | null;
+  /** Categoria do Google Maps ("Advogado criminalista"). */
+  category: string | null;
+  instagram: string | null;
+  facebook: string | null;
+  linkedin: string | null;
+  /** Celular publicado como WhatsApp no site do lead. */
+  site_whatsapp: string | null;
+  /** ok | offline | social (rede social no lugar do site); null = não analisado. */
+  site_status: "ok" | "offline" | "social" | null;
+  site_issues: string[] | null;
+  site_checked_at: string | null;
+  contacted_at: string | null;
+  replied_at: string | null;
+  followup_count: number | null;
+  last_followup_at: string | null;
   created_at: string;
   updated_at: string;
 };
+
+export type ProspectingSettings = {
+  template: string;
+  followupTemplate: string;
+  dailyLimit: number;
+};
+
+export const DEFAULT_FOLLOWUP_TEMPLATE = `{Oi|Olá}, tudo bem? Passando só para saber se você chegou a ver minha mensagem sobre o site de {{nome}}. Se fizer sentido, te mostro rapidinho um exemplo do que fizemos para {{caso}}.`;
+
+/** Dias sem resposta para o lead aparecer em "Follow-up". */
+export const FOLLOWUP_AFTER_DAYS = 3;
+
+export const DEFAULT_DAILY_LIMIT = 40;

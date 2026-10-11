@@ -3,7 +3,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { adSourceLabel, extractAdReferral, type AdReferral } from "@/lib/ad-referral";
 import { resolveEvolutionMessageJid } from "@/lib/evolution-payload";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isGroupJid, normalizeBrPhone, remoteJidToDigits } from "@/lib/phone";
+import {
+  brPhoneMatchKey,
+  brPhoneVariants,
+  isGroupJid,
+  normalizeBrPhone,
+  remoteJidToDigits,
+} from "@/lib/phone";
 import { extractWhatsAppText } from "@/lib/whatsapp-message";
 import {
   ingestWebhookMessageTransactionally,
@@ -371,6 +377,13 @@ export async function POST(request: NextRequest) {
       if (!fromMe && effectiveClientId) {
         await promoteStageOnReply(supabase, effectiveClientId);
       }
+      if (!fromMe) {
+        await markProspectReplied(supabase, {
+          clientId: effectiveClientId,
+          remoteJid,
+          e164: normalized.e164,
+        });
+      }
     }
   }
 
@@ -444,6 +457,51 @@ async function promoteStageOnReply(supabase: SupabaseClient, clientId: string) {
     .eq("id", clientId)
     .eq("stage", "enviado");
   requireSupabaseSuccess(promotionResult, "promotion.update");
+}
+
+// Lead da prospecção que respondeu sai de "Contatado" sozinho. Antes só o
+// estágio do CRM andava, e a lista da prospecção seguia mostrando como "sem
+// resposta" quem já estava conversando — e o lead entrava no follow-up.
+// Casa pelo cliente do CRM, pelo JID real e pelas duas grafias do telefone
+// (com e sem o nono dígito).
+async function markProspectReplied(
+  supabase: SupabaseClient,
+  {
+    clientId,
+    remoteJid,
+    e164,
+  }: { clientId: string | null; remoteJid: string; e164: string | null },
+) {
+  const now = new Date().toISOString();
+  const patch = { status: "respondeu", replied_at: now, updated_at: now };
+  // Pelo telefone, só quem foi de fato abordado: um lead "novo" com o mesmo
+  // número de um contato pessoal não vira "respondeu" por engano.
+  const lookups = [
+    clientId
+      ? { column: "crm_client_id", values: [clientId], statuses: ["novo", "contatado"] }
+      : null,
+    { column: "whatsapp_jid", values: [remoteJid], statuses: ["contatado"] },
+    e164
+      ? { column: "phone_e164", values: brPhoneVariants(e164), statuses: ["contatado"] }
+      : null,
+  ].filter(
+    (lookup): lookup is { column: string; values: string[]; statuses: string[] } =>
+      Boolean(lookup),
+  );
+
+  for (const lookup of lookups) {
+    const result = await supabase
+      .from("prospects")
+      .update(patch)
+      .in(lookup.column, lookup.values)
+      .in("status", lookup.statuses);
+    // Best-effort: um erro aqui (ex: migration ainda não aplicada) não pode
+    // derrubar a ingestão da mensagem, que já foi gravada.
+    if (result.error) {
+      console.error("[webhook] falha ao marcar lead como respondido:", result.error.message);
+      return;
+    }
+  }
 }
 
 // Primeiro toque vale: se o cliente já tinha um anúncio de origem, não troca
@@ -537,8 +595,12 @@ async function matchClientByPhone(
   requireSupabaseSuccess(clientsResult, "client.match");
   const { data: clients } = clientsResult;
 
+  // Pela chave sem o nono dígito: o JID de quem responde pode não ter o 9
+  // que o cadastro tem, e a resposta caía numa conversa sem cliente.
+  const inboundKey = brPhoneMatchKey(inboundE164);
+  if (!inboundKey) return null;
   for (const client of (clients ?? []) as { id: string; phone: string }[]) {
-    if (normalizeBrPhone(client.phone).e164 === inboundE164) return client.id;
+    if (brPhoneMatchKey(client.phone) === inboundKey) return client.id;
   }
 
   return null;

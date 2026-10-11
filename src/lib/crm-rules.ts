@@ -1,3 +1,4 @@
+import { brPhoneMatchKey } from "@/lib/phone";
 import type { CrmStage } from "@/types/crm";
 
 type CrmStagePatch = {
@@ -105,15 +106,8 @@ type ProspectPhoneCandidate = {
   crm_client_id: string | null;
 };
 
-function normalizePhoneE164(raw: string): string | null {
-  let digits = raw.split("@")[0].replace(/\D/g, "");
-  if (digits.startsWith("55") && (digits.length === 12 || digits.length === 13)) {
-    digits = digits.slice(2);
-  }
-  if (digits.startsWith("0")) digits = digits.replace(/^0+/, "");
-  return digits.length === 10 || digits.length === 11 ? `55${digits}` : null;
-}
-
+// Compara pela chave sem o nono dígito: o JID da conversa muitas vezes não
+// tem o 9 que o lead tem no cadastro.
 export function findUnlinkedProspectIdByPhone(
   prospects: ProspectPhoneCandidate[],
   remoteJid: string,
@@ -121,7 +115,7 @@ export function findUnlinkedProspectIdByPhone(
 ): string | null {
   const targetPhones = new Set(
     [remoteJid, phone]
-      .map((candidate) => normalizePhoneE164(candidate))
+      .map((candidate) => brPhoneMatchKey(candidate))
       .filter((candidate): candidate is string => Boolean(candidate)),
   );
 
@@ -131,7 +125,7 @@ export function findUnlinkedProspectIdByPhone(
     if (prospect.crm_client_id) continue;
     const normalizedPhones = [prospect.phone_e164, prospect.phone]
       .filter((candidate): candidate is string => Boolean(candidate))
-      .map((candidate) => normalizePhoneE164(candidate));
+      .map((candidate) => brPhoneMatchKey(candidate));
     if (normalizedPhones.some((candidate) => candidate && targetPhones.has(candidate))) {
       return prospect.id;
     }

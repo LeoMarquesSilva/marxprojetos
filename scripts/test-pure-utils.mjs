@@ -29,7 +29,7 @@ test("gera link wa.me com mensagem codificada", () => {
   );
 });
 
-test("preenche o template e garante o link do portfólio", () => {
+test("preenche o template sem acrescentar nada por fora", () => {
   const result = fillTemplate("Olá, {{nome}} de {{cidade}}! {{site}}", {
     nome: "Acme",
     cidade: "Campinas",
@@ -39,7 +39,17 @@ test("preenche o template e garante o link do portfólio", () => {
 
   assert.match(result, /Olá, Acme de Campinas!/);
   assert.match(result, /Acme ainda não tem site/);
-  assert.match(result, /https:\/\/portfolio\.example\//);
+  // O link só entra se o modelo pedir (b5fdad3): o que está escrito é o que sai.
+  assert.doesNotMatch(result, /portfolio\.example/);
+  assert.match(
+    fillTemplate("Veja: {{portfolio}}", {
+      nome: "Acme",
+      cidade: "Campinas",
+      hasSite: false,
+      portfolioUrl: "https://portfolio.example/",
+    }),
+    /Veja: https:\/\/portfolio\.example\//,
+  );
 });
 
 test("extrai texto de mensagens embrulhadas e interativas", () => {
