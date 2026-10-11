@@ -35,10 +35,11 @@ import {
   verifyAndSaveWhatsapp,
 } from "@/lib/prospecting/store";
 import { matchSegment, searchTermsFor } from "@/lib/prospecting/segments";
-import { renderProspectMessage } from "@/lib/prospecting/message";
+import { renderProspectMessage, siteDiagnosis, templateFor } from "@/lib/prospecting/message";
 import {
   DEFAULT_DAILY_LIMIT,
   DEFAULT_FOLLOWUP_TEMPLATE,
+  DEFAULT_SITE_TEMPLATE,
   DEFAULT_PROSPECTING_TEMPLATE,
   type Prospect,
   type ProspectStatus,
@@ -158,6 +159,7 @@ async function loadSettings(supabase: Supabase): Promise<ProspectingSettings> {
   // Devolve o que está salvo, sem tocar em nada: o modelo é usado como está.
   return {
     template: data?.template?.trim() || DEFAULT_PROSPECTING_TEMPLATE,
+    siteTemplate: data?.site_template?.trim() || DEFAULT_SITE_TEMPLATE,
     followupTemplate: data?.followup_template?.trim() || DEFAULT_FOLLOWUP_TEMPLATE,
     dailyLimit:
       typeof data?.daily_limit === "number" && data.daily_limit > 0
@@ -215,15 +217,18 @@ export async function getProspectingStatus(): Promise<ProspectingStatus> {
 
 export async function saveProspectingSettings(input: {
   template: string;
+  siteTemplate: string;
   followupTemplate: string;
   dailyLimit: number;
 }) {
   const { supabase, user } = await requireAuthenticatedUser();
 
   const template = input.template.trim();
+  const siteTemplate = input.siteTemplate.trim();
   const followupTemplate = input.followupTemplate.trim();
   const dailyLimit = Math.round(input.dailyLimit);
   if (!template) return { error: "A primeira mensagem não pode ficar vazia." };
+  if (!siteTemplate) return { error: "A mensagem para quem já tem site não pode ficar vazia." };
   if (!followupTemplate) return { error: "O follow-up não pode ficar vazio." };
   if (!Number.isFinite(dailyLimit) || dailyLimit < 1 || dailyLimit > 500) {
     return { error: "O limite diário precisa ficar entre 1 e 500 envios." };
@@ -233,6 +238,7 @@ export async function saveProspectingSettings(input: {
     {
       owner_id: user.id,
       template,
+      site_template: siteTemplate,
       followup_template: followupTemplate,
       daily_limit: dailyLimit,
       updated_at: new Date().toISOString(),
@@ -771,10 +777,16 @@ export async function personalizeMessage(id: string) {
   if (!prospect) return { error: "Lead não encontrado." };
 
   const settings = await loadSettings(supabase);
-  const baseMessage = renderProspectMessage(settings.template, prospect as Prospect);
+  const baseMessage = renderProspectMessage(
+    templateFor(settings, prospect as Prospect, "primeira"),
+    prospect as Prospect,
+  );
   const links = [...new Set(baseMessage.match(/https?:\/\/[^\s)]+/g) ?? [])];
   const segment = matchSegment(prospect);
-  const issues = (prospect.site_issues as string[] | null) ?? [];
+  const diagnosis = siteDiagnosis(prospect as Prospect);
+  const issues = diagnosis.length
+    ? diagnosis
+    : ((prospect.site_issues as string[] | null) ?? []);
 
   const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
 

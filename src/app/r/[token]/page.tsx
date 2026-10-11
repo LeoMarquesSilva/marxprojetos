@@ -1,6 +1,12 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { SiteReviewViewer } from "@/components/site-review-viewer";
 import { fetchReviewByToken, listReviewComments } from "@/app/actions/review";
+
+// Link privado de revisão: fora de buscador mesmo com o link em mãos.
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
 
 export default async function SiteReviewPage({
   params,

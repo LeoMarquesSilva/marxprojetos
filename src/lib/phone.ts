@@ -105,6 +105,8 @@ export function fillTemplate(
     caso?: string;
     casoLink?: string;
     saudacao?: string;
+    /** Lista dos problemas do site encontrados na auditoria. */
+    diagnostico?: string;
   },
 ): string {
   const sitePhrase =
@@ -124,6 +126,7 @@ export function fillTemplate(
   // conta própria.
   return template
     .replaceAll("{{site}}", sitePhrase)
+    .replaceAll("{{diagnostico}}", vars.diagnostico ?? "")
     .replaceAll("{{saudacao}}", vars.saudacao ?? "Olá")
     .replaceAll("{{nome}}", vars.nome)
     .replaceAll("{{cidade}}", vars.cidade)

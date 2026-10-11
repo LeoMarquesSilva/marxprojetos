@@ -22,6 +22,11 @@
 // Verificar o WhatsApp de quem ainda não foi verificado:
 //
 //   npm run maps:robo -- --verificar
+//
+// Auditar os sites no navegador (celular em 4G): nota do site e os
+// problemas que a mensagem cita. --nicho restringe (ex.: --nicho advo).
+//
+//   npm run maps:robo -- --auditar [--nicho advo]
 
 import { readFileSync, existsSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
@@ -29,12 +34,16 @@ import { parseArgs } from "node:util";
 import { createClient } from "@supabase/supabase-js";
 import { runMapsSearch, MapsBlockedError, MapsCancelledError } from "@/lib/prospecting/maps-scraper";
 import {
+  buildSiteScanPatch,
+  chunk,
   saveFoundLeads,
   scanAndSaveSites,
   verifyAndSaveWhatsapp,
   mapWithConcurrency,
 } from "@/lib/prospecting/store";
 import { scanWebsite } from "@/lib/prospecting/site-scan";
+import { auditWebsite } from "@/lib/prospecting/site-audit-browser";
+import { buildSiteAuditPatch } from "@/lib/prospecting/site-audit";
 import { matchSegment, searchTermsFor } from "@/lib/prospecting/segments";
 import { normalizeBrPhone } from "@/lib/phone";
 import { parseCsv, pickColumn } from "@/lib/csv";
@@ -298,6 +307,65 @@ async function resolveOwner(supabase, email) {
 /* Modo fila                                                           */
 /* ------------------------------------------------------------------ */
 
+const AUDIT_COLUMNS =
+  "id, website, phone_e164, is_mobile, has_whatsapp, email, instagram, facebook, linkedin";
+
+// Abre cada site no navegador como um celular em 4G e grava a nota e os
+// problemas. Três por vez: a medição de tempo fica honesta (com mais
+// sites em paralelo, o computador vira o gargalo e o site parece mais
+// lento do que é).
+async function auditSites(supabase, { ids, niche } = {}) {
+  const leads = [];
+  for (const idsChunk of ids?.length ? chunk(ids, 150) : [null]) {
+    let query = supabase
+      .from("prospects")
+      .select(AUDIT_COLUMNS)
+      .not("website", "is", null)
+      .is("site_audited_at", null)
+      .or("site_status.is.null,site_status.neq.social")
+      .order("rating_count", { ascending: false, nullsFirst: false })
+      .limit(3000);
+    if (idsChunk) query = query.in("id", idsChunk);
+    if (niche) query = query.ilike("niche", `%${niche}%`);
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    leads.push(...(data ?? []));
+  }
+  if (leads.length === 0) {
+    log("Nenhum site esperando auditoria.");
+    return;
+  }
+
+  log(`Auditando ${leads.length} site(s) no navegador (celular em 4G)…`);
+  const { chromium } = await import("playwright");
+  const browser = await chromium.launch({ headless: true });
+  const stats = { ok: 0, offline: 0, inconclusive: 0 };
+  let done = 0;
+  try {
+    await mapWithConcurrency(leads, 3, async (lead) => {
+      const { audit, signals } = await auditWebsite(browser, lead.website);
+      const now = new Date();
+      // Contatos lidos do site já montado (Wix e afins só mostram e-mail e
+      // WhatsApp depois do JavaScript); a auditoria decide status e problemas.
+      const patch = {
+        ...(signals ? buildSiteScanPatch(lead, signals, now).patch : {}),
+        ...buildSiteAuditPatch(audit, now),
+      };
+      const { error } = await supabase.from("prospects").update(patch).eq("id", lead.id);
+      if (error) log(`Não gravou a auditoria de ${lead.website}: ${error.message}`);
+      stats[audit.status] += 1;
+      done += 1;
+      if (done % 25 === 0 || done === leads.length) {
+        log(
+          `Sites auditados: ${done}/${leads.length} (${stats.ok} medidos, ${stats.offline} fora do ar, ${stats.inconclusive} sem veredito)`,
+        );
+      }
+    });
+  } finally {
+    await browser.close();
+  }
+}
+
 async function enrichSaved(supabase, newIds, { sites = true } = {}) {
   if (newIds.length === 0) return;
   if (sites) {
@@ -315,6 +383,11 @@ async function enrichSaved(supabase, newIds, { sites = true } = {}) {
       }
     }
     log(`Sites analisados: ${scanned}.`);
+    try {
+      await auditSites(supabase, { ids: newIds });
+    } catch (error) {
+      log("Auditoria dos sites falhou —", error.message);
+    }
   }
 
   const checker = await whatsappChecker();
@@ -511,11 +584,14 @@ const { values: args } = parseArgs({
     "uma-vez": { type: "boolean" },
     importar: { type: "string" },
     verificar: { type: "boolean" },
+    auditar: { type: "boolean" },
+    nicho: { type: "string" },
   },
 });
 
 try {
-  if (args.verificar) await verifyPending();
+  if (args.auditar) await auditSites(adminClient(), { niche: args.nicho });
+  else if (args.verificar) await verifyPending();
   else if (args.importar) await importCsv(args);
   else if (args.buscar?.length) await runOnce(args);
   else await runQueue(args);

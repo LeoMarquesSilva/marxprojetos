@@ -15,18 +15,47 @@ import type { ProspectingSettings } from "@/types/prospecting";
 
 const PLACEHOLDERS: { token: string; hint: string }[] = [
   { token: "{{saudacao}}", hint: "Bom dia / Boa tarde / Boa noite" },
-  { token: "{{nome}}", hint: "nome do negócio" },
+  { token: "{{vocativo}}", hint: '", Dra. Janaina" quando o nome é de uma pessoa; vazio quando é sociedade' },
+  { token: "{{nome}}", hint: "nome do negócio, sem a palavra-chave do Google" },
   { token: "{{cidade}}", hint: "cidade" },
   { token: "{{nicho}}", hint: "nicho buscado" },
-  { token: "{{site}}", hint: "frase sobre o site (ou a falta dele)" },
-  { token: "{{caso}}", hint: "projeto parecido do portfólio" },
+  { token: "{{site}}", hint: "a observação que abre a mensagem: sem site, fora do ar ou o problema mais forte do site" },
+  { token: "{{momento}}", hint: "o que isso custa na área do lead (criminal, família, trabalhista…)" },
+  { token: "{{problema}}", hint: "só o problema mais forte do site, em frase" },
+  { token: "{{diagnostico}}", hint: "lista com até 3 problemas do site" },
+  { token: "{{oferta}}", hint: "pergunta final: oferece a lista do que achou ou mostrar como ficaria" },
+  { token: "{{gancho}}", hint: "follow-up: 1º traz um ponto novo; 2º se despede" },
+  { token: "{{publico}}", hint: "escritórios de advocacia / clínicas…" },
+  { token: "{{caso_nome}}", hint: "nome do projeto parecido do portfólio" },
+  { token: "{{caso}}", hint: "projeto parecido, com o link" },
   { token: "{{caso_link}}", hint: "só o link do projeto parecido" },
   { token: "{{portfolio}}", hint: "site da INSYT" },
 ];
 
-// Dois leads de exemplo: um sem site e um com o site fora do ar — os dois
-// jeitos mais comuns de a frase de {{site}} mudar.
+// Leads de exemplo: sem site, site fora do ar e site auditado — os jeitos
+// mais comuns de {{site}} e {{diagnostico}} mudarem.
 const SAMPLE_LEADS: { label: string; lead: MessageLead }[] = [
+  {
+    label: "Escritório com site ruim",
+    lead: {
+      id: "exemplo-3",
+      name: "Dra. Paula Andrade - Advogada Trabalhista em Campinas",
+      city: "Campinas",
+      niche: "advogado trabalhista",
+      website: "https://andradeadvocacia.com.br",
+      site_status: "ok",
+      site_audit: {
+        status: "ok",
+        score: 38,
+        findings: [
+          { code: "slow", value: 9 },
+          { code: "no_whatsapp" },
+          { code: "no_preview", value: "sem_descricao" },
+          { code: "outdated", value: 2021 },
+        ],
+      },
+    },
+  },
   {
     label: "Escritório sem site",
     lead: {
@@ -35,37 +64,59 @@ const SAMPLE_LEADS: { label: string; lead: MessageLead }[] = [
       city: "Campinas",
       niche: "advogado criminalista",
       website: null,
+      rating: 4.8,
+      rating_count: 64,
     },
   },
   {
-    label: "Clínica com site fora do ar",
+    label: "Site fora do ar",
     lead: {
       id: "exemplo-2",
-      name: "Clínica Bem Viver",
+      name: "Moraes Advocacia Empresarial",
       city: "Campinas",
-      niche: "clínica geriátrica",
-      website: "https://bemviver.com.br",
+      niche: "advogado empresarial",
+      website: "https://moraesadvocacia.com.br",
       site_status: "offline",
       site_issues: ["Site fora do ar"],
     },
   },
 ];
 
+type TemplateTab = "primeira" | "site" | "followup";
+
+const TABS: [TemplateTab, string][] = [
+  ["primeira", "Sem site"],
+  ["site", "Já tem site"],
+  ["followup", "Follow-up"],
+];
+
+const TAB_HINTS: Record<TemplateTab, string> = {
+  primeira: "Primeiro contato — sem site, site fora do ar ou rede social no lugar",
+  site: "Primeiro contato com quem já tem site e a auditoria achou o que citar",
+  followup: "Follow-up (para quem não respondeu em 3 dias)",
+};
+
+function templatesOf(settings: ProspectingSettings): Record<TemplateTab, string> {
+  return {
+    primeira: settings.template,
+    site: settings.siteTemplate,
+    followup: settings.followupTemplate,
+  };
+}
+
 export function ProspectingSettingsDialog({ settings }: { settings: ProspectingSettings }) {
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<"primeira" | "followup">("primeira");
-  const [template, setTemplate] = useState(settings.template);
-  const [followupTemplate, setFollowupTemplate] = useState(settings.followupTemplate);
+  const [tab, setTab] = useState<TemplateTab>("primeira");
+  const [templates, setTemplates] = useState(() => templatesOf(settings));
   const [dailyLimit, setDailyLimit] = useState(String(settings.dailyLimit));
-  const [sampleIndex, setSampleIndex] = useState(0);
+  const [sampleIndex, setSampleIndex] = useState(1);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
     if (next) {
-      setTemplate(settings.template);
-      setFollowupTemplate(settings.followupTemplate);
+      setTemplates(templatesOf(settings));
       setDailyLimit(String(settings.dailyLimit));
     }
   }
@@ -73,8 +124,9 @@ export function ProspectingSettingsDialog({ settings }: { settings: ProspectingS
   function handleSave() {
     startTransition(async () => {
       const result = await saveProspectingSettings({
-        template,
-        followupTemplate,
+        template: templates.primeira,
+        siteTemplate: templates.site,
+        followupTemplate: templates.followup,
         dailyLimit: Number(dailyLimit),
       });
       if (result.error) {
@@ -87,7 +139,9 @@ export function ProspectingSettingsDialog({ settings }: { settings: ProspectingS
     });
   }
 
-  const current = tab === "primeira" ? template : followupTemplate;
+  const current = templates[tab];
+  const setCurrent = (update: (value: string) => string) =>
+    setTemplates((all) => ({ ...all, [tab]: update(all[tab]) }));
   const sample = SAMPLE_LEADS[sampleIndex];
   const preview = current.trim() ? renderProspectMessage(current, sample.lead) : "";
 
@@ -111,17 +165,17 @@ export function ProspectingSettingsDialog({ settings }: { settings: ProspectingS
           </Button>
         }
       >
-        <div className="grid grid-cols-2 gap-2 rounded-2xl bg-[var(--insyt-canvas)] p-1">
-          {(
-            [
-              ["primeira", "Primeira mensagem"],
-              ["followup", "Follow-up"],
-            ] as const
-          ).map(([value, label]) => (
+        <div className="grid grid-cols-3 gap-2 rounded-2xl bg-[var(--insyt-canvas)] p-1">
+          {TABS.map(([value, label]) => (
             <button
               key={value}
               type="button"
-              onClick={() => setTab(value)}
+              onClick={() => {
+                setTab(value);
+                // Prévia com o lead que combina com a aba.
+                if (value === "site") setSampleIndex(0);
+                if (value === "primeira") setSampleIndex(1);
+              }}
               className={`rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
                 tab === value
                   ? "bg-white text-[var(--insyt-black)] shadow-sm"
@@ -135,19 +189,16 @@ export function ProspectingSettingsDialog({ settings }: { settings: ProspectingS
 
         <div className="space-y-2">
           <Label htmlFor="prospecting-template">
-            {tab === "primeira"
-              ? "Primeiro contato"
-              : "Follow-up (para quem não respondeu em 3 dias)"}
+            {TAB_HINTS[tab]}
           </Label>
           <Textarea
             id="prospecting-template"
             rows={8}
             value={current}
-            onChange={(e) =>
-              tab === "primeira"
-                ? setTemplate(e.target.value)
-                : setFollowupTemplate(e.target.value)
-            }
+            onChange={(e) => {
+              const value = e.target.value;
+              setCurrent(() => value);
+            }}
           />
           <div className="flex flex-wrap gap-1.5">
             {PLACEHOLDERS.map((item) => (
@@ -155,11 +206,7 @@ export function ProspectingSettingsDialog({ settings }: { settings: ProspectingS
                 key={item.token}
                 type="button"
                 title={item.hint}
-                onClick={() =>
-                  tab === "primeira"
-                    ? setTemplate((value) => `${value}${item.token}`)
-                    : setFollowupTemplate((value) => `${value}${item.token}`)
-                }
+                onClick={() => setCurrent((value) => `${value}${item.token}`)}
                 className="rounded-full bg-[var(--insyt-canvas-alt)] px-2.5 py-1 font-mono text-[11px] text-[var(--insyt-slate)] transition-colors hover:bg-[var(--insyt-border)]"
               >
                 {item.token}

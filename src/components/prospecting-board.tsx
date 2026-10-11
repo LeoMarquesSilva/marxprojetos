@@ -89,7 +89,12 @@ import {
 } from "@/app/actions/prospecting";
 import { buildWaMeUrl, formatBrPhone } from "@/lib/phone";
 import { isFollowupDue } from "@/lib/prospecting/followup";
-import { scoreProspect, TIER_LABELS, type ProspectScore } from "@/lib/prospecting/score";
+import {
+  scoreBreakdown,
+  scoreProspect,
+  TIER_LABELS,
+  type ProspectScore,
+} from "@/lib/prospecting/score";
 import { PROSPECT_SEGMENTS } from "@/lib/prospecting/segments";
 import { cn } from "@/lib/utils";
 import {
@@ -918,7 +923,7 @@ export function ProspectingBoard({
                     </TableCell>
                     <TableCell className="py-4 align-top">
                       <span
-                        title={score.reasons.join("\n") || "Sem sinais fortes"}
+                        title={[scoreBreakdown(score), "", ...score.reasons].join("\n")}
                         className={cn(
                           "inline-flex cursor-help items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold",
                           TIER_STYLES[score.tier],
@@ -1227,6 +1232,7 @@ function SiteCell({ p }: { p: Prospect }) {
     );
   }
   const issues = p.site_issues ?? [];
+  const siteScore = p.site_status === "ok" ? p.site_score : null;
 
   return (
     <div className="space-y-1">
@@ -1246,6 +1252,20 @@ function SiteCell({ p }: { p: Prospect }) {
         </Badge>
       ) : issues.length > 0 ? (
         <p className="text-xs text-amber-700" title={issues.join("\n")}>
+          {siteScore !== null ? (
+            <span
+              className={cn(
+                "mr-1.5 inline-block rounded-full px-1.5 py-px text-[10px] font-bold",
+                siteScore < 40
+                  ? "bg-rose-50 text-rose-700"
+                  : siteScore < 70
+                    ? "bg-amber-50 text-amber-700"
+                    : "bg-emerald-50 text-emerald-700",
+              )}
+            >
+              Nota {siteScore}
+            </span>
+          ) : null}
           {issues[0]}
           {issues.length > 1 ? ` +${issues.length - 1}` : ""}
         </p>

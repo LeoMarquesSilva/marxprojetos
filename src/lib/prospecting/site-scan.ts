@@ -141,6 +141,34 @@ function firstProfile(
   return null;
 }
 
+// Página da hospedagem no lugar do site: conta suspensa (cPanel e afins) ou
+// a página padrão do servidor. Para quem visita, é o mesmo que fora do ar.
+const SUSPENDED =
+  /account (has been )?suspended|conta (foi )?suspensa|site suspenso|webmaster, por favor, entre em contato com o provedor/i;
+const DEFAULT_PAGE =
+  /^(index of \/|it works!?|welcome to nginx!?|apache2? (ubuntu |debian )?default page|default web site page|página padrão)/i;
+
+// "Página não encontrada" respondida como página normal (HTTP 200).
+const SOFT_404 = /^(404\b|p[áa]gina n[ãa]o encontrada|page not found|not found\b)/i;
+
+export function hostingPlaceholder(url: string, html: string): string | null {
+  if (/\/cgi-sys\/suspendedpage\.cgi/i.test(url)) return "Site suspenso pela hospedagem";
+  if (/\/cgi-sys\/defaultwebpage\.cgi/i.test(url)) return "Página padrão da hospedagem (sem site)";
+  const text = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (text.length < 3000 && SUSPENDED.test(text)) return "Site suspenso pela hospedagem";
+  const title = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() ?? "";
+  if (DEFAULT_PAGE.test(title) || DEFAULT_PAGE.test(text.slice(0, 80))) {
+    return "Página padrão da hospedagem (sem site)";
+  }
+  if (SOFT_404.test(title)) return "Site fora do ar (página não encontrada)";
+  return null;
+}
+
 /**
  * Lê o HTML já baixado. Separado do download para ser testável sem rede.
  */
@@ -185,6 +213,13 @@ export function extractSiteSignals(
     // página vazia quando não é um construtor conhecido.
     issues.push("Página quase sem conteúdo");
   }
+
+  // Texto provisório do modelo que ficou no ar ("Lorem ipsum", "Neste
+  // espaço podemos inserir o texto…"): argumento concreto e verificável.
+  const placeholder = visibleText.match(
+    /lorem ipsum dolor[^.]{0,40}|neste espa[çc]o (podemos|voc[êe] pode) inserir[^.]{0,60}|(insira|digite) (aqui )?(o )?seu texto[^.]{0,40}|seu texto aqui/i,
+  );
+  if (placeholder) issues.push(`Texto provisório no site: "${placeholder[0].trim().slice(0, 70)}"`);
 
   const copyright = visibleText.match(
     /(?:©|&copy;|copyright)\s*(?:\d{4}\s*[-–]\s*)?((?:19|20)\d{2})/i,
@@ -392,6 +427,9 @@ export async function scanWebsite(
         : `Site com erro (${page.status})`,
     );
   }
+
+  const placeholder = hostingPlaceholder(page.finalUrl, page.html);
+  if (placeholder) return offline(placeholder);
 
   let result = extractSiteSignals(page.html, {
     url: page.finalUrl,

@@ -13,7 +13,7 @@ import {
   updateProspectMessage,
 } from "@/app/actions/prospecting";
 import { buildWaMeUrl } from "@/lib/phone";
-import { renderProspectMessage } from "@/lib/prospecting/message";
+import { renderProspectMessage, templateFor } from "@/lib/prospecting/message";
 import { scoreProspect } from "@/lib/prospecting/score";
 import type { Prospect, ProspectingSettings } from "@/types/prospecting";
 
@@ -29,10 +29,7 @@ export function draftMessageFor(
   if (kind === "primeira" && prospect.custom_message?.trim()) {
     return prospect.custom_message.trim();
   }
-  return renderProspectMessage(
-    kind === "followup" ? settings.followupTemplate : settings.template,
-    prospect,
-  );
+  return renderProspectMessage(templateFor(settings, prospect, kind), prospect);
 }
 
 export function ProspectingMessageDialog({

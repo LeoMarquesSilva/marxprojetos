@@ -1,3 +1,5 @@
+import type { SiteAudit } from "@/lib/prospecting/site-audit";
+
 export type ProspectStatus = "novo" | "contatado" | "respondeu" | "descartado";
 
 export const PROSPECT_STATUS_LABELS: Record<ProspectStatus, string> = {
@@ -30,9 +32,16 @@ export const INSYT_STUDIO_URL = "https://www.insytstudio.com.br/";
 // Ponto de partida para quem ainda não salvou um modelo. Vale só isso: o
 // modelo salvo é usado como está, sem nada acrescentado. Para mandar o
 // portfólio, escreva {{portfolio}} onde ele deve aparecer.
-export const DEFAULT_PROSPECTING_TEMPLATE = `Olá! Tudo bem?
+//
+// Estrutura (o porquê de cada parte está em lib/prospecting/message.ts):
+// saudação pelo nome → a observação concreta sobre o lead ({{site}}) → o
+// que isso custa na área dele ({{momento}}) → quem somos + case parecido →
+// uma pergunta fácil, oferecendo algo ({{oferta}}).
+export const DEFAULT_PROSPECTING_TEMPLATE = `{{saudacao}}{{vocativo}}! {Tudo bem?|Tudo certo?}
 
-Me chamo Leonardo, da INSYT (criamos sites para negócios de {{cidade}}). {{site}} Posso te mostrar em 2 minutos como ficaria o site, sem compromisso?`;
+{{site}} {{momento}}
+
+{Sou o Leonardo|Aqui é o Leonardo}, da INSYT: fazemos sites para {{publico}}, como o de {{caso_nome}}. {{oferta}}`;
 
 export type Prospect = {
   id: string;
@@ -72,6 +81,11 @@ export type Prospect = {
   site_status: "ok" | "offline" | "social" | null;
   site_issues: string[] | null;
   site_checked_at: string | null;
+  /** Auditoria no navegador feita pelo robô; null = ainda não auditado. */
+  site_audit: SiteAudit | null;
+  /** Nota do site, 0–100 (100 = nada a melhorar). */
+  site_score: number | null;
+  site_audited_at: string | null;
   contacted_at: string | null;
   replied_at: string | null;
   followup_count: number | null;
@@ -82,11 +96,27 @@ export type Prospect = {
 
 export type ProspectingSettings = {
   template: string;
+  /** Primeira mensagem para quem já tem site: cita o {{diagnostico}}. */
+  siteTemplate: string;
   followupTemplate: string;
   dailyLimit: number;
 };
 
-export const DEFAULT_FOLLOWUP_TEMPLATE = `{Oi|Olá}, tudo bem? Passando só para saber se você chegou a ver minha mensagem sobre o site de {{nome}}. Se fizer sentido, te mostro rapidinho um exemplo do que fizemos para {{caso}}.`;
+// Para quem já tem site e a auditoria achou o que citar. {{site}} abre com
+// o problema mais forte (medido, com número); os outros ficam guardados —
+// são o motivo para ele responder ({{oferta}} oferece a lista).
+// {{diagnostico}} lista tudo de uma vez, para quem preferir.
+export const DEFAULT_SITE_TEMPLATE = `{{saudacao}}{{vocativo}}! {Tudo bem?|Tudo certo?}
+
+{{site}} {{momento}}
+
+{Sou o Leonardo|Aqui é o Leonardo}, da INSYT: fazemos sites para {{publico}}, como o de {{caso_nome}}. {{oferta}}`;
+
+// {{gancho}} muda sozinho: o primeiro follow-up traz um ponto novo; o
+// segundo (último) se despede e deixa a porta aberta.
+export const DEFAULT_FOLLOWUP_TEMPLATE = `{Oi|Olá}{{vocativo}}, {tudo bem?|como vai?}
+
+{{gancho}}`;
 
 /** Dias sem resposta para o lead aparecer em "Follow-up". */
 export const FOLLOWUP_AFTER_DAYS = 3;
