@@ -7,7 +7,9 @@ export type QuestionType =
   | "multiselect"
   | "file"
   | "links"
-  | "boolean";
+  | "boolean"
+  // Senha ou acesso: cifrado antes de gravar, visível só no painel.
+  | "secret";
 
 export type BriefingQuestion = {
   id: string;

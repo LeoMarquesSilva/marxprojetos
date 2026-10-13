@@ -2,7 +2,14 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, Loader2, Send } from "lucide-react";
+import {
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  Loader2,
+  Lock,
+  Send,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -206,6 +213,52 @@ export function PublicBriefingForm({ token, briefing }: Props) {
   );
 }
 
+function SecretField({
+  question,
+  value,
+  onChange,
+}: {
+  question: BriefingQuestion;
+  value: unknown;
+  onChange: (v: unknown) => void;
+}) {
+  const [visible, setVisible] = useState(false);
+  const id = question.id;
+
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>
+        {question.label}
+        {question.required ? " *" : ""}
+      </Label>
+      <div className="flex gap-2">
+        <Input
+          id={id}
+          type={visible ? "text" : "password"}
+          autoComplete="off"
+          spellCheck={false}
+          placeholder={question.placeholder}
+          value={String(value ?? "")}
+          onChange={(e) => onChange(e.target.value)}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={() => setVisible((v) => !v)}
+          aria-label={visible ? "Ocultar senha" : "Mostrar senha"}
+        >
+          {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+        </Button>
+      </div>
+      <p className="flex items-center gap-1.5 text-xs text-[var(--insyt-muted)]">
+        <Lock className="size-3" />
+        Guardado com criptografia. Só a equipe da INSYT consegue ver.
+      </p>
+    </div>
+  );
+}
+
 function QuestionField({
   question,
   value,
@@ -310,6 +363,12 @@ function QuestionField({
         />
         <Label htmlFor={id}>{question.label}</Label>
       </div>
+    );
+  }
+
+  if (question.type === "secret") {
+    return (
+      <SecretField question={question} value={value} onChange={onChange} />
     );
   }
 

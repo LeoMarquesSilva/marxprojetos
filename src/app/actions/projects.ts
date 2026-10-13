@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAuthenticatedUser } from "@/lib/supabase/require-authenticated-user";
 import { getBriefingQuestionsValidationError } from "@/lib/flow-utils";
+import { decryptSecret, isEncryptedSecret } from "@/lib/briefing-secrets";
 import type { BriefingQuestion, ProjectStatus } from "@/types/briefing";
 
 export async function getTemplates() {
@@ -199,4 +200,29 @@ export async function updateProjectQuestions(
   if (error) return { error: error.message };
   revalidatePath(`/projects/${id}`);
   return { success: true };
+}
+
+export async function revealBriefingSecret(
+  projectId: string,
+  questionId: string,
+) {
+  await requireAuthenticatedUser();
+
+  // A RLS limita a leitura aos projetos do workspace de quem está logado.
+  const { project, submission } = await getProject(projectId);
+  if (!project || !submission) return { error: "Resposta não encontrada." };
+
+  const question = (project.questions as BriefingQuestion[]).find(
+    (q) => q.id === questionId,
+  );
+  if (question?.type !== "secret") return { error: "Campo inválido." };
+
+  const value = (submission.answers as Record<string, unknown>)[questionId];
+  if (!isEncryptedSecret(value)) return { error: "Campo vazio." };
+
+  try {
+    return { value: decryptSecret(value) };
+  } catch {
+    return { error: "Não foi possível decifrar este acesso." };
+  }
 }

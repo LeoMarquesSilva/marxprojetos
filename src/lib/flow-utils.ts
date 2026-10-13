@@ -10,6 +10,7 @@ const BRIEFING_QUESTION_TYPES = new Set<QuestionType>([
   "file",
   "links",
   "boolean",
+  "secret",
 ]);
 
 export function isBriefingAnswerFilled(value: unknown): boolean {
@@ -47,7 +48,7 @@ export function getBriefingAnswerValidationError(
   }
 
   if (
-    ["text", "textarea", "email", "url", "file", "select"].includes(
+    ["text", "textarea", "email", "url", "file", "select", "secret"].includes(
       question.type,
     ) &&
     typeof value !== "string"

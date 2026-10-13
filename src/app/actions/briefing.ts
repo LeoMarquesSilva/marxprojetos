@@ -2,6 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { encryptSecret } from "@/lib/briefing-secrets";
+import type { BriefingQuestion } from "@/types/briefing";
 import {
   isValidEmailAddress,
   validateAndNormalizeBriefingAnswers,
@@ -68,9 +70,15 @@ export async function submitBriefing(input: {
     return { error: "Informe um e-mail válido em: Seus dados" };
   }
 
+  // A validação acima garante que as perguntas são um BriefingQuestion[].
+  const answers = encryptSecretAnswers(
+    briefing.questions as BriefingQuestion[],
+    validation.answers,
+  );
+
   const { data, error } = await supabase.rpc("submit_briefing", {
     p_token: input.token,
-    p_answers: validation.answers,
+    p_answers: answers,
     p_client_name:
       typeof input.clientName === "string" ? input.clientName : null,
     p_client_email: clientEmail || null,
@@ -83,4 +91,18 @@ export async function submitBriefing(input: {
     };
   }
   return { submissionId: data as string };
+}
+
+function encryptSecretAnswers(
+  questions: BriefingQuestion[],
+  answers: Record<string, unknown>,
+) {
+  const result = { ...answers };
+  for (const question of questions) {
+    const value = result[question.id];
+    if (question.type === "secret" && typeof value === "string" && value) {
+      result[question.id] = encryptSecret(value);
+    }
+  }
+  return result;
 }

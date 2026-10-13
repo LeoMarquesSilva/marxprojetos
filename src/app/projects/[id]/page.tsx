@@ -5,6 +5,7 @@ import { ptBR } from "date-fns/locale";
 import { ArrowLeft, ArrowUpRight, FileText, Globe } from "lucide-react";
 import { AdminShell } from "@/components/admin-shell";
 import { CopyLinkButton } from "@/components/copy-link-button";
+import { SecretAnswer } from "@/components/secret-answer";
 import { StatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -172,6 +173,7 @@ export default async function ProjectPage({
                       {sectionQuestions.map((q) => (
                         <AnswerRow
                           key={q.id}
+                          projectId={project.id}
                           question={q}
                           value={answers[q.id]}
                         />
@@ -204,18 +206,28 @@ function InfoRow({
 }
 
 function AnswerRow({
+  projectId,
   question,
   value,
 }: {
+  projectId: string;
   question: BriefingQuestion;
   value: unknown;
 }) {
   return (
     <div className="rounded-xl border border-[var(--insyt-border)] bg-[var(--insyt-canvas)] p-4">
       <p className="text-sm font-semibold text-[var(--insyt-black)]">{question.label}</p>
-      <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--insyt-slate)]">
-        {formatAnswer(value)}
-      </p>
+      {question.type === "secret" ? (
+        <SecretAnswer
+          projectId={projectId}
+          questionId={question.id}
+          filled={typeof value === "string" && value.length > 0}
+        />
+      ) : (
+        <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--insyt-slate)]">
+          {formatAnswer(value)}
+        </p>
+      )}
     </div>
   );
 }

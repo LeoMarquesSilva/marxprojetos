@@ -28,6 +28,7 @@ const guardedActions = {
     "createProject",
     "updateProjectStatus",
     "updateProjectQuestions",
+    "revealBriefingSecret",
   ],
   "src/app/actions/prospecting.ts": [
     "getProspects",
