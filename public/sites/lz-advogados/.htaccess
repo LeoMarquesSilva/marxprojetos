@@ -20,8 +20,8 @@ ErrorDocument 404 /404.html
   RewriteRule ^lucas-zenatti/?$ /equipe/lucas-zenatti/ [L,R=301]
   RewriteRule ^radames-sossomeier/?$ /equipe/radames-sossmeier/ [L,R=301]
   RewriteRule ^jeniffer-rech/?$ /equipe/jeniffer-rech/ [L,R=301]
-  RewriteRule ^thuany-cristini-cunha/?$ /equipe/thuany-cunha/ [L,R=301]
-  RewriteRule ^vinicius-galvao-dos-reis/?$ /equipe/vinicius-galvao-dos-reis/ [L,R=301]
+  RewriteRule ^thuany-cristini-cunha/?$ /equipe/thuany-cristini/ [L,R=301]
+  RewriteRule ^vinicius-galvao-dos-reis/?$ /equipe/vinicius-reis/ [L,R=301]
   RewriteRule ^sofia-suffiatti/?$ /equipe/sofia-suffiatti/ [L,R=301]
   RewriteRule ^parcerias-estrategicas-e-sociedade-em-conta-de-participacao-scp-o-caminho-juridico-para-crescer-em-tempos-de-incerteza/?$ /blog/parcerias-estrategicas-e-sociedade-em-conta-de-participacao-scp/ [L,R=301]
   RewriteRule ^gestao-de-pessoas-na-nova-economia-o-que-esta-travando-o-crescimento-da-sua-empresa/?$ /blog/gestao-de-pessoas-na-nova-economia/ [L,R=301]
@@ -30,6 +30,11 @@ ErrorDocument 404 /404.html
   RewriteRule ^(wp-sitemap|sitemap_index)\.xml$ /sitemap-index.xml [L,R=301]
   RewriteRule ^category/ /blog/ [L,R=301]
   RewriteRule ^author/ /equipe/ [L,R=301]
+  # Perfis renomeados ou removidos no site novo
+  RewriteRule ^equipe/alexia-gluck-thomaz-franzini/?$ /equipe/alexia-gluck/ [L,R=301]
+  RewriteRule ^equipe/thuany-cunha/?$ /equipe/thuany-cristini/ [L,R=301]
+  RewriteRule ^equipe/vinicius-galvao-dos-reis/?$ /equipe/vinicius-reis/ [L,R=301]
+  RewriteRule ^equipe/franciane-hasse/?$ /equipe/ [L,R=301]
 
   # 3) Barra final nas páginas (evita conteúdo duplicado /pagina e /pagina/)
   RewriteCond %{REQUEST_FILENAME} !-f
