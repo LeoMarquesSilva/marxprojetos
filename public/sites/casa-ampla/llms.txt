@@ -14,7 +14,7 @@ Casa AMPLA (Atenção MultiProfissional pela Longevidade Ativa) é uma casa de c
 
 ## Páginas principais
 
-- [A Casa — história e estrutura](https://casaampla.com.br/a-casa)
+- [A Casa: história e estrutura](https://casaampla.com.br/a-casa)
 - [Equipes de cuidado](https://casaampla.com.br/equipes)
 - [Profissionais](https://casaampla.com.br/profissionais)
 - [Oficinas e terapias](https://casaampla.com.br/oficinas-e-terapias)
@@ -22,11 +22,11 @@ Casa AMPLA (Atenção MultiProfissional pela Longevidade Ativa) é uma casa de c
 
 ## Equipes de cuidado
 
-- [Mente Ativa](https://casaampla.com.br/equipes/mente-ativa): Cuidado integrado para a saúde da mente. 12 profissionais.
+- [Mente Ativa](https://casaampla.com.br/equipes/mente-ativa): Cuidado integrado para a saúde da mente. 11 profissionais.
 - [Vitalidade em Foco](https://casaampla.com.br/equipes/vitalidade-em-foco): Envelhecer com saúde e qualidade de vida. 9 profissionais.
-- [Saúde da Mulher](https://casaampla.com.br/equipes/saude-da-mulher): Cuidado atento às fases e transformações do envelhecimento feminino. 9 profissionais.
+- [Saúde da Mulher](https://casaampla.com.br/equipes/saude-da-mulher): Cuidado atento às fases e transformações do envelhecimento feminino. 10 profissionais.
 - [Plenos Pulmões](https://casaampla.com.br/equipes/plenos-pulmoes): Respirar bem é viver com mais saúde e energia. 4 profissionais.
-- [Dor Não é Normal](https://casaampla.com.br/equipes/dor-nao-e-normal): Alívio da dor com abordagem completa e individualizada. 8 profissionais.
+- [Dor Não é Normal](https://casaampla.com.br/equipes/dor-nao-e-normal): Alívio da dor com abordagem completa e individualizada. 9 profissionais.
 
 ## Profissionais
 
@@ -50,7 +50,6 @@ Casa AMPLA (Atenção MultiProfissional pela Longevidade Ativa) é uma casa de c
 - [Paula Perin Glatt](https://casaampla.com.br/profissionais/paula-perin-glatt): Anestesiologista e especialista em Tratamento da Dor (CRM 147060)
 - [Pedro Couri](https://casaampla.com.br/profissionais/pedro-couri): Ortopedista e Traumatologista
 - [Pedro Maximink Esteves Villar](https://casaampla.com.br/profissionais/pedro-maximink-esteves-villar): Pneumologista (CRM 183.732 · SP · RQE 94.711)
-- [Vanessa Campoy](https://casaampla.com.br/profissionais/vanessa-campoy): Neurotorrinolaringologista (CRM 162.728)
 - [Vitor Godinho](https://casaampla.com.br/profissionais/vitor-godinho): Nefrologista (CRM 144.822 · RQE 92.389)
 
 ### Mente e comportamento

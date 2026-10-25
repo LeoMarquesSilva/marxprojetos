@@ -12,6 +12,7 @@ RewriteRule ^ https://casaampla.com.br%{REQUEST_URI} [R=301,L]
 
 # Site antigo
 RewriteRule ^quem-somos/nossa-historia/?$ /a-casa [R=301,L,NE]
+RewriteRule ^profissional/40/vanessa-campoy/?$ /profissionais [R=301,L,NE]
 RewriteRule ^equipe/17/mente-ativa/?$ /equipes/mente-ativa [R=301,L,NE]
 RewriteRule ^equipe/18/vitalidade-em-foco/?$ /equipes/vitalidade-em-foco [R=301,L,NE]
 RewriteRule ^equipe/21/saude-da-mulher/?$ /equipes/saude-da-mulher [R=301,L,NE]
@@ -40,7 +41,6 @@ RewriteRule ^profissional/21/bruno-deltreggia-benites/?$ /profissionais/bruno-de
 RewriteRule ^profissional/44/livia-conz/?$ /profissionais/livia-conz [R=301,L,NE]
 RewriteRule ^profissional/59/andre-santana-alcantara/?$ /profissionais/andre-santana-alcantara [R=301,L,NE]
 RewriteRule ^profissional/36/vitor-godinho/?$ /profissionais/vitor-godinho [R=301,L,NE]
-RewriteRule ^profissional/40/vanessa-campoy/?$ /profissionais/vanessa-campoy [R=301,L,NE]
 RewriteRule ^profissional/18/italo-karmann-aventurato/?$ /profissionais/italo-karmann-aventurato [R=301,L,NE]
 RewriteRule ^profissional/56/ksdy-maiara-m-sousa/?$ /profissionais/ksdy-maiara-m-sousa [R=301,L,NE]
 RewriteRule ^profissional/27/juliana-ferrer/?$ /profissionais/juliana-ferrer [R=301,L,NE]
