@@ -24,7 +24,7 @@ Casa AMPLA (Atenção MultiProfissional pela Longevidade Ativa) é uma casa de c
 
 - [Mente Ativa](https://casaampla.com.br/equipes/mente-ativa): Cuidado integrado para a saúde da mente. 11 profissionais.
 - [Vitalidade em Foco](https://casaampla.com.br/equipes/vitalidade-em-foco): Envelhecer com saúde e qualidade de vida. 9 profissionais.
-- [Saúde da Mulher](https://casaampla.com.br/equipes/saude-da-mulher): Cuidado atento às fases e transformações do envelhecimento feminino. 10 profissionais.
+- [Saúde da Mulher](https://casaampla.com.br/equipes/saude-da-mulher): Cuidado atento às fases e transformações do envelhecimento feminino. 11 profissionais.
 - [Plenos Pulmões](https://casaampla.com.br/equipes/plenos-pulmoes): Respirar bem é viver com mais saúde e energia. 4 profissionais.
 - [Dor Não é Normal](https://casaampla.com.br/equipes/dor-nao-e-normal): Alívio da dor com abordagem completa e individualizada. 9 profissionais.
 
@@ -35,6 +35,7 @@ Casa AMPLA (Atenção MultiProfissional pela Longevidade Ativa) é uma casa de c
 - [Daniela Gracioli de Almeida Bacha](https://casaampla.com.br/profissionais/daniela-gracioli-de-almeida-bacha): Geriatra (CRM 144.634 · RQE 81.415)
 - [Ana Paula Chibeni Fernandez](https://casaampla.com.br/profissionais/ana-paula-chibeni-fernandez): Anestesiologista e especialista em Tratamento da Dor (CRM 155940)
 - [André Santana Alcântara](https://casaampla.com.br/profissionais/andre-santana-alcantara): Nefrologista (CRM 134757 · RQE 71987)
+- [Andressa Aparecida Luciano Batista](https://casaampla.com.br/profissionais/andressa-aparecida-luciano-batista): Ginecologista e Obstetra (CRM 218778/SP · RQE 156502)
 - [Bruno Deltreggia Benites](https://casaampla.com.br/profissionais/bruno-deltreggia-benites): Hematologista e especialista em práticas integrativas (CRM-SP 129482)
 - [Carollyne Rodovalho Guerra Carneiro](https://casaampla.com.br/profissionais/carollyne-rodovalho-guerra-carneiro): Gastrocirurgiã (CRM 230459/SP · RQE 124194)
 - [Claudia Brogioni](https://casaampla.com.br/profissionais/claudia-brogioni): Ultrassonografista (CRM 104079 · RQE 105752)
