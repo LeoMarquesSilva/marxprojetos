@@ -44,6 +44,11 @@ export type FinanceProjectOption = {
   received: number;
   /** Recebido antes de Finanças: abate o que falta, não entra no caixa. */
   receivedBefore: number;
+  /**
+   * Projeto em sociedade: "fechado" e "recebido" são a minha parte, e o
+   * lançamento sugerido se chama assim (ex.: "repasse do Samuel").
+   */
+  receiveLabel?: string;
 };
 
 /** Saldo conferido no banco numa data: a base da projeção de caixa. */

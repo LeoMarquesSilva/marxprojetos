@@ -17,7 +17,7 @@
     "test:pure": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/test-pure-utils.mjs",
     "test:crm": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --import ./scripts/ts-alias/register.mjs --test tests/crm-consistency.test.mjs",
     "test:billing": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/subscription-billing.test.mjs",
-    "test:finance": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/finance.test.mjs",
+    "test:finance": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --import ./scripts/ts-alias/register.mjs --test tests/finance.test.mjs tests/project-partnership.test.mjs",
     "test:marketing": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/marketing.test.mjs",
     "test:prospecting": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --import ./scripts/ts-alias/register.mjs --test tests/prospecting.test.mjs",
     "portfolio:covers": "node scripts/capture-portfolio-covers.mjs pereira-garcia-site pereira-garcia",

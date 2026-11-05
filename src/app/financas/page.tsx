@@ -22,6 +22,7 @@ import {
 } from "@/components/finance-recurring-sheet";
 import { FinanceProjection } from "@/components/finance-projection";
 import { FinanceProjectValueDialog } from "@/components/finance-project-value";
+import { FinancePartnershipCard, type PartnershipView } from "@/components/finance-partnership";
 import {
   getFinanceEntries,
   getFinanceProjects,
@@ -53,6 +54,13 @@ import {
   todayInBrasilia,
   toAmount,
 } from "@/lib/subscription-billing";
+import {
+  monthsBetween,
+  parsePartnership,
+  partnershipForecast,
+  partnershipSchedule,
+  partnershipSettlement,
+} from "@/lib/project-partnership";
 import { formatMonthLabel, formatShortDate } from "@/lib/subscription-format";
 import { requireAuthenticatedUser } from "@/lib/supabase/require-authenticated-user";
 import { cn } from "@/lib/utils";
@@ -82,15 +90,57 @@ export default async function FinancasPage({
       getFinanceProjects(),
     ]);
 
-  const balances = projectBalances(projects, entries);
+  // Projeto em sociedade: o cliente paga a outro sócio, então o valor cheio
+  // não é "a receber" meu. Sai da lista de projetos e ganha painel próprio.
+  const partnerships = projects.flatMap((project) => {
+    const plan = parsePartnership(project.partnership);
+    return plan ? [{ project, plan }] : [];
+  });
+  const partnershipIds = new Set(partnerships.map(({ project }) => project.id));
+  const ownProjects = projects.filter((project) => !partnershipIds.has(project.id));
+  const entriesOf = (projectId: string) =>
+    entries.filter((entry) => entry.project_id === projectId);
+
+  const balances = projectBalances(ownProjects, entries);
   const receivedByProject = new Map(balances.map((item) => [item.id, item.received]));
-  const projectOptions: FinanceProjectOption[] = projects.map((project) => ({
+  const ownOptions: FinanceProjectOption[] = ownProjects.map((project) => ({
     id: project.id,
     title: project.title,
     contractAmount: project.contract_amount === null ? null : toAmount(project.contract_amount),
     received: receivedByProject.get(project.id) ?? 0,
     receivedBefore: toAmount(project.received_before),
   }));
+  const partnershipViews: PartnershipView[] = partnerships.map(({ project, plan }) => {
+    const settlement = partnershipSettlement(plan, entriesOf(project.id), today);
+    const elapsed = monthsBetween(plan.installments.firstMonth, currentMonth);
+    // Até a primeira renovação de custo anual (a Apple), para o mês negativo
+    // aparecer na tabela.
+    const firstRenewal = Math.max(
+      0,
+      ...plan.costs
+        .filter((cost) => cost.every === "ano")
+        .map((cost) => monthsBetween(plan.installments.firstMonth, cost.firstMonth) + 13),
+    );
+    return {
+      id: project.id,
+      title: project.title,
+      contractAmount: project.contract_amount === null ? null : toAmount(project.contract_amount),
+      plan,
+      settlement,
+      // Primeiro ano inteiro e a renovação, andando junto com o mês atual
+      // depois disso.
+      rows: partnershipSchedule(plan, Math.max(12, firstRenewal, elapsed + 3)),
+      option: {
+        id: project.id,
+        title: project.title,
+        contractAmount: settlement.myEarned,
+        received: settlement.myReceived,
+        receivedBefore: 0,
+        receiveLabel: `repasse do ${plan.collector}`,
+      },
+    };
+  });
+  const projectOptions = [...ownOptions, ...partnershipViews.map((view) => view.option)];
   const projectTitle = new Map(projects.map((project) => [project.id, project.title]));
   const projectReceivable = round(
     balances.reduce((sum, item) => sum + (item.remaining ?? 0), 0),
@@ -121,8 +171,25 @@ export default async function FinancasPage({
     })),
   );
 
-  const charges = forecastCharges(subscriptions, payments, today, FORECAST_HORIZON);
-  const bills = forecastBills(recurringExpenses, entries, today, FORECAST_HORIZON);
+  // A minha parte de cada mês da sociedade entra na previsão como repasse a
+  // receber (ou, no mês em que o lucro fica negativo, como conta).
+  const partnershipForecasts = partnershipViews.map((view) =>
+    partnershipForecast(
+      { id: view.id, title: view.title, plan: view.plan },
+      entriesOf(view.id),
+      today,
+      FORECAST_HORIZON,
+    ),
+  );
+  const byDueDate = (a: { dueOn: string }, b: { dueOn: string }) => a.dueOn.localeCompare(b.dueOn);
+  const charges = [
+    ...forecastCharges(subscriptions, payments, today, FORECAST_HORIZON),
+    ...partnershipForecasts.flatMap((forecast) => forecast.charges),
+  ].sort(byDueDate);
+  const bills = [
+    ...forecastBills(recurringExpenses, entries, today, FORECAST_HORIZON),
+    ...partnershipForecasts.flatMap((forecast) => forecast.bills),
+  ].sort(byDueDate);
 
   // Repasses ligados a cada recorrência, para mostrar o líquido de cada uma.
   const activeExpenses = recurringExpenses.filter((expense) =>
@@ -180,6 +247,10 @@ export default async function FinancasPage({
 
   const overdueCharges = charges.filter((charge) => charge.timing === "atrasado");
   const overdueBills = bills.filter((bill) => bill.timing === "atrasado");
+  // O aviso fala de recorrência e gasto fixo; repasse de sociedade em aberto
+  // aparece no painel do próprio projeto.
+  const lateCharges = overdueCharges.filter((charge) => !charge.projectId);
+  const lateBills = overdueBills.filter((bill) => !bill.projectId);
   // A projeção olha 12 meses; a lista "Pela frente" fica nos próximos meses.
   const aheadLimit = addMonths(currentMonth, AHEAD_MONTHS);
   const isAhead = (item: { timing: string; month: string }) =>
@@ -212,30 +283,30 @@ export default async function FinancasPage({
           actions={<FinanceEntrySheet projects={projectOptions} />}
         />
 
-        {overdueCharges.length > 0 || overdueBills.length > 0 ? (
+        {lateCharges.length > 0 || lateBills.length > 0 ? (
           <div className="insyt-card space-y-2 border border-red-100 bg-red-50 px-5 py-4 text-red-800">
-            {overdueCharges.length > 0 ? (
+            {lateCharges.length > 0 ? (
               <Link href="/recorrencia" className="flex items-start gap-3 hover:underline">
                 <AlertTriangle className="mt-0.5 size-4 shrink-0" />
                 <p className="text-sm">
                   <span className="font-semibold">
-                    {formatBrl(sumCharges(overdueCharges))} a receber em atraso
+                    {formatBrl(sumCharges(lateCharges))} a receber em atraso
                   </span>
                   {" · "}
-                  {namesPreview(overdueCharges.map((charge) => charge.clientName))}. A
+                  {namesPreview(lateCharges.map((charge) => charge.clientName))}. A
                   cobrança continua na recorrência.
                 </p>
               </Link>
             ) : null}
-            {overdueBills.length > 0 ? (
+            {lateBills.length > 0 ? (
               <p className="flex items-start gap-3 text-sm">
                 <AlertTriangle className="mt-0.5 size-4 shrink-0" />
                 <span>
                   <span className="font-semibold">
-                    {formatBrl(sumCharges(overdueBills))} de gasto fixo vencido
+                    {formatBrl(sumCharges(lateBills))} de gasto fixo vencido
                   </span>
                   {" · "}
-                  {namesPreview(overdueBills.map((bill) => bill.description))}. Marque como
+                  {namesPreview(lateBills.map((bill) => bill.description))}. Marque como
                   pago no mês em que venceu.
                 </span>
               </p>
@@ -399,7 +470,9 @@ export default async function FinancasPage({
         <div className="grid gap-4 lg:grid-cols-2">
           <Panel
             title="A receber"
-            subtitle={`recorrência ${isPast ? "em aberto" : "do mês"} · ${monthTitle.toLowerCase()}`}
+            subtitle={`recorrência${partnershipViews.length > 0 ? " e repasses" : ""} ${
+              isPast ? "em aberto" : "do mês"
+            } · ${monthTitle.toLowerCase()}`}
             total={toReceive}
             empty="Nenhuma mensalidade em aberto neste mês."
           >
@@ -439,7 +512,7 @@ export default async function FinancasPage({
                   : "valor fechado de cada site e quanto já entrou"}
               </p>
             </div>
-            <FinanceProjectValueDialog projects={projectOptions} />
+            <FinanceProjectValueDialog projects={ownOptions} />
           </header>
           {balances.length === 0 ? (
             <p className="px-6 py-8 text-sm text-[var(--insyt-muted)]">
@@ -507,7 +580,7 @@ export default async function FinancasPage({
                         <FinanceEntrySheet projects={projectOptions} receiveProject={option} />
                       ) : null}
                       {option ? (
-                        <FinanceProjectValueDialog projects={projectOptions} project={option} />
+                        <FinanceProjectValueDialog projects={ownOptions} project={option} />
                       ) : null}
                     </span>
                   </li>
@@ -516,6 +589,15 @@ export default async function FinancasPage({
             </ul>
           )}
         </section>
+
+        {partnershipViews.map((view) => (
+          <FinancePartnershipCard
+            key={view.id}
+            view={view}
+            projects={projectOptions}
+            today={today}
+          />
+        ))}
 
         <div className="grid gap-4 lg:grid-cols-3">
           <section className="insyt-card overflow-hidden lg:col-span-2">
@@ -818,7 +900,7 @@ function ChargeRow({ charge, share }: { charge: ForecastCharge; share: number })
           {charge.clientName}
         </p>
         <p className="truncate text-xs text-[var(--insyt-muted)]">
-          vence {formatShortDate(charge.dueOn)}
+          {charge.note ?? `vence ${formatShortDate(charge.dueOn)}`}
           {late ? <span className="text-red-700"> · atrasado</span> : ""}
           {share > 0 ? ` · líquido ${formatBrl(round(charge.amount - share))} após repasse` : ""}
         </p>
@@ -832,7 +914,7 @@ function ChargeRow({ charge, share }: { charge: ForecastCharge; share: number })
         {formatBrl(charge.amount)}
       </p>
       <Link
-        href="/recorrencia"
+        href={charge.projectId ? `#sociedade-${charge.projectId}` : "/recorrencia"}
         className="shrink-0 text-xs font-semibold text-[var(--insyt-primary)] hover:underline"
       >
         Abrir
@@ -862,7 +944,16 @@ function BillRow({ bill }: { bill: ForecastBill }) {
       >
         −{formatBrl(bill.amount)}
       </p>
-      <FinanceBillPay expenseId={bill.expenseId} month={bill.month} />
+      {bill.projectId ? (
+        <Link
+          href={`#sociedade-${bill.projectId}`}
+          className="shrink-0 text-xs font-semibold text-[var(--insyt-primary)] hover:underline"
+        >
+          Abrir
+        </Link>
+      ) : (
+        <FinanceBillPay expenseId={bill.expenseId} month={bill.month} />
+      )}
     </li>
   );
 }

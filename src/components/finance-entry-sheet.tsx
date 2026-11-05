@@ -116,7 +116,10 @@ export function FinanceEntrySheet({
       setCategory("Projeto");
       setProjectId(receiveProject.id);
       setDescription(
-        `${receiveProject.title} — ${receiveProject.received > 0 ? "restante" : "parcela"}`,
+        `${receiveProject.title} — ${
+          receiveProject.receiveLabel ??
+          (receiveProject.received > 0 ? "restante" : "parcela")
+        }`,
       );
       setNotes("");
     } else {
@@ -199,7 +202,7 @@ export function FinanceEntrySheet({
       ) : receiveProject ? (
         <Button type="button" variant="outline" size="sm" onClick={openSheet}>
           <ArrowDownLeft className="size-3.5" />
-          Receber
+          {receiveProject.receiveLabel ? "Registrar repasse" : "Receber"}
         </Button>
       ) : (
         <Button

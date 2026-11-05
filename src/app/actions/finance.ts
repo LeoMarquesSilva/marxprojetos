@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAuthenticatedUser } from "@/lib/supabase/require-authenticated-user";
-import { monthStartOf } from "@/lib/subscription-billing";
+import { parsePartnership, withClientPayment } from "@/lib/project-partnership";
+import { addMonths, monthStartOf } from "@/lib/subscription-billing";
 import {
   FINANCE_EXPENSE_CATEGORIES,
   FINANCE_INCOME_CATEGORIES,
@@ -136,17 +137,87 @@ export type FinanceProjectRow = {
   title: string;
   contract_amount: number | string | null;
   received_before: number | string;
+  /** Plano do projeto em sociedade (jsonb); null nos projetos só meus. */
+  partnership: unknown;
 };
 
 export async function getFinanceProjects(): Promise<FinanceProjectRow[]> {
   const { supabase } = await requireAuthenticatedUser();
   const { data, error } = await supabase
     .from("projects")
-    .select("id, title, contract_amount, received_before")
+    .select("id, title, contract_amount, received_before, partnership")
     .order("created_at", { ascending: false });
 
   if (error) throw new Error(error.message);
   return (data ?? []) as FinanceProjectRow[];
+}
+
+const MONTH_START_PATTERN = /^\d{4}-\d{2}-01$/;
+
+/** Lê o plano cru do banco: as alterações preservam campos que o app não usa. */
+async function loadPartnership(
+  supabase: Awaited<ReturnType<typeof requireAuthenticatedUser>>["supabase"],
+  projectId: string,
+) {
+  const { data, error } = await supabase
+    .from("projects")
+    .select("partnership")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (error) return { error: error.message };
+  const raw = data?.partnership as Record<string, unknown> | null | undefined;
+  const plan = parsePartnership(raw);
+  if (!raw || !plan) return { error: "Este projeto não é uma sociedade." };
+  return { raw, plan };
+}
+
+async function savePartnership(
+  supabase: Awaited<ReturnType<typeof requireAuthenticatedUser>>["supabase"],
+  projectId: string,
+  partnership: Record<string, unknown>,
+) {
+  const { error } = await supabase.from("projects").update({ partnership }).eq("id", projectId);
+  if (error) return { error: error.message };
+  revalidatePath("/financas");
+  revalidatePath("/crm");
+  return { success: true };
+}
+
+/**
+ * Projeto em sociedade: marca o mês como pago pelo cliente a quem recebe
+ * (`paidOn` null desmarca). A minha parte desse mês passa a ser cobrável.
+ */
+export async function setPartnershipPayment(
+  projectId: string,
+  month: string,
+  paidOn: string | null,
+) {
+  const { supabase } = await requireAuthenticatedUser();
+  if (!MONTH_START_PATTERN.test(month)) return { error: "Mês inválido." };
+  if (paidOn !== null && !DATE_PATTERN.test(paidOn)) return { error: "Informe a data." };
+
+  const loaded = await loadPartnership(supabase, projectId);
+  if ("error" in loaded) return { error: loaded.error };
+
+  const { payments } = withClientPayment(loaded.plan, month, paidOn);
+  return savePartnership(supabase, projectId, { ...loaded.raw, payments });
+}
+
+/** Mês do lançamento; a mensalidade começa no mês seguinte (30 dias depois). */
+export async function setPartnershipLaunch(projectId: string, launchMonth: string) {
+  const { supabase } = await requireAuthenticatedUser();
+  if (!MONTH_START_PATTERN.test(launchMonth)) return { error: "Informe o mês do lançamento." };
+
+  const loaded = await loadPartnership(supabase, projectId);
+  if ("error" in loaded) return { error: loaded.error };
+  if (launchMonth < loaded.plan.installments.firstMonth) {
+    return { error: "O lançamento não pode ser antes da assinatura." };
+  }
+
+  const monthly = loaded.plan.monthly
+    ? { ...(loaded.raw.monthly as Record<string, unknown>), firstMonth: addMonths(launchMonth, 1) }
+    : loaded.raw.monthly ?? null;
+  return savePartnership(supabase, projectId, { ...loaded.raw, launchMonth, monthly });
 }
 
 /**

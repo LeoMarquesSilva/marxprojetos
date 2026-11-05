@@ -272,6 +272,10 @@ export type ForecastTiming = "atrasado" | "a_vencer" | "futuro";
 export type ForecastCharge = {
   id: string;
   subscriptionId: string;
+  /** Repasse de projeto em sociedade (sem assinatura). */
+  projectId?: string;
+  /** Linha de baixo no lugar de "vence dd/mm" (ex.: o cliente já pagou). */
+  note?: string;
   clientName: string;
   amount: number;
   dueOn: string;
@@ -430,6 +434,8 @@ export type RecurringExpenseRule = {
 export type ForecastBill = {
   id: string;
   expenseId: string;
+  /** Parte dos custos de projeto em sociedade (sem gasto fixo). */
+  projectId?: string;
   description: string;
   category: string;
   amount: number;
