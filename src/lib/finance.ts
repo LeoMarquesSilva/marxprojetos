@@ -8,6 +8,7 @@ export {
   isRecurringExpenseActive,
   linesInMonth,
   monthTotals,
+  openItemsForMonth,
   projectBalances,
   projectCash,
   sumCharges,

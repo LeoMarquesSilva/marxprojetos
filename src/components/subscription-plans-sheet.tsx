@@ -10,15 +10,15 @@ import {
   updateSubscriptionPlan,
 } from "@/app/actions/subscriptions";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { formatBrl, parseBrlAmount, toAmount } from "@/lib/subscription-billing";
 import { cn } from "@/lib/utils";
@@ -250,37 +250,34 @@ export function SubscriptionPlansSheet({
 
   return (
     <>
-      <Button
-        type="button"
-        variant="ghost"
-        onClick={() => setOpen(true)}
-        className="text-white/80 hover:bg-white/10 hover:text-white"
-      >
-        <Layers className="size-4" />
+      <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(true)}>
+        <Layers className="size-3.5" />
         Planos
       </Button>
 
-      <Sheet
+      <Dialog
         open={open}
         onOpenChange={(next) => {
           setOpen(next);
           if (!next) setDraft(null);
         }}
       >
-        <SheetContent className="w-full overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-lg">
-          <SheetHeader className="border-b border-[var(--insyt-border)] px-6 py-6">
-            <SheetTitle className="text-2xl font-bold">Planos</SheetTitle>
-            <SheetDescription>
+        <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden rounded-3xl bg-white p-0 sm:max-w-lg">
+          <DialogHeader className="border-b border-[var(--insyt-border)] px-6 py-5 pr-12">
+            <DialogTitle className="text-2xl font-bold text-[var(--insyt-black)]">
+              Planos
+            </DialogTitle>
+            <DialogDescription>
               O catálogo que aparece ao criar uma assinatura. Mudar o preço aqui
               não altera o valor de quem já assina.
-            </SheetDescription>
-          </SheetHeader>
-          <div className="space-y-8 px-6 py-6">
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 space-y-8 overflow-y-auto px-6 py-6">
             {renderGroup("Planos", "plano", basePlans)}
             {renderGroup("Adicionais", "adicional", addons)}
           </div>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

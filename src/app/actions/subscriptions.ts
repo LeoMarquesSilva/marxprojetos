@@ -151,6 +151,23 @@ export async function getSubscriptionFormData(): Promise<SubscriptionFormData> {
   };
 }
 
+// Quem paga mensalidade já é cliente: o card vai para "Fechado" sozinho, em
+// vez de ficar em "Enviado" esperando alguém lembrar de arrastar. Falhar aqui
+// não desfaz a assinatura — ela já está salva e é o que importa para a cobrança.
+async function closeCrmClientWithSubscription(
+  supabase: SupabaseClient,
+  crmClientId: string | null,
+) {
+  if (!crmClientId) return;
+  await supabase
+    .from("crm_clients")
+    .update({ stage: "fechado", updated_at: new Date().toISOString() })
+    .eq("id", crmClientId)
+    .neq("stage", "fechado");
+  revalidatePath("/crm");
+  revalidatePath(`/crm/${crmClientId}`);
+}
+
 export async function createSubscription(input: SubscriptionInput) {
   const { supabase, user } = await requireAuthenticatedUser();
   const built = await buildSubscriptionFields(supabase, input);
@@ -162,7 +179,8 @@ export async function createSubscription(input: SubscriptionInput) {
 
   if (error) return { error: error.message };
 
-  revalidatePath("/recorrencia");
+  await closeCrmClientWithSubscription(supabase, built.fields.crm_client_id);
+  revalidatePath("/financas", "layout");
   return { success: true };
 }
 
@@ -171,14 +189,20 @@ export async function updateSubscription(id: string, input: SubscriptionInput) {
   const built = await buildSubscriptionFields(supabase, input);
   if ("error" in built) return { error: built.error };
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("subscriptions")
     .update({ ...built.fields, updated_at: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .select("status")
+    .maybeSingle();
 
   if (error) return { error: error.message };
 
-  revalidatePath("/recorrencia");
+  if (data?.status === "ativa") {
+    await closeCrmClientWithSubscription(supabase, built.fields.crm_client_id);
+  }
+  revalidatePath("/financas", "layout");
+  revalidatePath("/crm");
   return { success: true };
 }
 
@@ -228,7 +252,7 @@ export async function createSubscriptionPlan(input: SubscriptionPlanInput) {
 
   if (error) return { error: error.message };
 
-  revalidatePath("/recorrencia");
+  revalidatePath("/financas", "layout");
   return { success: true };
 }
 
@@ -244,7 +268,7 @@ export async function updateSubscriptionPlan(id: string, input: SubscriptionPlan
 
   if (error) return { error: error.message };
 
-  revalidatePath("/recorrencia");
+  revalidatePath("/financas", "layout");
   return { success: true };
 }
 
@@ -259,7 +283,7 @@ export async function setSubscriptionPlanActive(id: string, active: boolean) {
 
   if (error) return { error: error.message };
 
-  revalidatePath("/recorrencia");
+  revalidatePath("/financas", "layout");
   return { success: true };
 }
 
@@ -286,7 +310,7 @@ export async function setSubscriptionStatus(
 
   if (error) return { error: error.message };
 
-  revalidatePath("/recorrencia");
+  revalidatePath("/financas", "layout");
   return { success: true };
 }
 
@@ -295,7 +319,7 @@ export async function deleteSubscription(id: string) {
   const { error } = await supabase.from("subscriptions").delete().eq("id", id);
   if (error) return { error: error.message };
 
-  revalidatePath("/recorrencia");
+  revalidatePath("/financas", "layout");
   return { success: true };
 }
 
@@ -317,22 +341,25 @@ export async function registerSubscriptionPayment(input: {
     return { error: "Informe um valor válido." };
   }
 
-  const { error } = await supabase.from("subscription_payments").insert({
-    subscription_id: input.subscriptionId,
-    reference_month: monthStartOf(input.referenceMonth),
-    amount: input.amount,
-    paid_on: input.paidOn,
-    method: input.method.trim() || null,
-  });
+  const { data, error } = await supabase
+    .from("subscription_payments")
+    .insert({
+      subscription_id: input.subscriptionId,
+      reference_month: monthStartOf(input.referenceMonth),
+      amount: input.amount,
+      paid_on: input.paidOn,
+      method: input.method.trim() || null,
+    })
+    .select("id")
+    .single();
 
   if (error) {
     if (error.code === "23505") return { error: "Esse mês já está pago." };
     return { error: error.message };
   }
 
-  revalidatePath("/recorrencia");
-  revalidatePath("/financas");
-  return { success: true };
+  revalidatePath("/financas", "layout");
+  return { success: true, id: data.id as string };
 }
 
 export async function deleteSubscriptionPayment(id: string) {
@@ -344,7 +371,6 @@ export async function deleteSubscriptionPayment(id: string) {
 
   if (error) return { error: error.message };
 
-  revalidatePath("/recorrencia");
-  revalidatePath("/financas");
+  revalidatePath("/financas", "layout");
   return { success: true };
 }

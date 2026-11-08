@@ -7,6 +7,11 @@ export function formatMonthLabel(month: string) {
   return format(parseISO(month), "MMMM 'de' yyyy", { locale: ptBR });
 }
 
+/** "out", sem ponto: cabe em botão e em rótulo curto. */
+export function formatShortMonth(month: string) {
+  return format(parseISO(month), "MMM", { locale: ptBR }).replace(".", "");
+}
+
 export function formatShortDate(date: string) {
   return format(parseISO(date), "dd/MM/yyyy");
 }

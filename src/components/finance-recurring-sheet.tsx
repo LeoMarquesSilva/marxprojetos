@@ -2,12 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, Pencil, Repeat, Square } from "lucide-react";
+import { Loader2, Pencil, Repeat } from "lucide-react";
 import { toast } from "sonner";
 import {
   createRecurringExpense,
   endRecurringExpense,
-  payRecurringExpense,
   updateRecurringExpense,
 } from "@/app/actions/finance";
 import {
@@ -111,7 +110,8 @@ export function FinanceRecurringSheet({
           type="button"
           variant="ghost"
           size="icon-sm"
-          title="Editar gasto fixo"
+          title="Editar ou encerrar gasto fixo"
+          aria-label={`Editar ou encerrar: ${expense?.description}`}
           onClick={openSheet}
         >
           <Pencil className="size-3.5" />
@@ -131,7 +131,7 @@ export function FinanceRecurringSheet({
             </DialogTitle>
             <DialogDescription>
               O que sai todo mês no mesmo dia: imposto do MEI, repasse de sócio,
-              ferramentas. Cada mês aparece em “A pagar” até você marcar como pago.
+              ferramentas. Cada mês fica em “A pagar” até você marcar como pago.
             </DialogDescription>
           </DialogHeader>
 
@@ -230,8 +230,17 @@ export function FinanceRecurringSheet({
             </div>
           </div>
 
-          <div className="border-t border-[var(--insyt-border)] px-6 py-4">
-            <Button type="button" className="w-full" disabled={isPending} onClick={save}>
+          <div className="flex items-center justify-between gap-2 border-t border-[var(--insyt-border)] px-6 py-4">
+            {expense && !(expense.ended_on && expense.ended_on <= todayInBrasilia()) ? (
+              <FinanceRecurringEnd
+                id={expense.id}
+                description={expense.description}
+                onEnded={() => setOpen(false)}
+              />
+            ) : (
+              <span />
+            )}
+            <Button type="button" disabled={isPending} onClick={save}>
               {isPending ? <Loader2 className="size-4 animate-spin" /> : null}
               Salvar
             </Button>
@@ -242,7 +251,15 @@ export function FinanceRecurringSheet({
   );
 }
 
-export function FinanceRecurringEnd({ id, description }: { id: string; description: string }) {
+function FinanceRecurringEnd({
+  id,
+  description,
+  onEnded,
+}: {
+  id: string;
+  description: string;
+  onEnded: () => void;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -254,6 +271,7 @@ export function FinanceRecurringEnd({ id, description }: { id: string; descripti
         return;
       }
       toast.success("Gasto fixo encerrado.");
+      onEnded();
       router.refresh();
     });
   }
@@ -262,18 +280,9 @@ export function FinanceRecurringEnd({ id, description }: { id: string; descripti
     <AlertDialog>
       <AlertDialogTrigger
         render={
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            title="Encerrar gasto fixo"
-            disabled={isPending}
-          >
-            {isPending ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <Square className="size-3.5" />
-            )}
+          <Button type="button" variant="ghost" disabled={isPending}>
+            {isPending ? <Loader2 className="size-3.5 animate-spin" /> : null}
+            Encerrar gasto
           </Button>
         }
       />
@@ -291,38 +300,5 @@ export function FinanceRecurringEnd({ id, description }: { id: string; descripti
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-  );
-}
-
-/** Marca o mês como pago hoje; o lançamento pode ser editado depois no caixa. */
-export function FinanceBillPay({ expenseId, month }: { expenseId: string; month: string }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      disabled={isPending}
-      onClick={() =>
-        startTransition(async () => {
-          const result = await payRecurringExpense({
-            expenseId,
-            referenceMonth: month,
-            paidOn: todayInBrasilia(),
-          });
-          if (result.error) {
-            toast.error(result.error);
-            return;
-          }
-          toast.success("Marcado como pago hoje.");
-          router.refresh();
-        })
-      }
-    >
-      {isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
-      Paguei
-    </Button>
   );
 }

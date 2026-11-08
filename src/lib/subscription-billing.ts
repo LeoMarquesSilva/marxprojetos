@@ -126,6 +126,75 @@ export function getBillingState(
   return { currentMonth, currentStatus, overdueMonths, openMonths, nextDue };
 }
 
+/** Dias corridos de `today` até `date`; negativo se a data já passou. */
+export function daysUntil(date: string, today: string): number {
+  const toUtc = (value: string) =>
+    Date.UTC(Number(value.slice(0, 4)), Number(value.slice(5, 7)) - 1, Number(value.slice(8, 10)));
+  return Math.round((toUtc(date) - toUtc(today)) / 86_400_000);
+}
+
+/** "vence hoje", "vence em 5 dias, 13/11", "venceu 13/10, há 26 dias". */
+export function dueLabel(dueOn: string, today: string): { text: string; late: boolean } {
+  const days = daysUntil(dueOn, today);
+  const date = `${dueOn.slice(8, 10)}/${dueOn.slice(5, 7)}`;
+  if (days < 0) {
+    return { text: `venceu ${date}, há ${-days} ${days === -1 ? "dia" : "dias"}`, late: true };
+  }
+  if (days === 0) return { text: "vence hoje", late: false };
+  if (days === 1) return { text: "vence amanhã", late: false };
+  if (days <= 7) return { text: `vence em ${days} dias, ${date}`, late: false };
+  return { text: `vence ${date}`, late: false };
+}
+
+/** Quanto antes precisa de atenção, menor: quem deve, quem vai vencer, quem pagou. */
+export function billingUrgency(state: SubscriptionBillingState): number {
+  if (state.overdueMonths.length > 0) return 0;
+  if (state.currentStatus === "pendente") return 1;
+  if (state.currentStatus === "pago") return 2;
+  return 3;
+}
+
+/** Ordena a lista de assinaturas por urgência e, dentro dela, pelo vencimento. */
+export function sortByUrgency<
+  Row extends { state: SubscriptionBillingState; subscription: { client_name: string } },
+>(rows: Row[]): Row[] {
+  return [...rows].sort((a, b) => {
+    const urgency = billingUrgency(a.state) - billingUrgency(b.state);
+    if (urgency !== 0) return urgency;
+    const due = (a.state.nextDue ?? "9999").localeCompare(b.state.nextDue ?? "9999");
+    if (due !== 0) return due;
+    return a.subscription.client_name.localeCompare(b.subscription.client_name, "pt-BR");
+  });
+}
+
+export type TrailMonth = {
+  month: string;
+  status: "pago" | "atrasado" | "aberto";
+  paidOn: string | null;
+};
+
+/** Situação dos últimos `count` meses cobrados, do mais antigo ao atual. */
+export function paymentTrail(
+  subscription: BillingSubscription,
+  payments: Array<BillingPayment & { paid_on: string }>,
+  today: string,
+  count = 6,
+): TrailMonth[] {
+  const paidOn = new Map(
+    payments.map((payment) => [monthStartOf(payment.reference_month), payment.paid_on]),
+  );
+  const current = monthStartOf(today);
+  const trail: TrailMonth[] = [];
+  for (let offset = count - 1; offset >= 0; offset--) {
+    const month = addMonths(current, -offset);
+    if (!isBillableMonth(subscription, month)) continue;
+    const paid = paidOn.get(month) ?? null;
+    const late = dueDateFor(month, subscription.billing_day) < today;
+    trail.push({ month, status: paid ? "pago" : late ? "atrasado" : "aberto", paidOn: paid });
+  }
+  return trail;
+}
+
 export function toAmount(value: number | string | null | undefined): number {
   const amount = typeof value === "string" ? Number(value) : (value ?? 0);
   return Number.isFinite(amount) ? amount : 0;
@@ -415,6 +484,23 @@ export function chargesInMonth<Charge extends { month: string }>(
 ): Charge[] {
   const start = monthStartOf(month);
   return charges.filter((charge) => charge.month === start);
+}
+
+/**
+ * O que aparece em aberto ao olhar um mês. No mês atual o que está atrasado vem
+ * junto, de qualquer mês anterior: conta vencida não pode depender de voltar no
+ * calendário para ser encontrada.
+ */
+export function openItemsForMonth<Item extends { month: string; timing: ForecastTiming }>(
+  items: Item[],
+  month: string,
+  currentMonth: string,
+): Item[] {
+  const start = monthStartOf(month);
+  if (start !== monthStartOf(currentMonth)) {
+    return items.filter((item) => item.month === start);
+  }
+  return items.filter((item) => item.month === start || item.timing === "atrasado");
 }
 
 export function sumCharges(charges: Array<{ amount: number }>) {

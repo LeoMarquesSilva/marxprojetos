@@ -10,6 +10,17 @@ import {
   setSubscriptionStatus,
   updateSubscription,
 } from "@/app/actions/subscriptions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Combobox,
@@ -18,15 +29,15 @@ import {
   ComboboxItem,
   ComboboxList,
 } from "@/components/ui/combobox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import {
   firstDueDate,
@@ -108,6 +119,9 @@ export function SubscriptionFormSheet({
   const [customDay, setCustomDay] = useState(
     subscription && !BILLING_DAYS.includes(subscription.billing_day),
   );
+  // Só puxa o foco quando a pessoa pede "Outro dia"; ao abrir para editar, o
+  // foco automático rolaria o formulário até o meio.
+  const [focusCustomDay, setFocusCustomDay] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<string>(
     subscription?.payment_method ?? PAYMENT_METHODS[0],
   );
@@ -265,7 +279,6 @@ export function SubscriptionFormSheet({
 
   function remove() {
     if (!subscription) return;
-    if (!window.confirm("Excluir a assinatura e todo o histórico de pagamentos dela?")) return;
     startTransition(async () => {
       const result = await deleteSubscription(subscription.id);
       if (result.error) {
@@ -289,32 +302,29 @@ export function SubscriptionFormSheet({
           size="icon-sm"
           onClick={() => setOpen(true)}
           title="Editar assinatura"
+          aria-label={`Editar assinatura: ${subscription?.client_name}`}
         >
           <Pencil className="size-3.5" />
         </Button>
       ) : (
-        <Button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="border-white/15 bg-white/10 text-white hover:bg-white/15"
-        >
-          <Plus className="size-4" />
+        <Button type="button" size="sm" variant="outline" onClick={() => setOpen(true)}>
+          <Plus className="size-3.5" />
           Nova assinatura
         </Button>
       )}
 
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent className="flex w-full flex-col gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-2xl">
-          <SheetHeader className="border-b border-[var(--insyt-border)] px-6 py-6">
-            <SheetTitle className="text-2xl font-bold">
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden rounded-3xl bg-white p-0 sm:max-w-2xl">
+          <DialogHeader className="border-b border-[var(--insyt-border)] px-6 py-5 pr-12">
+            <DialogTitle className="text-2xl font-bold text-[var(--insyt-black)]">
               {editing ? "Editar assinatura" : "Nova assinatura"}
-            </SheetTitle>
-            <SheetDescription>
+            </DialogTitle>
+            <DialogDescription>
               Plano mensal de hospedagem e manutenção de um cliente.
-            </SheetDescription>
-          </SheetHeader>
+            </DialogDescription>
+          </DialogHeader>
 
-          <div className="flex-1 space-y-10 overflow-x-hidden overflow-y-auto px-6 py-8">
+          <div className="min-h-0 flex-1 space-y-10 overflow-x-hidden overflow-y-auto px-6 py-6">
             {/* 1. Cliente */}
             <FormSection step={1} title="Cliente">
               {manualClient ? (
@@ -546,10 +556,16 @@ export function SubscriptionFormSheet({
                         }
                         className="h-9 w-24 py-1"
                         aria-label="Dia de vencimento"
-                        autoFocus
+                        autoFocus={focusCustomDay}
                       />
                     ) : (
-                      <Chip selected={false} onClick={() => setCustomDay(true)}>
+                      <Chip
+                        selected={false}
+                        onClick={() => {
+                          setCustomDay(true);
+                          setFocusCustomDay(true);
+                        }}
+                      >
                         Outro dia
                       </Chip>
                     )}
@@ -636,22 +652,41 @@ export function SubscriptionFormSheet({
                   </Button>
                 )}
 
-                <Button
-                  type="button"
-                  variant="destructive"
-                  className="w-full"
-                  disabled={isPending}
-                  onClick={remove}
-                >
-                  Excluir assinatura
-                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger
+                    render={
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        className="w-full"
+                        disabled={isPending}
+                      >
+                        Excluir assinatura
+                      </Button>
+                    }
+                  />
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Excluir esta assinatura?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {subscription.client_name}: a assinatura e todo o histórico de pagamentos
+                        dela somem, inclusive do caixa. Para só parar de cobrar, use Cancelar
+                        plano.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Voltar</AlertDialogCancel>
+                      <AlertDialogAction onClick={remove}>Excluir</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </section>
             ) : null}
           </div>
 
           {/* Resumo fixo: o que vai ser cobrado, antes de salvar. */}
-          <footer className="border-t border-[var(--insyt-border)] bg-white px-6 py-5">
-            <div className="mb-4 flex items-end justify-between gap-4">
+          <footer className="border-t border-[var(--insyt-border)] bg-white px-6 py-4">
+            <div className="mb-3 flex items-end justify-between gap-4">
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-[var(--insyt-black)]">
                   {clientName || "Cliente não escolhido"}
@@ -676,7 +711,6 @@ export function SubscriptionFormSheet({
             </div>
             <Button
               type="button"
-              size="lg"
               className="w-full"
               onClick={save}
               disabled={isPending || !canSave}
@@ -685,8 +719,8 @@ export function SubscriptionFormSheet({
               {editing ? "Salvar alterações" : "Criar assinatura"}
             </Button>
           </footer>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

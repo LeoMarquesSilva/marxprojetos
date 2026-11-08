@@ -178,7 +178,7 @@ async function savePartnership(
 ) {
   const { error } = await supabase.from("projects").update({ partnership }).eq("id", projectId);
   if (error) return { error: error.message };
-  revalidatePath("/financas");
+  revalidatePath("/financas", "layout");
   revalidatePath("/crm");
   return { success: true };
 }
@@ -250,7 +250,7 @@ export async function setProjectContractAmount(
 
   if (error) return { error: error.message };
 
-  revalidatePath("/financas");
+  revalidatePath("/financas", "layout");
   return { success: true };
 }
 
@@ -287,7 +287,7 @@ export async function saveFinanceSettings(input: {
 
   if (error) return { error: error.message };
 
-  revalidatePath("/financas");
+  revalidatePath("/financas", "layout");
   return { success: true };
 }
 
@@ -302,7 +302,7 @@ export async function createFinanceEntry(input: FinanceEntryInput) {
 
   if (error) return { error: error.message };
 
-  revalidatePath("/financas");
+  revalidatePath("/financas", "layout");
   return { success: true };
 }
 
@@ -318,7 +318,7 @@ export async function updateFinanceEntry(id: string, input: FinanceEntryInput) {
 
   if (error) return { error: error.message };
 
-  revalidatePath("/financas");
+  revalidatePath("/financas", "layout");
   return { success: true };
 }
 
@@ -327,7 +327,7 @@ export async function deleteFinanceEntry(id: string) {
   const { error } = await supabase.from("finance_entries").delete().eq("id", id);
   if (error) return { error: error.message };
 
-  revalidatePath("/financas");
+  revalidatePath("/financas", "layout");
   return { success: true };
 }
 
@@ -342,7 +342,7 @@ export async function createRecurringExpense(input: RecurringExpenseInput) {
 
   if (error) return { error: error.message };
 
-  revalidatePath("/financas");
+  revalidatePath("/financas", "layout");
   return { success: true };
 }
 
@@ -358,7 +358,7 @@ export async function updateRecurringExpense(id: string, input: RecurringExpense
 
   if (error) return { error: error.message };
 
-  revalidatePath("/financas");
+  revalidatePath("/financas", "layout");
   return { success: true };
 }
 
@@ -377,7 +377,7 @@ export async function endRecurringExpense(id: string, endedOn: string) {
 
   if (error) return { error: error.message };
 
-  revalidatePath("/financas");
+  revalidatePath("/financas", "layout");
   return { success: true };
 }
 
@@ -385,10 +385,15 @@ export async function payRecurringExpense(input: {
   expenseId: string;
   referenceMonth: string;
   paidOn: string;
+  /** Sem valor, usa o do gasto fixo. O DAS, por exemplo, muda de um ano para o outro. */
+  amount?: number;
 }) {
   const { supabase, user } = await requireAuthenticatedUser();
   if (!DATE_PATTERN.test(input.referenceMonth) || !DATE_PATTERN.test(input.paidOn)) {
     return { error: "Data inválida." };
+  }
+  if (input.amount !== undefined && (!Number.isFinite(input.amount) || input.amount <= 0)) {
+    return { error: "Informe um valor maior que zero." };
   }
 
   const { data: expense, error: expenseError } = await supabase
@@ -399,22 +404,26 @@ export async function payRecurringExpense(input: {
 
   if (expenseError || !expense) return { error: "Gasto fixo não encontrado." };
 
-  const { error } = await supabase.from("finance_entries").insert({
-    owner_id: user.id,
-    kind: "saida",
-    amount: expense.amount,
-    occurred_on: input.paidOn,
-    category: expense.category,
-    description: expense.description,
-    recurring_expense_id: input.expenseId,
-    reference_month: monthStartOf(input.referenceMonth),
-  });
+  const { data, error } = await supabase
+    .from("finance_entries")
+    .insert({
+      owner_id: user.id,
+      kind: "saida",
+      amount: input.amount ?? expense.amount,
+      occurred_on: input.paidOn,
+      category: expense.category,
+      description: expense.description,
+      recurring_expense_id: input.expenseId,
+      reference_month: monthStartOf(input.referenceMonth),
+    })
+    .select("id")
+    .single();
 
   if (error) {
     if (error.code === "23505") return { error: "Esse mês já está pago." };
     return { error: error.message };
   }
 
-  revalidatePath("/financas");
-  return { success: true };
+  revalidatePath("/financas", "layout");
+  return { success: true, id: data.id as string };
 }

@@ -59,16 +59,21 @@ function formatInput(value: number) {
 
 /**
  * Sem `entry`, abre um lançamento novo; com `entry`, edita o existente.
- * `receiveProject` abre já como recebimento do restante daquele projeto.
+ * `receiveProject` abre já como recebimento do restante daquele projeto;
+ * `defaultAmount` troca o restante por um valor certo (o repasse de um mês).
  */
 export function FinanceEntrySheet({
   entry,
   projects,
   receiveProject,
+  defaultAmount,
+  triggerLabel,
 }: {
   entry?: FinanceEntry;
   projects: FinanceProjectOption[];
   receiveProject?: FinanceProjectOption;
+  defaultAmount?: number;
+  triggerLabel?: string;
 }) {
   const router = useRouter();
   const editing = Boolean(entry);
@@ -110,8 +115,9 @@ export function FinanceEntrySheet({
         receiveProject.contractAmount != null
           ? Math.max(0, receiveProject.contractAmount - receiveProject.received)
           : 0;
+      const suggested = defaultAmount ?? rest;
       setKind("entrada");
-      setAmount(rest > 0 ? formatInput(rest) : "");
+      setAmount(suggested > 0 ? formatInput(suggested) : "");
       setOccurredOn(todayInBrasilia());
       setCategory("Projeto");
       setProjectId(receiveProject.id);
@@ -202,7 +208,7 @@ export function FinanceEntrySheet({
       ) : receiveProject ? (
         <Button type="button" variant="outline" size="sm" onClick={openSheet}>
           <ArrowDownLeft className="size-3.5" />
-          {receiveProject.receiveLabel ? "Registrar repasse" : "Receber"}
+          {triggerLabel ?? (receiveProject.receiveLabel ? "Registrar repasse" : "Receber")}
         </Button>
       ) : (
         <Button

@@ -10,9 +10,15 @@ import {
   isRecurringExpenseActive,
   linesInMonth,
   monthTotals,
+  openItemsForMonth,
   projectBalances,
   projectCash,
   sumCharges,
+  daysUntil,
+  dueLabel,
+  getBillingState,
+  paymentTrail,
+  sortByUrgency,
 } from "../src/lib/subscription-billing.ts";
 
 const outeiral = {
@@ -267,4 +273,77 @@ test("o recebido antes do sistema abate o que falta sem precisar de lançamento"
     [{ kind: "entrada", amount: 648.5, project_id: "outeiral" }],
   );
   assert.equal(quitado.remaining, 0);
+});
+
+test("no mês atual, o que está atrasado aparece junto com o que vence no mês", () => {
+  const items = [
+    { id: "out", month: "2026-10-01", timing: "atrasado" },
+    { id: "nov", month: "2026-11-01", timing: "a_vencer" },
+    { id: "dez", month: "2026-12-01", timing: "futuro" },
+  ];
+  const ids = (list) => list.map((item) => item.id);
+
+  assert.deepEqual(ids(openItemsForMonth(items, "2026-11-01", "2026-11-01")), ["out", "nov"]);
+  // Fora do mês atual, cada mês mostra só o que é dele.
+  assert.deepEqual(ids(openItemsForMonth(items, "2026-10-01", "2026-11-01")), ["out"]);
+  assert.deepEqual(ids(openItemsForMonth(items, "2026-12-01", "2026-11-01")), ["dez"]);
+});
+
+test("o rótulo de vencimento fala em dias perto da data e marca o atraso", () => {
+  const today = "2026-11-08";
+  assert.equal(daysUntil("2026-12-08", today), 30);
+  assert.equal(daysUntil("2026-10-13", today), -26);
+
+  assert.deepEqual(dueLabel("2026-10-13", today), { text: "venceu 13/10, há 26 dias", late: true });
+  assert.deepEqual(dueLabel("2026-11-07", today), { text: "venceu 07/11, há 1 dia", late: true });
+  assert.deepEqual(dueLabel("2026-11-08", today), { text: "vence hoje", late: false });
+  assert.deepEqual(dueLabel("2026-11-09", today), { text: "vence amanhã", late: false });
+  assert.deepEqual(dueLabel("2026-11-13", today), { text: "vence em 5 dias, 13/11", late: false });
+  assert.deepEqual(dueLabel("2026-11-20", today), { text: "vence 20/11", late: false });
+});
+
+test("a lista de assinaturas começa por quem deve e termina em quem já pagou", () => {
+  const today = "2026-11-12";
+  const build = (client_name, billing_day, paidMonths) => {
+    const subscription = {
+      client_name,
+      amount: 100,
+      billing_day,
+      status: "ativa",
+      started_on: "2026-10-01",
+      ended_on: null,
+    };
+    const payments = paidMonths.map((reference_month) => ({ reference_month, amount: 100 }));
+    return { subscription, state: getBillingState(subscription, payments, today) };
+  };
+
+  const pagou = build("Pagou", 5, ["2026-10-01", "2026-11-01"]);
+  const devendo = build("Devendo", 5, ["2026-10-01"]);
+  const venceDepois = build("Vence dia 25", 25, ["2026-10-01"]);
+  const venceAntes = build("Vence dia 15", 15, ["2026-10-01"]);
+
+  const order = sortByUrgency([pagou, venceDepois, devendo, venceAntes]).map(
+    (row) => row.subscription.client_name,
+  );
+  assert.deepEqual(order, ["Devendo", "Vence dia 15", "Vence dia 25", "Pagou"]);
+});
+
+test("o histórico curto mostra só meses cobrados, com pago, atrasado e em aberto", () => {
+  const subscription = {
+    amount: 100,
+    billing_day: 15,
+    status: "ativa",
+    started_on: "2026-09-01",
+    ended_on: null,
+  };
+  const trail = paymentTrail(
+    subscription,
+    [{ reference_month: "2026-09-01", amount: 100, paid_on: "2026-09-16" }],
+    "2026-11-08",
+  );
+  assert.deepEqual(trail, [
+    { month: "2026-09-01", status: "pago", paidOn: "2026-09-16" },
+    { month: "2026-10-01", status: "atrasado", paidOn: null },
+    { month: "2026-11-01", status: "aberto", paidOn: null },
+  ]);
 });

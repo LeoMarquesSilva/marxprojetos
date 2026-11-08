@@ -6,6 +6,8 @@ export type AdminPageQuickLink = {
   href: string;
   label: string;
   icon: LucideIcon;
+  /** Só fica ativo na própria rota, não nas filhas (a primeira aba de um módulo). */
+  exact?: boolean;
 };
 
 export function AdminPageHeader({
@@ -16,6 +18,7 @@ export function AdminPageHeader({
   activeHref,
   actions,
   className,
+  compact = false,
 }: {
   icon?: LucideIcon;
   title: string;
@@ -24,7 +27,36 @@ export function AdminPageHeader({
   activeHref?: string;
   actions?: React.ReactNode;
   className?: string;
+  /** Telas de trabalho: título e abas em pouco espaço, o conteúdo sobe. */
+  compact?: boolean;
 }) {
+  const links =
+    quickLinks && quickLinks.length > 0 ? (
+      <nav className={cn("flex flex-wrap gap-2", compact ? "mt-5" : "mt-8")}>
+        {quickLinks.map(({ href, label, icon: LinkIcon, exact }) => {
+          const active =
+            activeHref === href ||
+            (!exact && href !== "/dashboard" && activeHref?.startsWith(href));
+          return (
+            <Link
+              key={href}
+              href={href}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-colors duration-200",
+                active
+                  ? "border-white/15 bg-white/12 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+                  : "border-white/10 bg-black/20 text-white/75 hover:border-white/15 hover:bg-white/8 hover:text-white",
+              )}
+            >
+              <LinkIcon className="size-3.5 shrink-0 opacity-80" strokeWidth={2} />
+              {label}
+            </Link>
+          );
+        })}
+      </nav>
+    ) : null;
+
   return (
     <header
       className={cn(
@@ -38,10 +70,17 @@ export function AdminPageHeader({
         aria-hidden
       />
 
-      <div className="relative p-8 sm:p-10">
-        <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
+      <div className={cn("relative", compact ? "px-6 py-6 sm:px-8" : "p-8 sm:p-10")}>
+        <div
+          className={cn(
+            "flex",
+            compact
+              ? "items-center justify-between gap-4"
+              : "flex-col gap-8 lg:flex-row lg:items-start lg:justify-between",
+          )}
+        >
           <div className="min-w-0 flex-1">
-            {Icon ? (
+            {Icon && !compact ? (
               <div
                 className="mb-5 flex size-10 items-center justify-center rounded-xl border border-white/10 bg-black/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
               >
@@ -49,7 +88,12 @@ export function AdminPageHeader({
               </div>
             ) : null}
 
-            <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+            <h1
+              className={cn(
+                "font-bold tracking-tight text-white",
+                compact ? "text-2xl sm:text-3xl" : "text-3xl sm:text-4xl",
+              )}
+            >
               {title}
             </h1>
             {description ? (
@@ -58,36 +102,15 @@ export function AdminPageHeader({
               </p>
             ) : null}
 
-            {quickLinks && quickLinks.length > 0 ? (
-              <div className="mt-8 flex flex-wrap gap-2">
-                {quickLinks.map(({ href, label, icon: LinkIcon }) => {
-                  const active =
-                    activeHref === href ||
-                    (href !== "/dashboard" && activeHref?.startsWith(href));
-                  return (
-                    <Link
-                      key={href}
-                      href={href}
-                      className={cn(
-                        "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all duration-300 ease-fluid",
-                        active
-                          ? "border-white/15 bg-white/12 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
-                          : "border-white/10 bg-black/20 text-white/75 hover:border-white/15 hover:bg-white/8 hover:text-white",
-                      )}
-                    >
-                      <LinkIcon className="size-3.5 shrink-0 opacity-80" strokeWidth={2} />
-                      {label}
-                    </Link>
-                  );
-                })}
-              </div>
-            ) : null}
+            {compact ? null : links}
           </div>
 
           {actions ? (
-            <div className="shrink-0 lg:pt-1">{actions}</div>
+            <div className={cn("shrink-0", !compact && "lg:pt-1")}>{actions}</div>
           ) : null}
         </div>
+
+        {compact ? links : null}
       </div>
     </header>
   );

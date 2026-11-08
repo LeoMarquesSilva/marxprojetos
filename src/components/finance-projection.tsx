@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { Fragment, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Landmark, Loader2, TrendingUp } from "lucide-react";
+import { ChevronDown, Landmark, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { saveFinanceSettings } from "@/app/actions/finance";
 import { Button } from "@/components/ui/button";
@@ -49,6 +49,7 @@ export function FinanceProjection({
   const [horizon, setHorizon] = useState<(typeof HORIZONS)[number]>(6);
   const [drawInput, setDrawInput] = useState("");
   const [includeOverdue, setIncludeOverdue] = useState(false);
+  const [openMonth, setOpenMonth] = useState<string | null>(null);
 
   const draw = parseBrlAmount(drawInput) ?? 0;
 
@@ -72,12 +73,9 @@ export function FinanceProjection({
 
   return (
     <section className="insyt-card overflow-hidden">
-      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--insyt-border)] px-6 py-4">
-        <div>
-          <h2 className="flex items-center gap-2 font-bold text-[var(--insyt-black)]">
-            <TrendingUp className="size-4 text-[var(--insyt-primary)]" />
-            Projeção de caixa
-          </h2>
+      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--insyt-border)] px-5 py-4 sm:px-6">
+        <div className="min-w-0 flex-1 basis-80">
+          <h2 className="font-bold text-[var(--insyt-black)]">Projeção de caixa</h2>
           <p className="mt-1 text-xs text-[var(--insyt-muted)]">
             Saldo em conta hoje + recorrência − gastos fixos, mês a mês.
             {projectReceivable > 0
@@ -118,9 +116,7 @@ export function FinanceProjection({
 
       <div className="grid gap-6 px-6 py-5 md:grid-cols-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-muted)]">
-            Na conta hoje
-          </p>
+          <p className="text-xs font-semibold text-[var(--insyt-muted)]">Na conta hoje</p>
           <p className="mt-1 text-2xl font-bold tabular-nums tracking-tight text-[var(--insyt-black)]">
             {formatBrl(startingCash)}
           </p>
@@ -140,7 +136,7 @@ export function FinanceProjection({
         </div>
 
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-muted)]">
+          <p className="text-xs font-semibold text-[var(--insyt-muted)]">
             Em {horizon} meses, sem tirar nada
           </p>
           <p
@@ -160,7 +156,7 @@ export function FinanceProjection({
         <div>
           <Label
             htmlFor="projection-draw"
-            className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-muted)]"
+            className="text-xs font-semibold text-[var(--insyt-muted)]"
           >
             Se eu tirar por mês
           </Label>
@@ -227,7 +223,7 @@ export function FinanceProjection({
           {rows.map((row) => (
             <span
               key={row.month}
-              className="min-w-0 flex-1 truncate text-center text-[10px] font-semibold uppercase tracking-wider text-[var(--insyt-muted)]"
+              className="min-w-0 flex-1 truncate text-center text-[11px] font-semibold capitalize text-[var(--insyt-muted)]"
             >
               {shortMonth(row.month)}
             </span>
@@ -238,7 +234,7 @@ export function FinanceProjection({
       <div className="overflow-x-auto border-t border-[var(--insyt-border)]">
         <table className="w-full min-w-[36rem] text-sm">
           <thead>
-            <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-[var(--insyt-muted)]">
+            <tr className="text-left text-xs font-semibold text-[var(--insyt-muted)]">
               <th className="px-6 py-3">Mês</th>
               <th className="px-3 py-3 text-right">Começa com</th>
               <th className="px-3 py-3 text-right">Entra</th>
@@ -248,38 +244,103 @@ export function FinanceProjection({
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--insyt-border)]">
-            {rows.map((row) => (
-              <tr key={row.month} className="tabular-nums">
-                <td className="px-6 py-2.5 font-semibold text-[var(--insyt-black)]">
-                  {monthName(row.month)}
-                  {row.month === rows[0]?.month ? (
-                    <span className="font-normal text-[var(--insyt-muted)]"> · resto do mês</span>
+            {rows.map((row, index) => {
+              const isFirst = index === 0;
+              const isOpen = openMonth === row.month;
+              // A mesma regra de projectCash, para a lista bater com o total da linha.
+              const monthCharges = charges.filter((charge) =>
+                isFirst
+                  ? (charge.month === row.month && charge.timing !== "atrasado") ||
+                    (includeOverdue && charge.timing === "atrasado")
+                  : charge.month === row.month,
+              );
+              const monthBills = bills.filter((bill) =>
+                isFirst
+                  ? bill.month === row.month || bill.timing === "atrasado"
+                  : bill.month === row.month,
+              );
+              return (
+                <Fragment key={row.month}>
+                  <tr className="tabular-nums">
+                    <td className="px-6 py-2.5 font-semibold text-[var(--insyt-black)]">
+                      <button
+                        type="button"
+                        aria-expanded={isOpen}
+                        onClick={() => setOpenMonth(isOpen ? null : row.month)}
+                        className="flex items-center gap-1.5 text-left transition-colors duration-150 hover:text-[var(--insyt-primary-dark)]"
+                      >
+                        <ChevronDown
+                          className={cn(
+                            "size-3.5 shrink-0 text-[var(--insyt-muted)] transition-transform duration-150",
+                            isOpen && "rotate-180",
+                          )}
+                        />
+                        <span>
+                          {monthName(row.month)}
+                          {isFirst ? (
+                            <span className="font-normal text-[var(--insyt-muted)]">
+                              {" "}
+                              · resto do mês
+                            </span>
+                          ) : null}
+                        </span>
+                      </button>
+                    </td>
+                    <td className="px-3 py-2.5 text-right text-[var(--insyt-slate)]">
+                      {formatBrl(row.opening)}
+                    </td>
+                    <td className="px-3 py-2.5 text-right text-emerald-800">
+                      {row.income > 0 ? `+${formatBrl(row.income)}` : "—"}
+                    </td>
+                    <td className="px-3 py-2.5 text-right text-[var(--insyt-slate)]">
+                      {row.expense > 0 ? `−${formatBrl(row.expense)}` : "—"}
+                    </td>
+                    {draw > 0 ? (
+                      <td className="px-3 py-2.5 text-right text-[var(--insyt-slate)]">
+                        −{formatBrl(row.draw)}
+                      </td>
+                    ) : null}
+                    <td
+                      className={cn(
+                        "px-6 py-2.5 text-right font-bold",
+                        row.closing < reserve ? "text-red-700" : "text-[var(--insyt-black)]",
+                      )}
+                    >
+                      {formatBrl(row.closing)}
+                    </td>
+                  </tr>
+                  {isOpen ? (
+                    <tr>
+                      <td colSpan={draw > 0 ? 6 : 5} className="bg-[var(--insyt-canvas)] px-6 py-4">
+                        <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
+                          <MonthBreakdown
+                            title="Entra"
+                            empty="Nada previsto."
+                            items={monthCharges.map((charge) => ({
+                              id: charge.id,
+                              label: charge.clientName,
+                              dueOn: charge.dueOn,
+                              amount: charge.amount,
+                            }))}
+                          />
+                          <MonthBreakdown
+                            title="Sai"
+                            empty="Nenhum gasto fixo."
+                            negative
+                            items={monthBills.map((bill) => ({
+                              id: bill.id,
+                              label: bill.description,
+                              dueOn: bill.dueOn,
+                              amount: bill.amount,
+                            }))}
+                          />
+                        </div>
+                      </td>
+                    </tr>
                   ) : null}
-                </td>
-                <td className="px-3 py-2.5 text-right text-[var(--insyt-slate)]">
-                  {formatBrl(row.opening)}
-                </td>
-                <td className="px-3 py-2.5 text-right text-emerald-800">
-                  {row.income > 0 ? `+${formatBrl(row.income)}` : "—"}
-                </td>
-                <td className="px-3 py-2.5 text-right text-[var(--insyt-slate)]">
-                  {row.expense > 0 ? `−${formatBrl(row.expense)}` : "—"}
-                </td>
-                {draw > 0 ? (
-                  <td className="px-3 py-2.5 text-right text-[var(--insyt-slate)]">
-                    −{formatBrl(row.draw)}
-                  </td>
-                ) : null}
-                <td
-                  className={cn(
-                    "px-6 py-2.5 text-right font-bold",
-                    row.closing < reserve ? "text-red-700" : "text-[var(--insyt-black)]",
-                  )}
-                >
-                  {formatBrl(row.closing)}
-                </td>
-              </tr>
-            ))}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -307,16 +368,62 @@ export function FinanceProjection({
   );
 }
 
+function MonthBreakdown({
+  title,
+  empty,
+  items,
+  negative = false,
+}: {
+  title: string;
+  empty: string;
+  items: { id: string; label: string; dueOn: string; amount: number }[];
+  negative?: boolean;
+}) {
+  return (
+    <div>
+      <p className="text-xs font-semibold text-[var(--insyt-muted)]">{title}</p>
+      {items.length === 0 ? (
+        <p className="mt-1.5 text-xs text-[var(--insyt-muted)]">{empty}</p>
+      ) : (
+        <ul className="mt-1.5 space-y-1">
+          {items.map((item) => (
+            <li
+              key={item.id}
+              className="flex items-baseline justify-between gap-3 text-xs text-[var(--insyt-slate)]"
+            >
+              <span className="min-w-0 truncate">
+                {item.label}
+                <span className="text-[var(--insyt-muted)]">
+                  {" "}
+                  · {item.dueOn.slice(8, 10)}/{item.dueOn.slice(5, 7)}
+                </span>
+              </span>
+              <span
+                className={cn("shrink-0 tabular-nums", negative ? "" : "text-emerald-800")}
+              >
+                {negative ? "−" : "+"}
+                {formatBrl(item.amount)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function FinanceBalanceDialog({
   balance,
   balanceOn,
   reserve,
   compact = false,
+  compactLabel = "atualizar",
 }: {
   balance: number;
   balanceOn: string;
   reserve: number;
   compact?: boolean;
+  compactLabel?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -366,9 +473,9 @@ export function FinanceBalanceDialog({
         <button
           type="button"
           onClick={openDialog}
-          className="font-semibold text-[var(--insyt-primary)] hover:underline"
+          className="font-semibold text-[var(--insyt-primary-dark)] hover:underline"
         >
-          atualizar
+          {compactLabel}
         </button>
       ) : (
         <Button type="button" size="sm" variant="outline" onClick={openDialog}>
