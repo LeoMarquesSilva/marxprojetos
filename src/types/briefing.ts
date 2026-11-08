@@ -80,6 +80,10 @@ export type Project = {
   portfolio_deliverables: string[];
   portfolio_image_alt: string | null;
   portfolio_sort_order: number;
+  /** Andamento de produção (ver project-work.ts); null antes de classificar. */
+  work_status: string | null;
+  due_on: string | null;
+  delivered_on: string | null;
 };
 
 export type SiteCommentStatus = "open" | "resolved";

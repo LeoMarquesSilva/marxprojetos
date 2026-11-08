@@ -26,6 +26,15 @@ import {
   parsePaymentSchedule,
   scheduleForecast,
 } from "../src/lib/project-schedule.ts";
+import {
+  countByWorkStatus,
+  isDueSoon,
+  isTrackedProject,
+  isWorkOverdue,
+  nextDeliveredOn,
+  onTimeRate,
+  relativeDay,
+} from "../src/lib/project-work.ts";
 
 const outeiral = {
   id: "outeiral",
@@ -454,4 +463,77 @@ test("a próxima parcela cai no mesmo dia, ou no último dia do mês mais curto"
   assert.equal(nextInstallmentDate("2026-12-10"), "2027-01-10");
   assert.equal(nextInstallmentDate("2027-01-31"), "2027-02-28");
   assert.equal(nextInstallmentDate("2028-01-31"), "2028-02-29");
+});
+
+const work = (work_status, due_on = null, delivered_on = null) => ({
+  work_status,
+  due_on,
+  delivered_on,
+});
+
+test("status de produção conta quem não foi classificado à parte", () => {
+  const counts = countByWorkStatus([
+    work("em_andamento"),
+    work("em_andamento"),
+    work("concluido"),
+    work(null),
+    work("qualquer coisa"),
+  ]);
+  assert.equal(counts.em_andamento, 2);
+  assert.equal(counts.concluido, 1);
+  assert.equal(counts.sem_status, 2);
+});
+
+test("entrega no prazo só conta quem foi concluído e tinha prazo", () => {
+  assert.equal(onTimeRate([work("concluido"), work("em_andamento", "2026-11-01")]), null);
+  assert.deepEqual(
+    onTimeRate([
+      work("concluido", "2026-11-10", "2026-11-10"),
+      work("concluido", "2026-11-10", "2026-11-12"),
+      work("concluido", null, "2026-11-12"),
+      work("em_andamento", "2026-11-10"),
+    ]),
+    { rate: 50, total: 2 },
+  );
+});
+
+test("prazo vencido e entrega próxima ignoram concluído e pausado", () => {
+  const today = "2026-11-08";
+  assert.equal(isWorkOverdue(work("em_andamento", "2026-11-07"), today), true);
+  assert.equal(isWorkOverdue(work(null, "2026-11-07"), today), true);
+  assert.equal(isWorkOverdue(work("em_andamento", "2026-11-08"), today), false);
+  assert.equal(isWorkOverdue(work("concluido", "2026-11-07"), today), false);
+  assert.equal(isWorkOverdue(work("pausado", "2026-11-07"), today), false);
+
+  assert.equal(isDueSoon(work("em_revisao", "2026-11-15"), today), true);
+  assert.equal(isDueSoon(work("em_revisao", "2026-11-16"), today), false);
+  assert.equal(isDueSoon(work("em_revisao", "2026-11-01"), today), true);
+  assert.equal(isDueSoon(work("concluido", "2026-11-10"), today), false);
+  assert.equal(isDueSoon(work("em_revisao"), today), false);
+});
+
+test("concluir registra a entrega sem apagar data já informada, e reabrir limpa", () => {
+  assert.equal(nextDeliveredOn("concluido", null, "2026-11-08"), "2026-11-08");
+  assert.equal(nextDeliveredOn("concluido", "2026-10-27", "2026-11-08"), "2026-10-27");
+  assert.equal(nextDeliveredOn("em_revisao", "2026-10-27", "2026-11-08"), null);
+  assert.equal(nextDeliveredOn(null, "2026-10-27", "2026-11-08"), null);
+});
+
+test("rascunho de proposta fica fora da lista de projetos", () => {
+  assert.equal(isTrackedProject({ title: "Proposta — CCR Advogados", status: "draft" }), false);
+  assert.equal(isTrackedProject({ title: "Proposta — CCR Advogados", status: "sent" }), true);
+  assert.equal(isTrackedProject({ title: "Site Camila Gracioli", status: "draft" }), true);
+});
+
+test("projeto arquivado sai da lista e das contas", () => {
+  assert.equal(isTrackedProject({ title: "Site Camila Gracioli", status: "archived" }), false);
+  assert.equal(isTrackedProject({ title: "Site Camila Gracioli", status: "reviewed" }), true);
+});
+
+test("a data relativa fala em dias até um mês", () => {
+  const today = "2026-11-08";
+  assert.equal(relativeDay("2026-11-08", today), "hoje");
+  assert.equal(relativeDay("2026-11-07", today), "ontem");
+  assert.equal(relativeDay("2026-11-03", today), "há 5 dias");
+  assert.equal(relativeDay("2026-09-01", today), "01/09/2026");
 });

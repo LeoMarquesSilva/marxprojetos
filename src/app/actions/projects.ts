@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { requireAuthenticatedUser } from "@/lib/supabase/require-authenticated-user";
 import { getBriefingQuestionsValidationError } from "@/lib/flow-utils";
 import { decryptSecret, isEncryptedSecret } from "@/lib/briefing-secrets";
+import { nextDeliveredOn, WORK_STATUSES, type WorkStatus } from "@/lib/project-work";
+import { todayInBrasilia } from "@/lib/subscription-billing";
 import type { BriefingQuestion, ProjectStatus } from "@/types/briefing";
 
 export async function getTemplates() {
@@ -176,6 +178,46 @@ export async function updateProjectStatus(id: string, status: ProjectStatus) {
   const { error } = await supabase
     .from("projects")
     .update({ status })
+    .eq("id", id);
+
+  if (error) return { error: error.message };
+  revalidatePath(`/projects/${id}`);
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
+/** Andamento de produção: status e prazo. Concluir registra o dia da entrega. */
+export async function updateProjectWork(
+  id: string,
+  input: { workStatus: WorkStatus | null; dueOn: string | null },
+) {
+  const { supabase } = await requireAuthenticatedUser();
+  if (input.workStatus !== null && !WORK_STATUSES.includes(input.workStatus)) {
+    return { error: "Status inválido." };
+  }
+  if (input.dueOn !== null && !/^\d{4}-\d{2}-\d{2}$/.test(input.dueOn)) {
+    return { error: "Prazo inválido." };
+  }
+
+  const { data: current, error: readError } = await supabase
+    .from("projects")
+    .select("delivered_on")
+    .eq("id", id)
+    .maybeSingle();
+  if (readError) return { error: readError.message };
+  if (!current) return { error: "Projeto não encontrado." };
+
+  const { error } = await supabase
+    .from("projects")
+    .update({
+      work_status: input.workStatus,
+      due_on: input.dueOn,
+      delivered_on: nextDeliveredOn(
+        input.workStatus,
+        current.delivered_on as string | null,
+        todayInBrasilia(),
+      ),
+    })
     .eq("id", id);
 
   if (error) return { error: error.message };

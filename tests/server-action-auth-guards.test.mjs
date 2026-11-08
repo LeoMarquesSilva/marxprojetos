@@ -27,6 +27,7 @@ const guardedActions = {
     "getProject",
     "createProject",
     "updateProjectStatus",
+    "updateProjectWork",
     "updateProjectQuestions",
     "revealBriefingSecret",
   ],
