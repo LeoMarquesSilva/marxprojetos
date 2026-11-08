@@ -202,7 +202,7 @@ export function FinanceProjection({
               >
                 <span
                   className={cn(
-                    "hidden text-[10px] font-semibold tabular-nums sm:block",
+                    "hidden text-[11px] font-semibold tabular-nums sm:block",
                     below ? "text-red-700" : "text-[var(--insyt-slate)]",
                   )}
                 >

@@ -120,16 +120,9 @@ export function PortfolioExternalManager({
       <section className="insyt-card overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-[var(--insyt-border)] px-6 py-6 sm:flex-row sm:items-end sm:justify-between sm:px-8">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--insyt-primary)]">
-              Projetos externos
-            </p>
-            <h2 className="mt-2 text-2xl font-bold text-[var(--insyt-black)]">
+            <h2 className="text-[17px] font-bold text-[var(--insyt-black)]">
               Trabalhos fora do Briefing Studio
             </h2>
-            <p className="mt-2 max-w-lg text-sm leading-relaxed text-[var(--insyt-muted)]">
-              Sites que você entregou mas que não passaram por briefing aqui.
-              Aparecem na página pública depois dos cases.
-            </p>
           </div>
           <Button type="button" onClick={() => setEditor({ mode: "create" })}>
             <Plus className="size-4" />
@@ -170,7 +163,7 @@ export function PortfolioExternalManager({
                         <ImageIcon className="size-5 text-[var(--insyt-muted)]" />
                       </div>
                     ) : null}
-                    <span className="absolute left-2 top-2 rounded-full bg-black/65 px-2 py-1 text-[10px] font-semibold tracking-wider text-white backdrop-blur">
+                    <span className="absolute left-2 top-2 rounded-full bg-black/65 px-2 py-1 text-[11px] font-semibold tracking-wider text-white backdrop-blur">
                       {String(index + 1).padStart(2, "0")}
                     </span>
                   </div>

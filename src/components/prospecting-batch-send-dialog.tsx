@@ -307,7 +307,7 @@ export function ProspectingBatchSendDialog({
 
           {eligible[0] ? (
             <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--insyt-muted)]">
+              <p className="text-xs font-semibold text-[var(--insyt-muted)]">
                 Prévia — {eligible[0].name}
               </p>
               <div className="rounded-2xl bg-[#e7f8ef] p-4 text-sm whitespace-pre-wrap text-[var(--insyt-black)]">

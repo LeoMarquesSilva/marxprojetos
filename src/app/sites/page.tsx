@@ -28,21 +28,20 @@ export default async function SitesPage() {
 
   return (
     <AdminShell userEmail={user?.email}>
-      <div className="space-y-12 animate-in fade-in slide-in-from-bottom-8 duration-1000 ease-fluid">
+      <div className="space-y-6">
         <AdminPageHeader
           icon={Globe}
           title="Sites em revisão"
-          description="Vincule um site já construído a um briefing e acompanhe os comentários do cliente."
           activeHref="/sites"
           actions={<SiteReviewCreateDialog />}
         />
 
         <div className="insyt-card overflow-hidden">
-          <div className="border-b border-[var(--insyt-border)] px-8 py-6">
-            <h2 className="text-2xl font-bold tracking-tight text-[var(--insyt-black)]">
+          <div className="border-b border-[var(--insyt-border)] px-5 py-4">
+            <h2 className="text-[17px] font-bold tracking-tight text-[var(--insyt-black)]">
               Briefings
             </h2>
-            <p className="mt-1 text-sm text-[var(--insyt-slate)]">
+            <p className="mt-0.5 text-xs text-[var(--insyt-muted)]">
               Clique em um briefing para vincular ou gerenciar a revisão do site.
             </p>
           </div>
@@ -66,12 +65,12 @@ export default async function SitesPage() {
               <Table>
                 <TableHeader>
                   <TableRow className="border-[var(--insyt-border)] hover:bg-transparent">
-                    <TableHead className="pl-8">Briefing</TableHead>
+                    <TableHead className="pl-5">Briefing</TableHead>
                     <TableHead>Cliente</TableHead>
                     <TableHead>Status do site</TableHead>
                     <TableHead>Comentários abertos</TableHead>
                     <TableHead>Disponível desde</TableHead>
-                    <TableHead className="w-10 pr-8" />
+                    <TableHead className="w-10 pr-5" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -80,7 +79,7 @@ export default async function SitesPage() {
                       key={site.id}
                       className="group border-[var(--insyt-border)] transition-colors hover:bg-[var(--insyt-canvas-alt)]/50"
                     >
-                      <TableCell className="py-5 pl-8">
+                      <TableCell className="max-w-[20rem] truncate py-3 pl-5">
                         <Link
                           href={`/sites/${site.id}`}
                           className="font-semibold text-[var(--insyt-black)] transition-colors group-hover:text-[var(--insyt-primary)]"
@@ -88,16 +87,16 @@ export default async function SitesPage() {
                           {site.title}
                         </Link>
                       </TableCell>
-                      <TableCell className="py-5 text-[var(--insyt-slate)]">
+                      <TableCell className="max-w-[12rem] truncate py-3 text-[var(--insyt-slate)]">
                         {site.client_name || "—"}
                       </TableCell>
-                      <TableCell className="py-5">
+                      <TableCell className="py-3">
                         <SiteStatusBadge
                           enabled={site.review_enabled}
                           approvedAt={site.review_approved_at}
                         />
                       </TableCell>
-                      <TableCell className="py-5">
+                      <TableCell className="py-3">
                         {site.review_enabled ? (
                           <Badge
                             variant={site.openComments > 0 ? "default" : "secondary"}
@@ -108,14 +107,14 @@ export default async function SitesPage() {
                           <span className="text-[var(--insyt-muted)]">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="py-5 text-[var(--insyt-muted)]">
+                      <TableCell className="py-3 text-[var(--insyt-muted)]">
                         {site.review_enabled_at
                           ? format(new Date(site.review_enabled_at), "d MMM yyyy", {
                               locale: ptBR,
                             })
                           : "—"}
                       </TableCell>
-                      <TableCell className="py-5 pr-8">
+                      <TableCell className="py-3 pr-5">
                         <Link
                           href={`/sites/${site.id}`}
                           className="inline-flex size-8 items-center justify-center rounded-full bg-[var(--insyt-canvas)] text-[var(--insyt-muted)] transition-all duration-300 ease-fluid group-hover:scale-110 group-hover:bg-[var(--insyt-primary)] group-hover:text-white"

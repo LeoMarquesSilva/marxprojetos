@@ -338,7 +338,7 @@ export function SubscriptionFormSheet({
                   <button
                     type="button"
                     onClick={() => setManualClient(false)}
-                    className="text-xs font-semibold text-[var(--insyt-primary)] hover:underline"
+                    className="text-xs font-semibold text-[var(--insyt-primary-dark)] hover:underline"
                   >
                     Escolher do CRM
                   </button>
@@ -445,7 +445,7 @@ export function SubscriptionFormSheet({
 
               {addonPlans.length > 0 ? (
                 <div className="mt-5 space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-muted)]">
+                  <p className="text-xs font-semibold text-[var(--insyt-muted)]">
                     Adicionais
                   </p>
                   <div className="grid gap-2">
@@ -522,7 +522,7 @@ export function SubscriptionFormSheet({
                       <button
                         type="button"
                         onClick={useListPrice}
-                        className="font-semibold text-[var(--insyt-primary)] hover:underline"
+                        className="font-semibold text-[var(--insyt-primary-dark)] hover:underline"
                       >
                         Usar valor de tabela
                       </button>
@@ -789,7 +789,7 @@ function Chip({
       className={cn(
         "h-9 rounded-full border px-4 text-sm font-medium transition-all duration-300 ease-fluid",
         selected
-          ? "border-[var(--insyt-black)] bg-[var(--insyt-black)] text-white"
+          ? "border-[var(--insyt-primary-dark)] bg-[var(--insyt-primary-dark)] text-white"
           : "border-[var(--insyt-border)] text-[var(--insyt-slate)] hover:border-[var(--insyt-slate)]/50 hover:text-[var(--insyt-black)]",
       )}
     >

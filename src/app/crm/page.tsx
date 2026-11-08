@@ -30,11 +30,10 @@ export default async function CrmPage({
 
   return (
     <AdminShell userEmail={user?.email} wide>
-      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-1000 ease-fluid">
+      <div className="space-y-6">
         <AdminPageHeader
           icon={Users}
           title="CRM"
-          description="Acompanhe leads, propostas e clientes fechados num só lugar."
           activeHref="/crm"
         />
 

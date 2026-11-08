@@ -1,4 +1,4 @@
-import { LayoutDashboard, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { AdminShell } from "@/components/admin-shell";
@@ -22,16 +22,11 @@ export default async function NewProjectPage() {
 
   return (
     <AdminShell userEmail={user?.email}>
-      <div className="animate-in fade-in slide-in-from-bottom-8 duration-1000 ease-fluid">
+      <div>
         <AdminPageHeader
           icon={Plus}
           title="Novo briefing"
           description={`Novo projeto · ${today}`}
-          activeHref="/projects/new"
-          quickLinks={[
-            { href: "/dashboard", label: "Briefings", icon: LayoutDashboard },
-            { href: "/projects/new", label: "Novo briefing", icon: Plus },
-          ]}
         />
         <div className="mt-8">
           <CreateProjectForm templates={templates} crmClients={crmClients} />

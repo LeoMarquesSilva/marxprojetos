@@ -1,8 +1,11 @@
 import Link from "next/link";
+import { ProjectArchiveButton } from "@/components/project-archive-button";
+import { ProjectWorkControls } from "@/components/project-work-controls";
+import { todayInBrasilia } from "@/lib/subscription-billing";
 import { notFound } from "next/navigation";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ArrowLeft, ArrowUpRight, FileText, Globe } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Globe } from "lucide-react";
 import { AdminShell } from "@/components/admin-shell";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { SecretAnswer } from "@/components/secret-answer";
@@ -58,30 +61,51 @@ export default async function ProjectPage({
               Voltar
             </Link>
             <div>
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-4xl font-bold tracking-tight text-[var(--insyt-black)]">
-                  {project.title}
-                </h1>
-                <StatusBadge status={project.status as ProjectStatus} />
+              <h1 className="text-2xl font-bold sm:text-[1.75rem] sm:leading-9 tracking-tight text-[var(--insyt-black)]">
+                {project.title}
+              </h1>
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+                <ProjectWorkControls
+                  layout="inline"
+                  projectId={project.id}
+                  projectTitle={project.title}
+                  workStatus={project.work_status}
+                  dueOn={project.due_on}
+                  today={todayInBrasilia()}
+                />
+                <p className="text-sm text-[var(--insyt-muted)]">
+                  Criado em{" "}
+                  {format(new Date(project.created_at), "d MMM yyyy", {
+                    locale: ptBR,
+                  })}
+                </p>
               </div>
-              <p className="mt-1 text-sm text-[var(--insyt-muted)]">
-                Criado em{" "}
-                {format(new Date(project.created_at), "d MMM yyyy", {
-                  locale: ptBR,
-                })}
-              </p>
             </div>
           </div>
 
-          <StatusActions project={project as Project} />
+          <ProjectArchiveButton
+            projectId={project.id}
+            status={project.status as ProjectStatus}
+            restoreTo={project.submitted_at ? "submitted" : "draft"}
+          />
         </div>
 
         <Card className="insyt-card border-none shadow-none">
           <CardHeader>
-            <CardTitle>Link do cliente</CardTitle>
-            <CardDescription>
-              Envie este link para o cliente preencher o briefing.
-            </CardDescription>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <CardTitle>Briefing</CardTitle>
+                  <StatusBadge status={project.status as ProjectStatus} />
+                </div>
+                <CardDescription>
+                  Envie este link para o cliente preencher o briefing.
+                </CardDescription>
+              </div>
+              {project.status !== "archived" ? (
+                <BriefingActions project={project as Project} />
+              ) : null}
+            </div>
           </CardHeader>
           <CardContent>
             <CopyLinkButton token={project.token} />
@@ -138,6 +162,7 @@ export default async function ProjectPage({
               <Separator />
               <InfoRow
                 label="Respondido em"
+                empty="Ainda não respondeu"
                 value={
                   project.submitted_at
                     ? format(new Date(project.submitted_at), "d MMM yyyy HH:mm", {
@@ -166,7 +191,7 @@ export default async function ProjectPage({
               ) : (
                 sections.map(([section, sectionQuestions]) => (
                   <div key={section} className="space-y-4">
-                    <h3 className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--insyt-primary)]">
+                    <h3 className="text-xs font-semibold text-[var(--insyt-primary-dark)]">
                       {section}
                     </h3>
                     <div className="space-y-4">
@@ -193,14 +218,20 @@ export default async function ProjectPage({
 function InfoRow({
   label,
   value,
+  empty = "Não informado",
 }: {
   label: string;
   value: string | null | undefined;
+  empty?: string;
 }) {
   return (
     <div>
       <p className="text-[var(--insyt-muted)]">{label}</p>
-      <p className="font-medium text-[var(--insyt-black)]">{value || "N/A"}</p>
+      {value ? (
+        <p className="font-medium text-[var(--insyt-black)]">{value}</p>
+      ) : (
+        <p className="text-[var(--insyt-muted)]">{empty}</p>
+      )}
     </div>
   );
 }
@@ -232,11 +263,11 @@ function AnswerRow({
   );
 }
 
-function StatusActions({ project }: { project: Project }) {
+/** Estes botões mudam só o status do briefing. O da produção fica no cabeçalho da página. */
+function BriefingActions({ project }: { project: Project }) {
   const options: { status: ProjectStatus; label: string }[] = [
     { status: "in_progress", label: "Marcar em andamento" },
     { status: "reviewed", label: "Marcar revisado" },
-    { status: "archived", label: "Arquivar" },
   ];
   const nextStatuses = options.filter((s) => s.status !== project.status);
 
@@ -245,7 +276,6 @@ function StatusActions({ project }: { project: Project }) {
       {nextStatuses.map(({ status, label }) => (
         <form key={status} action={setProjectStatus.bind(null, project.id, status)}>
           <Button type="submit" variant="outline" size="sm">
-            <FileText className="size-4" />
             {label}
           </Button>
         </form>

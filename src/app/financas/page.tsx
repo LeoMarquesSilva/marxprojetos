@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight } from "lucide-react";
+import { MoneyColumns } from "@/components/charts/money-columns";
 import { FinanceEntryDelete, FinanceEntrySheet } from "@/components/finance-entry-sheet";
 import { FinanceBalanceDialog } from "@/components/finance-projection";
 import {
@@ -30,11 +31,7 @@ import {
 } from "@/lib/finance";
 import { loadFinanceData, type FinanceData } from "@/lib/finance-page-data";
 import { addMonths, dueLabel, formatBrl, toAmount } from "@/lib/subscription-billing";
-import {
-  formatMonthLabel,
-  formatShortDate,
-  formatShortMonth,
-} from "@/lib/subscription-format";
+import { formatMonthLabel, formatShortDate } from "@/lib/subscription-format";
 import { cn } from "@/lib/utils";
 import { PAYMENT_METHODS } from "@/types/subscription";
 
@@ -89,14 +86,9 @@ export default async function FinancasMesPage({
       expense: realized.expense,
       expectedIncome: sumCharges(chargesInMonth(charges, month)),
       expectedExpense: sumCharges(chargesInMonth(bills, month)),
+      href: monthHref(month, currentMonth),
     };
   });
-  const maxBar = Math.max(
-    1,
-    ...bars.map((bar) =>
-      Math.max(bar.income + bar.expectedIncome, bar.expense + bar.expectedExpense),
-    ),
-  );
 
   return (
     <div className="space-y-6">
@@ -117,76 +109,16 @@ export default async function FinancasMesPage({
               </Link>
             )}
           </div>
-          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--insyt-muted)]">
-            <Legend className="bg-emerald-500">Entrou</Legend>
-            <Legend className="bg-emerald-200">A receber</Legend>
-            <Legend className="bg-stone-400">Saiu</Legend>
-            <Legend className="bg-stone-200">A pagar</Legend>
-          </p>
         </div>
 
-        <nav aria-label="Escolher mês" className="flex gap-1 overflow-x-auto px-3 py-3 sm:px-4">
-          {bars.map((bar) => {
-            const selected = bar.month === selectedMonth;
-            const current = bar.month === currentMonth;
-            // No celular cabem cinco meses: os vizinhos do escolhido. As setas levam adiante.
-            const nearSelected =
-              bar.month >= addMonths(selectedMonth, -2) && bar.month <= addMonths(selectedMonth, 2);
-            return (
-              <Link
-                key={bar.month}
-                href={monthHref(bar.month, currentMonth)}
-                aria-current={selected ? "page" : undefined}
-                aria-label={capitalize(formatMonthLabel(bar.month))}
-                title={[
-                  capitalize(formatMonthLabel(bar.month)),
-                  `Entrou ${formatBrl(bar.income)}`,
-                  `Saiu ${formatBrl(bar.expense)}`,
-                  bar.expectedIncome > 0 ? `A receber ${formatBrl(bar.expectedIncome)}` : null,
-                  bar.expectedExpense > 0 ? `A pagar ${formatBrl(bar.expectedExpense)}` : null,
-                ]
-                  .filter(Boolean)
-                  .join("\n")}
-                className={cn(
-                  "min-w-14 flex-1 flex-col items-center gap-1.5 rounded-xl px-1 pb-1.5 pt-2 transition-colors duration-150",
-                  nearSelected ? "flex" : "hidden sm:flex",
-                  selected
-                    ? "bg-[var(--insyt-canvas)] ring-1 ring-[var(--insyt-border)]"
-                    : "hover:bg-[var(--insyt-canvas)]/70",
-                )}
-              >
-                <span className="flex h-12 items-end gap-1">
-                  <StackedBar
-                    done={bar.income}
-                    expected={bar.expectedIncome}
-                    max={maxBar}
-                    doneClass="bg-emerald-500"
-                    expectedClass="bg-emerald-200"
-                  />
-                  <StackedBar
-                    done={bar.expense}
-                    expected={bar.expectedExpense}
-                    max={maxBar}
-                    doneClass="bg-stone-400"
-                    expectedClass="bg-stone-200"
-                  />
-                </span>
-                <span
-                  className={cn(
-                    "text-[11px] font-semibold capitalize",
-                    current
-                      ? "text-[var(--insyt-primary-dark)]"
-                      : selected
-                        ? "text-[var(--insyt-black)]"
-                        : "text-[var(--insyt-muted)]",
-                  )}
-                >
-                  {formatShortMonth(bar.month)}
-                </span>
-              </Link>
-            );
-          })}
-        </nav>
+        <div className="px-4 pb-4 pt-3 sm:px-5">
+          <MoneyColumns
+            columns={bars}
+            currentMonth={currentMonth}
+            selectedMonth={selectedMonth}
+            plotHeight={132}
+          />
+        </div>
 
         <FinanceKpiGrid className="border-t border-[var(--insyt-border)]">
           <FinanceKpi
@@ -609,44 +541,6 @@ function MonthStep({
     >
       <Icon className="size-4" />
     </Link>
-  );
-}
-
-function StackedBar({
-  done,
-  expected,
-  max,
-  doneClass,
-  expectedClass,
-}: {
-  done: number;
-  expected: number;
-  max: number;
-  doneClass: string;
-  expectedClass: string;
-}) {
-  const scale = (value: number) => (value > 0 ? Math.max(4, Math.round((value / max) * 48)) : 0);
-  const doneHeight = scale(done);
-  const expectedHeight = scale(expected);
-  if (doneHeight === 0 && expectedHeight === 0) {
-    return <span className="h-1 w-2 rounded-full bg-[var(--insyt-border)]" />;
-  }
-  return (
-    <span className="flex w-2 flex-col overflow-hidden rounded-full">
-      {expectedHeight > 0 ? (
-        <span className={expectedClass} style={{ height: expectedHeight }} />
-      ) : null}
-      {doneHeight > 0 ? <span className={doneClass} style={{ height: doneHeight }} /> : null}
-    </span>
-  );
-}
-
-function Legend({ className, children }: { className: string; children: string }) {
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className={cn("size-2 rounded-full", className)} />
-      {children}
-    </span>
   );
 }
 

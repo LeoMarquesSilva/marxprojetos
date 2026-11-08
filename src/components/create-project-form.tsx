@@ -162,7 +162,7 @@ export function CreateProjectForm({
     <form action={handleSubmit} className="space-y-8">
       <div className="grid gap-6 sm:grid-cols-3">
         <div className="insyt-card p-8 h-full flex flex-col justify-center">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--insyt-muted)]">
+            <p className="text-[11px] font-semibold text-[var(--insyt-muted)]">
               Template
             </p>
             <p className="mt-3 text-2xl font-bold tracking-tight text-[var(--insyt-black)]">
@@ -170,7 +170,7 @@ export function CreateProjectForm({
             </p>
         </div>
         <div className="insyt-card p-8 h-full flex flex-col justify-center">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--insyt-muted)]">
+            <p className="text-[11px] font-semibold text-[var(--insyt-muted)]">
               Perguntas
             </p>
             <p className="mt-3 text-4xl font-bold tracking-tight text-[var(--insyt-black)]">
@@ -178,7 +178,7 @@ export function CreateProjectForm({
             </p>
         </div>
         <div className="insyt-card p-8 h-full flex flex-col justify-center">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--insyt-muted)]">
+            <p className="text-[11px] font-semibold text-[var(--insyt-muted)]">
               Obrigatórias
             </p>
             <p className="mt-3 text-4xl font-bold tracking-tight text-[var(--insyt-black)]">
@@ -199,7 +199,7 @@ export function CreateProjectForm({
         </CardHeader>
         <CardContent className="grid gap-6 sm:grid-cols-2">
           <div className="space-y-3">
-            <Label htmlFor="ai_niche" className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-slate)]">Nicho do cliente *</Label>
+            <Label htmlFor="ai_niche" className="text-xs font-semibold text-[var(--insyt-slate)]">Nicho do cliente *</Label>
             <Input
               id="ai_niche"
               value={niche}
@@ -209,7 +209,7 @@ export function CreateProjectForm({
             />
           </div>
           <div className="space-y-3">
-            <Label htmlFor="ai_product" className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-slate)]">Tipo de produto *</Label>
+            <Label htmlFor="ai_product" className="text-xs font-semibold text-[var(--insyt-slate)]">Tipo de produto *</Label>
             <Input
               id="ai_product"
               value={productType}
@@ -219,7 +219,7 @@ export function CreateProjectForm({
             />
           </div>
           <div className="space-y-3">
-            <Label htmlFor="ai_goal" className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-slate)]">Objetivo (opcional)</Label>
+            <Label htmlFor="ai_goal" className="text-xs font-semibold text-[var(--insyt-slate)]">Objetivo (opcional)</Label>
             <Input
               id="ai_goal"
               value={goal}
@@ -229,7 +229,7 @@ export function CreateProjectForm({
             />
           </div>
           <div className="space-y-3">
-            <Label htmlFor="ai_tone" className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-slate)]">Tom (opcional)</Label>
+            <Label htmlFor="ai_tone" className="text-xs font-semibold text-[var(--insyt-slate)]">Tom (opcional)</Label>
             <Input
               id="ai_tone"
               value={tone}
@@ -239,7 +239,7 @@ export function CreateProjectForm({
             />
           </div>
           <div className="space-y-3 sm:col-span-2">
-            <Label htmlFor="ai_context" className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-slate)]">O que já sabemos do cliente (opcional)</Label>
+            <Label htmlFor="ai_context" className="text-xs font-semibold text-[var(--insyt-slate)]">O que já sabemos do cliente (opcional)</Label>
             <Textarea
               id="ai_context"
               rows={4}
@@ -273,7 +273,7 @@ export function CreateProjectForm({
         </CardHeader>
         <CardContent className="grid gap-6 sm:grid-cols-2">
           <div className="space-y-3 sm:col-span-2">
-            <Label htmlFor="title" className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-slate)]">Título do projeto *</Label>
+            <Label htmlFor="title" className="text-xs font-semibold text-[var(--insyt-slate)]">Título do projeto *</Label>
             <Input
               id="title"
               name="title"
@@ -283,7 +283,7 @@ export function CreateProjectForm({
             />
           </div>
           <div className="space-y-3 sm:col-span-2">
-            <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-slate)]">Template base</Label>
+            <Label className="text-xs font-semibold text-[var(--insyt-slate)]">Template base</Label>
             <Select value={templateId} onValueChange={onTemplateChange} items={templates.map((t) => ({ value: t.id, label: t.name }))}>
               <SelectTrigger className="h-12 rounded-xl bg-[var(--insyt-canvas)] border-transparent focus:bg-white transition-colors duration-300">
                 <SelectValue placeholder="Selecione um template" />
@@ -301,7 +301,7 @@ export function CreateProjectForm({
             ) : null}
           </div>
           <div className="space-y-3 sm:col-span-2">
-            <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-slate)]">
+            <Label className="text-xs font-semibold text-[var(--insyt-slate)]">
               Cliente do CRM
             </Label>
             <Combobox
@@ -329,7 +329,7 @@ export function CreateProjectForm({
             </p>
           </div>
           <div className="space-y-3">
-            <Label htmlFor="client_name" className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-slate)]">Nome do cliente</Label>
+            <Label htmlFor="client_name" className="text-xs font-semibold text-[var(--insyt-slate)]">Nome do cliente</Label>
             <Input
               id="client_name"
               value={clientName}
@@ -340,7 +340,7 @@ export function CreateProjectForm({
             />
           </div>
           <div className="space-y-3">
-            <Label htmlFor="client_email" className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-slate)]">E-mail do cliente</Label>
+            <Label htmlFor="client_email" className="text-xs font-semibold text-[var(--insyt-slate)]">E-mail do cliente</Label>
             <Input
               id="client_email"
               type="email"
@@ -349,7 +349,7 @@ export function CreateProjectForm({
             />
           </div>
           <div className="space-y-3 sm:col-span-2">
-            <Label htmlFor="client_company" className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-slate)]">Empresa</Label>
+            <Label htmlFor="client_company" className="text-xs font-semibold text-[var(--insyt-slate)]">Empresa</Label>
             <Input
               id="client_company"
               value={clientCompany}
@@ -357,7 +357,7 @@ export function CreateProjectForm({
             />
           </div>
           <div className="space-y-3 sm:col-span-2">
-            <Label htmlFor="welcome_message" className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-slate)]">Mensagem de boas-vindas</Label>
+            <Label htmlFor="welcome_message" className="text-xs font-semibold text-[var(--insyt-slate)]">Mensagem de boas-vindas</Label>
             <Textarea
               id="welcome_message"
               name="welcome_message"
@@ -383,7 +383,7 @@ export function CreateProjectForm({
               className="rounded-2xl border border-[var(--insyt-border)] bg-[var(--insyt-canvas)] p-6 transition-all duration-300 hover:shadow-md hover:bg-white"
             >
               <div className="mb-4 flex items-center justify-between gap-2">
-                <span className="inline-flex items-center rounded-full bg-[var(--insyt-black)]/5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--insyt-slate)]">
+                <span className="inline-flex items-center rounded-full bg-[var(--insyt-black)]/5 px-2.5 py-1 text-[11px] font-semibold text-[var(--insyt-slate)]">
                   {q.section ?? "Geral"} ·{" "}
                   {QUESTION_TYPE_LABELS[q.type] ?? q.type}
                   {q.required ? " · obrigatório" : ""}
@@ -391,7 +391,7 @@ export function CreateProjectForm({
               </div>
               <div className="grid gap-5 sm:grid-cols-2">
                 <div className="space-y-3 sm:col-span-2">
-                  <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-slate)]">Pergunta</Label>
+                  <Label className="text-xs font-semibold text-[var(--insyt-slate)]">Pergunta</Label>
                   <Input
                     value={touchedLabelIds.has(q.id) ? q.label : ""}
                     placeholder={defaultLabels[q.id] ?? q.label}
@@ -423,7 +423,7 @@ export function CreateProjectForm({
                   />
                 </div>
                 <div className="space-y-3">
-                  <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-slate)]">Obrigatório</Label>
+                  <Label className="text-xs font-semibold text-[var(--insyt-slate)]">Obrigatório</Label>
                   <Select
                     value={q.required ? "yes" : "no"}
                     onValueChange={(v) => {

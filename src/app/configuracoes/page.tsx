@@ -12,11 +12,10 @@ export default async function ConfiguracoesPage() {
 
   return (
     <AdminShell userEmail={user.email}>
-      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-1000 ease-fluid">
+      <div className="space-y-6">
         <AdminPageHeader
           icon={Settings}
           title="Configurações"
-          description="Sua senha e os usuários que têm acesso ao Briefing Studio."
           activeHref="/configuracoes"
         />
 

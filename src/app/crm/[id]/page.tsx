@@ -58,7 +58,7 @@ export default async function CrmClientPage({
               Voltar
             </Link>
             <div>
-              <h1 className="text-4xl font-bold tracking-tight text-[var(--insyt-black)]">
+              <h1 className="text-2xl font-bold sm:text-[1.75rem] sm:leading-9 tracking-tight text-[var(--insyt-black)]">
                 {client.name}
               </h1>
               <p className="mt-1 text-sm text-[var(--insyt-muted)]">

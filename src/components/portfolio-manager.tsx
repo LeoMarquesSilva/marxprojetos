@@ -96,7 +96,7 @@ export function PortfolioManager({
               Copiar portfólio
             </p>
           </div>
-          <span className="flex size-11 items-center justify-center rounded-full bg-[var(--insyt-black)] text-white transition-colors group-hover:bg-[var(--insyt-primary)]">
+          <span className="flex size-11 items-center justify-center rounded-full bg-[var(--insyt-tint)] text-[var(--insyt-primary-dark)] transition-colors group-hover:bg-[var(--insyt-primary)] group-hover:text-white">
             <Copy className="size-4" />
           </span>
         </button>
@@ -105,17 +105,10 @@ export function PortfolioManager({
       <section className="insyt-card overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-[var(--insyt-border)] px-6 py-6 sm:flex-row sm:items-end sm:justify-between sm:px-8">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--insyt-primary)]">
-              Curadoria
-            </p>
-            <h2 className="mt-2 text-2xl font-bold text-[var(--insyt-black)]">
+            <h2 className="text-[17px] font-bold text-[var(--insyt-black)]">
               Selecione seus melhores trabalhos
             </h2>
           </div>
-          <p className="max-w-sm text-sm leading-relaxed text-[var(--insyt-muted)]">
-            Publique apenas os projetos que reforçam o tipo de cliente que você
-            deseja conquistar.
-          </p>
         </div>
 
         {initialProjects.length === 0 ? (
@@ -153,7 +146,7 @@ export function PortfolioManager({
                         <ImageIcon className="size-5 text-[var(--insyt-muted)]" />
                       </div>
                     ) : null}
-                    <span className="absolute left-2 top-2 rounded-full bg-black/65 px-2 py-1 text-[10px] font-semibold tracking-wider text-white backdrop-blur">
+                    <span className="absolute left-2 top-2 rounded-full bg-black/65 px-2 py-1 text-[11px] font-semibold tracking-wider text-white backdrop-blur">
                       {String(index + 1).padStart(2, "0")}
                     </span>
                   </div>
@@ -177,10 +170,11 @@ export function PortfolioManager({
                         project.client_name ||
                         "Cliente não informado"}
                     </p>
-                    <p className="mt-2 line-clamp-1 text-sm text-[var(--insyt-slate)]">
-                      {project.portfolio_description ||
-                        "Adicione uma descrição curta para transformar o projeto em case."}
-                    </p>
+                    {project.portfolio_description ? (
+                      <p className="mt-2 line-clamp-1 text-sm text-[var(--insyt-slate)]">
+                        {project.portfolio_description}
+                      </p>
+                    ) : null}
                   </div>
 
                   <div className="flex items-center gap-2 sm:justify-end">
@@ -435,7 +429,7 @@ function PortfolioEditor({
 
         {belongsToCase ? (
           <div className="space-y-6 rounded-2xl border border-[var(--insyt-border)] p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--insyt-primary)]">
+            <p className="text-xs font-semibold text-[var(--insyt-primary-dark)]">
               Conteúdo do case
             </p>
 

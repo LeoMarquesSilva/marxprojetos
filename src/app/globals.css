@@ -4,6 +4,16 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Menu lateral recolhido. O atributo vem do script em app/layout.tsx, antes da primeira
+   pintura. Só vale a partir de lg, porque a gaveta do celular usa os mesmos links abertos. */
+@custom-variant menu-recolhido {
+  html[data-menu="recolhido"] & {
+    @media (min-width: 64rem) {
+      @slot;
+    }
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -54,6 +64,7 @@
   --insyt-black: #0a0a0a;
   --insyt-slate: #525663;
   --insyt-muted: #8b909d;
+  --insyt-placeholder: #525663;
   --insyt-canvas: #FDFBF7;
   --insyt-canvas-alt: #F5F3ED;
   --insyt-border: #E8E6E1;
@@ -92,6 +103,44 @@
   --chart-5: #0a0a0a;
 }
 
+/*
+ * Telas internas: as páginas públicas seguem com os valores de :root. Fica no
+ * <html> porque modais e menus são renderizados fora do AdminShell.
+ */
+html:has([data-admin-shell]) {
+  --insyt-black: #1d1512;
+  --insyt-slate: #5c514a;
+  --insyt-muted: #766a62;
+  --insyt-placeholder: #766a62;
+  --insyt-canvas: #faf6f1;
+  --insyt-canvas-alt: #f3ece4;
+  --insyt-border: #ece4db;
+  --insyt-tint: #fff1ea;
+  --insyt-tint-strong: #ffe3d6;
+
+  --background: #faf6f1;
+  --foreground: #1d1512;
+  --card-foreground: #1d1512;
+  --popover-foreground: #1d1512;
+  --secondary: #f3ece4;
+  --secondary-foreground: #1d1512;
+  --muted: #f3ece4;
+  --muted-foreground: #5c514a;
+  --accent: #fff1ea;
+  --accent-foreground: #bf3616;
+  --border: #ece4db;
+  --input: #e2d8cd;
+  --radius: 0.625rem;
+
+  scrollbar-color: #d6cabd transparent;
+  scrollbar-width: thin;
+}
+
+html:has([data-admin-shell]) ::selection {
+  background: #ffd9c8;
+  color: #1d1512;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -104,6 +153,14 @@
 
   html {
     @apply font-sans;
+  }
+
+  /* Na camada base: botões-link seguem com o anel próprio, que vem em utilities. */
+  html:has([data-admin-shell]) a:focus-visible,
+  html:has([data-admin-shell]) summary:focus-visible {
+    outline: 2px solid var(--insyt-primary);
+    outline-offset: 2px;
+    border-radius: 6px;
   }
 
   h1,
@@ -144,6 +201,13 @@
   /* White cards — shadow only, no gray bezel */
   .insyt-card {
     @apply rounded-2xl bg-white shadow-[0_4px_24px_-6px_rgba(0,0,0,0.07),0_2px_8px_-2px_rgba(0,0,0,0.04)];
+  }
+
+  /* Nas telas internas o cartão se apoia numa sombra curta e quente. */
+  html:has([data-admin-shell]) .insyt-card {
+    box-shadow:
+      0 1px 2px rgb(60 35 20 / 0.05),
+      0 10px 28px -18px rgb(60 35 20 / 0.18);
   }
 
   /* Dark surface — sidebar & hero header (INSYT dashboard) */

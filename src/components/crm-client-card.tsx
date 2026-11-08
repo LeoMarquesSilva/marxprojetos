@@ -67,7 +67,7 @@ function CrmClientCardContent({
             "flex size-9 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
             hasUnread
               ? "bg-[var(--insyt-primary)] text-white"
-              : "bg-[var(--insyt-canvas-alt)] text-[var(--insyt-primary)]",
+              : "bg-[var(--insyt-canvas-alt)] text-[var(--insyt-primary-dark)]",
           )}
         >
           {initialsOf(client.name)}
@@ -149,12 +149,12 @@ function CrmClientCardContent({
           <div className="min-w-0 flex-1">
             <p className="truncate text-xs font-semibold">{client.next_step}</p>
             {nextStepDate && isValid(nextStepDate) ? (
-              <p className="mt-0.5 text-[10px] font-medium">
+              <p className="mt-0.5 text-[11px] font-medium">
                 {nextStepTiming === "overdue" ? "Atrasado" : "Próximo"} ·{" "}
                 {format(nextStepDate, "dd 'de' MMM", { locale: ptBR })}
               </p>
             ) : (
-              <p className="mt-0.5 text-[10px]">Próximo passo</p>
+              <p className="mt-0.5 text-[11px]">Próximo passo</p>
             )}
           </div>
         </div>
@@ -182,7 +182,7 @@ function ChatPreviewRow({
       <MessageCircle
         className={cn(
           "size-3.5 shrink-0",
-          hasUnread ? "text-[var(--insyt-primary)]" : "text-[var(--insyt-muted)]",
+          hasUnread ? "text-[var(--insyt-primary-dark)]" : "text-[var(--insyt-muted)]",
         )}
       />
       <span
@@ -196,11 +196,11 @@ function ChatPreviewRow({
         {chat.lastMessagePreview ?? "Conversa iniciada"}
       </span>
       {hasUnread ? (
-        <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-[var(--insyt-primary)] text-[10px] font-bold text-white">
+        <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-[var(--insyt-primary)] text-[11px] font-bold text-white">
           {chat.unreadCount > 9 ? "9+" : chat.unreadCount}
         </span>
       ) : chat.lastMessageAt ? (
-        <span className="shrink-0 text-[10px] tabular-nums text-[var(--insyt-muted)]">
+        <span className="shrink-0 text-[11px] tabular-nums text-[var(--insyt-muted)]">
           {formatDistanceToNowStrict(new Date(chat.lastMessageAt), { locale: ptBR })}
         </span>
       ) : null}

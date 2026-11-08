@@ -286,7 +286,6 @@ export function MarketingPostComposer({ post }: { post?: MarketingPost }) {
         <Button
           type="button"
           onClick={openComposer}
-          className="border-white/15 bg-white/10 text-white hover:bg-white/15"
         >
           <Plus className="size-4" />
           Novo post
@@ -358,7 +357,7 @@ export function MarketingPostComposer({ post }: { post?: MarketingPost }) {
                         >
                           <ChevronLeft className="size-3.5" />
                         </button>
-                        <span className="rounded-full bg-black/60 px-1.5 text-[10px] font-semibold text-white">
+                        <span className="rounded-full bg-black/60 px-1.5 text-[11px] font-semibold text-white">
                           {index + 1}
                         </span>
                         <button

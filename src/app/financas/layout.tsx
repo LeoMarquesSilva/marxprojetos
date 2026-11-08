@@ -11,8 +11,8 @@ export default async function FinanceLayout({ children }: { children: ReactNode 
   const { user } = await requireAuthenticatedUser();
 
   return (
-    <AdminShell userEmail={user.email} wide>
-      <div className="mx-auto w-full max-w-6xl space-y-6">
+    <AdminShell userEmail={user.email}>
+      <div className="space-y-6">
         <FinanceHeader
           actions={
             <Suspense fallback={<LaunchPlaceholder />}>
@@ -34,7 +34,7 @@ async function LaunchButton() {
 
 function LaunchPlaceholder() {
   return (
-    <Button disabled className="border-white/15 bg-white/10 text-white">
+    <Button disabled>
       <Plus className="size-4" />
       Lançar
     </Button>

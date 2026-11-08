@@ -41,16 +41,16 @@ export function CrmWorkspace({
 
   return (
     <div className="space-y-6">
-      <div className="inline-flex rounded-2xl bg-[var(--insyt-canvas)] p-1">
+      <div className="flex gap-1 border-b border-[var(--insyt-border)]">
         <button
           type="button"
           onClick={() => selectView("funil")}
           aria-pressed={view === "funil"}
           className={cn(
-            "inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors",
+            "-mb-px inline-flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors duration-150",
             view === "funil"
-              ? "bg-white text-[var(--insyt-black)] shadow-sm"
-              : "text-[var(--insyt-slate)] hover:text-[var(--insyt-black)]",
+              ? "border-[var(--insyt-primary)] text-[var(--insyt-primary-dark)]"
+              : "border-transparent text-[var(--insyt-slate)] hover:text-[var(--insyt-black)]",
           )}
         >
           <Columns3 className="size-4" />
@@ -61,10 +61,10 @@ export function CrmWorkspace({
           onClick={() => selectView("conversas")}
           aria-pressed={view === "conversas"}
           className={cn(
-            "inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors",
+            "-mb-px inline-flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors duration-150",
             view === "conversas"
-              ? "bg-white text-[var(--insyt-black)] shadow-sm"
-              : "text-[var(--insyt-slate)] hover:text-[var(--insyt-black)]",
+              ? "border-[var(--insyt-primary)] text-[var(--insyt-primary-dark)]"
+              : "border-transparent text-[var(--insyt-slate)] hover:text-[var(--insyt-black)]",
           )}
         >
           <MessageCircle className="size-4" />

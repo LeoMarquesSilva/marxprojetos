@@ -41,21 +41,16 @@ export default async function ManagePortfolioPage() {
 
   return (
     <AdminShell userEmail={user?.email}>
-      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-1000 ease-fluid">
+      <div className="space-y-6">
         <AdminPageHeader
           icon={BriefcaseBusiness}
           title="Portfólio"
-          description="Transforme trabalhos entregues em prova para a próxima venda."
           activeHref="/portfolio/gerenciar"
           actions={
             <Link
               href="/"
               target="_blank"
-              className={buttonVariants({
-                variant: "outline",
-                className:
-                  "border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white",
-              })}
+              className={buttonVariants({ variant: "outline" })}
             >
               Ver página pública
               <ExternalLink className="size-4" />

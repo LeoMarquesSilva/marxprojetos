@@ -37,11 +37,10 @@ export default async function MarketingPage({
 
   return (
     <AdminShell userEmail={user.email}>
-      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-1000 ease-fluid">
+      <div className="space-y-6">
         <AdminPageHeader
           icon={BarChart3}
           title="Marketing"
-          description="Como o Instagram da INSYT está indo: alcance, engajamento e o desempenho de cada post."
           activeHref="/marketing"
           quickLinks={marketingQuickLinks}
         />
@@ -179,7 +178,7 @@ export default async function MarketingPage({
                               className="size-full object-cover"
                             />
                           ) : null}
-                          <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
+                          <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-semibold text-white">
                             {mediaLabel(media.mediaType, media.productType)}
                           </span>
                         </div>

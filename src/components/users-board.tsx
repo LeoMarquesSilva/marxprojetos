@@ -88,7 +88,8 @@ export function UsersBoard({
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-[17px] font-bold text-[var(--insyt-black)]">Usuários</h2>
         <UserCreateSheet onCreated={(user) => setUsers((prev) => [...prev, user])} />
       </div>
 
@@ -111,7 +112,7 @@ export function UsersBoard({
               >
                 <TableCell className="py-4 pl-6">
                   <div className="flex items-center gap-3">
-                    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--insyt-canvas-alt)] text-[11px] font-bold text-[var(--insyt-primary)]">
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--insyt-canvas-alt)] text-[11px] font-bold text-[var(--insyt-primary-dark)]">
                       {initialsOf(u.email)}
                     </span>
                     <div className="min-w-0">

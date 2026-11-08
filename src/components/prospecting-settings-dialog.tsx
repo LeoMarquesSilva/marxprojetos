@@ -217,7 +217,7 @@ export function ProspectingSettingsDialog({ settings }: { settings: ProspectingS
 
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--insyt-muted)]">
+            <p className="text-xs font-semibold text-[var(--insyt-muted)]">
               Prévia
             </p>
             <div className="flex gap-1">
@@ -228,7 +228,7 @@ export function ProspectingSettingsDialog({ settings }: { settings: ProspectingS
                   onClick={() => setSampleIndex(index)}
                   className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
                     sampleIndex === index
-                      ? "bg-[var(--insyt-black)] text-white"
+                      ? "bg-[var(--insyt-primary-dark)] text-white"
                       : "bg-[var(--insyt-canvas-alt)] text-[var(--insyt-slate)]"
                   }`}
                 >

@@ -115,7 +115,7 @@ function Avatar({
   unread?: boolean;
 }) {
   const sizeClass =
-    size === "lg" ? "size-14 text-base" : size === "sm" ? "size-9 text-[10px]" : "size-10 text-xs";
+    size === "lg" ? "size-14 text-base" : size === "sm" ? "size-9 text-[11px]" : "size-10 text-xs";
 
   if (src) {
     return (
@@ -136,7 +136,7 @@ function Avatar({
         sizeClass,
         unread
           ? "bg-[var(--insyt-primary)] text-white"
-          : "bg-[var(--insyt-canvas-alt)] text-[var(--insyt-primary)]",
+          : "bg-[var(--insyt-canvas-alt)] text-[var(--insyt-primary-dark)]",
       )}
     >
       {initialsOf(name)}
@@ -426,7 +426,7 @@ export function CrmInbox({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1">
+        <div className="flex min-w-0 flex-1 flex-wrap gap-2">
           {filters.map((item) => {
             const active = filter === item.id;
             const stageAccent = isStageFilter(item.id)
@@ -441,7 +441,7 @@ export function CrmInbox({
                 className={cn(
                   "inline-flex shrink-0 items-center gap-2 rounded-full px-3.5 py-2 text-xs font-semibold transition-colors",
                   active
-                    ? "bg-[var(--insyt-black)] text-white"
+                    ? "bg-[var(--insyt-primary-dark)] text-white"
                     : stageAccent
                       ? cn(stageAccent.pillBg, stageAccent.pillText, "hover:opacity-90")
                       : "bg-[var(--insyt-canvas)] text-[var(--insyt-slate)] hover:bg-[var(--insyt-canvas-alt)]",
@@ -574,7 +574,7 @@ export function CrmInbox({
                         >
                           {name}
                         </p>
-                        <span className="shrink-0 text-[10px] tabular-nums text-[var(--insyt-muted)]">
+                        <span className="shrink-0 text-[11px] tabular-nums text-[var(--insyt-muted)]">
                           {formatChatTime(chat.lastMessageAt)}
                         </span>
                       </div>
@@ -591,7 +591,7 @@ export function CrmInbox({
                           {chat.lastMessagePreview ?? "Sem mensagens"}
                         </p>
                         {hasUnread ? (
-                          <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-[var(--insyt-primary)] text-[10px] font-bold text-white">
+                          <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-[var(--insyt-primary)] text-[11px] font-bold text-white">
                             {chat.unreadCount > 9 ? "9+" : chat.unreadCount}
                           </span>
                         ) : null}
@@ -601,7 +601,7 @@ export function CrmInbox({
                         {chat.client ? (
                           <span
                             className={cn(
-                              "inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                              "inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold",
                               STAGE_ACCENT[chat.client.stage].pillBg,
                               STAGE_ACCENT[chat.client.stage].pillText,
                             )}
@@ -609,12 +609,12 @@ export function CrmInbox({
                             {STAGE_LABELS[chat.client.stage]}
                           </span>
                         ) : (
-                          <span className="inline-flex rounded-full bg-[var(--insyt-canvas-alt)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--insyt-muted)]">
+                          <span className="inline-flex rounded-full bg-[var(--insyt-canvas-alt)] px-2 py-0.5 text-[11px] font-bold text-[var(--insyt-muted)]">
                             Sem cliente
                           </span>
                         )}
                         {chat.client?.value ? (
-                          <span className="rounded-full bg-[var(--accent)] px-2 py-0.5 text-[10px] font-bold tabular-nums text-[var(--accent-foreground)]">
+                          <span className="rounded-full bg-[var(--accent)] px-2 py-0.5 text-[11px] font-bold tabular-nums text-[var(--accent-foreground)]">
                             {currencyFormatter.format(chat.client.value)}
                           </span>
                         ) : null}
@@ -678,7 +678,7 @@ export function CrmInbox({
                     <>
                       <span
                         className={cn(
-                          "hidden rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide sm:inline-flex",
+                          "hidden rounded-full px-2.5 py-1 text-[11px] font-bold sm:inline-flex",
                           STAGE_ACCENT[activeChat.client.stage].pillBg,
                           STAGE_ACCENT[activeChat.client.stage].pillText,
                         )}
@@ -949,7 +949,7 @@ function InboxDetailsPanel({
 
       <div className="space-y-5 py-5">
         <section className="space-y-2">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--insyt-muted)]">
+          <p className="text-[11px] font-semibold text-[var(--insyt-muted)]">
             Status da mensagem
           </p>
           <div className="flex items-center gap-2 rounded-xl bg-white px-3 py-2.5 text-sm">
@@ -971,7 +971,7 @@ function InboxDetailsPanel({
 
         {activeChat.client ? (
           <section className="space-y-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--insyt-muted)]">
+            <p className="text-[11px] font-semibold text-[var(--insyt-muted)]">
               Negociação
             </p>
 
@@ -1062,7 +1062,7 @@ function InboxDetailsPanel({
                         commitStage(stage);
                       }}
                       className={cn(
-                        "rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide transition-colors",
+                        "rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors",
                         active
                           ? cn(
                               STAGE_ACCENT[stage].pillBg,
@@ -1133,7 +1133,7 @@ function InboxDetailsPanel({
           </section>
         ) : (
           <section className="space-y-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--insyt-muted)]">
+            <p className="text-[11px] font-semibold text-[var(--insyt-muted)]">
               Negociação
             </p>
             <p className="text-xs text-[var(--insyt-muted)]">
@@ -1176,7 +1176,7 @@ function InboxDetailsPanel({
         )}
 
         <section className="space-y-2">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--insyt-muted)]">
+          <p className="text-[11px] font-semibold text-[var(--insyt-muted)]">
             Prospecção
           </p>
           {prospect ? (
@@ -1190,7 +1190,7 @@ function InboxDetailsPanel({
               <div className="flex flex-wrap gap-1.5">
                 <span
                   className={cn(
-                    "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase",
+                    "rounded-full px-2 py-0.5 text-[11px] font-bold",
                     prospect.website
                       ? "bg-emerald-50 text-emerald-800"
                       : "bg-[var(--accent)] text-[var(--accent-foreground)]",
@@ -1199,7 +1199,7 @@ function InboxDetailsPanel({
                   {prospect.website ? "Tem site" : "Sem site"}
                 </span>
                 {prospect.rating != null ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-[var(--insyt-canvas-alt)] px-2 py-0.5 text-[10px] font-semibold text-[var(--insyt-slate)]">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[var(--insyt-canvas-alt)] px-2 py-0.5 text-[11px] font-semibold text-[var(--insyt-slate)]">
                     <Star className="size-3" />
                     {prospect.rating}
                   </span>
@@ -1210,7 +1210,7 @@ function InboxDetailsPanel({
                   href={prospect.website}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center gap-1.5 text-xs text-[var(--insyt-primary)] hover:underline"
+                  className="flex items-center gap-1.5 text-xs text-[var(--insyt-primary-dark)] hover:underline"
                 >
                   <Globe className="size-3.5" />
                   {prospect.website.replace(/^https?:\/\//, "")}
@@ -1231,7 +1231,7 @@ function InboxDetailsPanel({
         </section>
 
         <section className="space-y-2">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--insyt-muted)]">
+          <p className="text-[11px] font-semibold text-[var(--insyt-muted)]">
             Nota rápida
           </p>
           <Textarea

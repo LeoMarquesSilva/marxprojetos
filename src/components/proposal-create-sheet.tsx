@@ -46,7 +46,6 @@ export function ProposalCreateSheet() {
       <Button
         type="button"
         onClick={() => setOpen(true)}
-        className="border-white/15 bg-white/10 text-white hover:bg-white/15"
       >
         <Plus className="size-4" />
         Nova proposta

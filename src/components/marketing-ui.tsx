@@ -4,6 +4,7 @@ import { ptBR } from "date-fns/locale";
 import { BarChart3, Megaphone, PlugZap, Send } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import type { AdminPageQuickLink } from "@/components/admin-page-header";
+import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { DailyPoint } from "@/types/marketing";
 
@@ -30,7 +31,7 @@ export function MarketingStat({
   return (
     <div className="insyt-card p-6">
       <div className="flex items-start justify-between gap-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--insyt-muted)]">
+        <p className="text-xs font-semibold text-[var(--insyt-muted)]">
           {label}
         </p>
         <Icon
@@ -152,7 +153,7 @@ export function RangeTabs({
           className={cn(
             "rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
             days === current
-              ? "bg-[var(--insyt-black)] text-white"
+              ? "bg-[var(--insyt-primary-dark)] text-white"
               : "text-[var(--insyt-slate)] hover:text-[var(--insyt-black)]",
           )}
         >
@@ -185,7 +186,7 @@ export function MarketingNotice({
       {action ? (
         <Link
           href={action.href}
-          className="inline-flex items-center gap-2 rounded-xl bg-[var(--insyt-black)] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--insyt-primary)]"
+          className={buttonVariants()}
         >
           {action.label}
         </Link>

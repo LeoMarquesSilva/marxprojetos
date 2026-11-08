@@ -83,7 +83,7 @@ export function ProposalReadPanel({
       </p>
 
       <div className="space-y-2">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--insyt-muted)]">
+        <p className="text-[11px] font-semibold text-[var(--insyt-muted)]">
           Cada abertura
         </p>
         {sessions.map((session) => (
@@ -147,7 +147,7 @@ function Metric({
         highlight ? "bg-emerald-50" : "bg-[var(--insyt-canvas)]",
       )}
     >
-      <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--insyt-muted)]">
+      <p className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--insyt-muted)]">
         <Icon className="size-3.5" />
         {label}
       </p>

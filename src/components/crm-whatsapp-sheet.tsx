@@ -73,7 +73,7 @@ export function CrmWhatsappSheet({
           <>
             <SheetHeader className="border-b border-[var(--insyt-border)] px-6 py-6">
               <div className="flex items-start gap-3">
-                <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[var(--insyt-canvas-alt)] text-sm font-bold text-[var(--insyt-primary)]">
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[var(--insyt-canvas-alt)] text-sm font-bold text-[var(--insyt-primary-dark)]">
                   {initialsOf(client.name)}
                 </span>
                 <div className="min-w-0 flex-1 space-y-1">
@@ -86,7 +86,7 @@ export function CrmWhatsappSheet({
                     </span>
                     <Link
                       href={`/crm/${client.id}`}
-                      className="inline-flex items-center gap-1 text-[var(--insyt-primary)] hover:underline"
+                      className="inline-flex items-center gap-1 text-[var(--insyt-primary-dark)] hover:underline"
                     >
                       Abrir ficha
                       <ExternalLink className="size-3" />

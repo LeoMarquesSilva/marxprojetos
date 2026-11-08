@@ -38,11 +38,10 @@ export default async function MarketingConexaoPage({
 
   return (
     <AdminShell userEmail={user.email}>
-      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-1000 ease-fluid">
+      <div className="space-y-6">
         <AdminPageHeader
           icon={PlugZap}
           title="Conexão com a Meta"
-          description="A conta do Facebook que administra o Instagram e a conta de anúncios da INSYT."
           activeHref="/marketing/conexao"
           quickLinks={marketingQuickLinks}
         />

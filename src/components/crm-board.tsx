@@ -229,7 +229,7 @@ export function CrmBoard({ initialClients }: { initialClients: CrmBoardClient[] 
       <div className="insyt-card flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:gap-5 sm:p-5">
         <div className="flex shrink-0 items-center gap-6 border-[var(--insyt-border)] sm:border-r sm:pr-5">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--insyt-muted)]">
+            <p className="text-xs font-semibold text-[var(--insyt-muted)]">
               Em negociação
             </p>
             <p className="mt-1 text-2xl font-bold tabular-nums tracking-tight text-[var(--insyt-black)]">
@@ -324,7 +324,7 @@ export function CrmBoard({ initialClients }: { initialClients: CrmBoardClient[] 
               setQuery("");
               setOnlyUnread(false);
             }}
-            className="text-sm font-medium text-[var(--insyt-primary)] hover:underline"
+            className="text-sm font-medium text-[var(--insyt-primary-dark)] hover:underline"
           >
             Limpar filtros
           </button>
@@ -410,7 +410,7 @@ function ColumnHeader({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2">
-            <h3 className="truncate text-xs font-semibold uppercase tracking-[0.18em] text-[var(--insyt-black)]">
+            <h3 className="truncate text-xs font-semibold text-[var(--insyt-black)]">
               {STAGE_LABELS[stage]}
             </h3>
             <span

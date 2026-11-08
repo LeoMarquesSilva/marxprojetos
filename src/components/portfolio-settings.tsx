@@ -98,7 +98,7 @@ export function PortfolioSettings({ project }: { project: Project }) {
           href="/"
           target="_blank"
           rel="noopener noreferrer"
-          className="block text-sm font-medium text-[var(--insyt-primary)] hover:underline"
+          className="block text-sm font-medium text-[var(--insyt-primary-dark)] hover:underline"
         >
           Ver portfólio público ↗
         </a>

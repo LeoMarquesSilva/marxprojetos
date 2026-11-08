@@ -231,7 +231,6 @@ export function FinanceEntrySheet({
         <Button
           type="button"
           onClick={openSheet}
-          className="border-white/15 bg-white/10 text-white hover:bg-white/15"
         >
           <Plus className="size-4" />
           Lançar
@@ -282,7 +281,7 @@ export function FinanceEntrySheet({
                 inputMode="decimal"
                 value={amount}
                 onChange={(event) => setAmount(event.target.value)}
-                placeholder="648,50"
+                placeholder="Ex: 650,00"
                 className="text-lg font-bold"
               />
             </div>
@@ -343,7 +342,7 @@ export function FinanceEntrySheet({
                         <button
                           type="button"
                           onClick={() => setAmount(formatInput(remaining))}
-                          className="font-semibold text-[var(--insyt-primary)] hover:underline"
+                          className="font-semibold text-[var(--insyt-primary-dark)] hover:underline"
                         >
                           usar o restante
                         </button>
@@ -369,7 +368,7 @@ export function FinanceEntrySheet({
                 id="finance-description"
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
-                placeholder="Outeiral Advocacia — 50% do desenvolvimento"
+                placeholder="Ex: Entrada do site"
                 maxLength={160}
               />
             </div>

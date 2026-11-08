@@ -115,7 +115,7 @@ export function SubscriptionPlansSheet({
     return (
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--insyt-muted)]">
+          <h3 className="text-sm font-semibold text-[var(--insyt-muted)]">
             {title}
           </h3>
           <Button

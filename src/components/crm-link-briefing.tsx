@@ -63,7 +63,7 @@ export function CrmLinkBriefing({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link
           href={`/projects/${currentProjectId}`}
-          className="text-sm font-medium text-[var(--insyt-primary)] hover:underline"
+          className="text-sm font-medium text-[var(--insyt-primary-dark)] hover:underline"
         >
           {currentProjectTitle ?? "Ver briefing"}
         </Link>

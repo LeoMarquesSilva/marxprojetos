@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Copy, ExternalLink, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -34,6 +34,8 @@ const STATUS_STYLE: Record<ProposalStatus, string> = {
   recusada: "bg-stone-100 text-stone-600",
 };
 
+const subscribeToNothing = () => () => {};
+
 export function ProposalActions({
   proposalId,
   token,
@@ -50,8 +52,13 @@ export function ProposalActions({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  const publicUrl =
-    typeof window === "undefined" ? "" : `${window.location.origin}/p/${token}`;
+  // O servidor não conhece o domínio: o link entra logo depois da hidratação, sem divergir.
+  const origin = useSyncExternalStore(
+    subscribeToNothing,
+    () => window.location.origin,
+    () => "",
+  );
+  const publicUrl = origin ? `${origin}/p/${token}` : "";
 
   function copyLink() {
     navigator.clipboard.writeText(publicUrl).then(
@@ -92,7 +99,7 @@ export function ProposalActions({
 
         {published ? (
           <div className="space-y-2">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--insyt-muted)]">
+            <p className="text-[11px] font-semibold text-[var(--insyt-muted)]">
               Link do cliente
             </p>
             <div className="flex gap-2">
@@ -117,7 +124,7 @@ export function ProposalActions({
         ) : null}
 
         <div className="space-y-2">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--insyt-muted)]">
+          <p className="text-[11px] font-semibold text-[var(--insyt-muted)]">
             Situação
           </p>
           <div className="flex flex-wrap gap-2">

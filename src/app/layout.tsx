@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Poppins } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
+import { MENU_INIT_SCRIPT } from "@/lib/admin-menu";
 import { SITE_URL } from "@/lib/site-url";
 import "./globals.css";
 
@@ -31,6 +32,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
+        <script dangerouslySetInnerHTML={{ __html: MENU_INIT_SCRIPT }} />
         <link
           href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&display=swap"
           rel="stylesheet"

@@ -45,11 +45,10 @@ export default async function ProposalsPage() {
 
   return (
     <AdminShell userEmail={user?.email}>
-      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-1000 ease-fluid">
+      <div className="space-y-6">
         <AdminPageHeader
           icon={FileText}
           title="Propostas"
-          description="Monte, envie e acompanhe se o cliente leu."
           activeHref="/propostas"
           actions={<ProposalCreateSheet />}
         />

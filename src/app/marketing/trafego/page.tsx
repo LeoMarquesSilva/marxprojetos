@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { buttonVariants } from "@/components/ui/button";
 import {
   BadgeDollarSign,
   CircleDollarSign,
@@ -59,11 +60,10 @@ export default async function MarketingTrafegoPage({
 
   return (
     <AdminShell userEmail={user.email} wide>
-      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-1000 ease-fluid">
+      <div className="space-y-6">
         <AdminPageHeader
           icon={Megaphone}
           title="Tráfego pago"
-          description="Quanto saiu em anúncio, quantas conversas virou e quantas viraram cliente no CRM."
           activeHref="/marketing/trafego"
           quickLinks={marketingQuickLinks}
           actions={
@@ -72,7 +72,7 @@ export default async function MarketingTrafegoPage({
                 href={`https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${connection.adAccount.id.replace(/^act_/, "")}`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/15"
+                className={buttonVariants({ variant: "outline" })}
               >
                 <ExternalLink className="size-4" />
                 Gerenciador de Anúncios
@@ -174,7 +174,7 @@ export default async function MarketingTrafegoPage({
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[960px] text-sm">
                     <thead>
-                      <tr className="border-b border-[var(--insyt-border)] text-left text-[11px] font-semibold uppercase tracking-wider text-[var(--insyt-muted)]">
+                      <tr className="border-b border-[var(--insyt-border)] text-left text-[11px] font-semibold text-[var(--insyt-muted)]">
                         <th className="px-6 py-3">Campanha</th>
                         <th className="px-3 py-3 text-right">Investido</th>
                         <th className="px-3 py-3 text-right">Alcance</th>
@@ -264,7 +264,7 @@ export default async function MarketingTrafegoPage({
                 </div>
                 <Link
                   href="/crm"
-                  className="text-sm font-semibold text-[var(--insyt-primary)] hover:underline"
+                  className="text-sm font-semibold text-[var(--insyt-primary-dark)] hover:underline"
                 >
                   Abrir CRM
                 </Link>

@@ -39,16 +39,9 @@ export function PortfolioSiteSettingsEditor({
       <section className="insyt-card overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-[var(--insyt-border)] px-6 py-6 sm:flex-row sm:items-end sm:justify-between sm:px-8">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--insyt-primary)]">
-              Apresentação e contato
-            </p>
-            <h2 className="mt-2 text-2xl font-bold text-[var(--insyt-black)]">
+            <h2 className="text-[17px] font-bold text-[var(--insyt-black)]">
               Quem fala com o lead
             </h2>
-            <p className="mt-2 max-w-lg text-sm leading-relaxed text-[var(--insyt-muted)]">
-              Aparece no fim da página pública, logo antes da chamada para
-              contato — quando o lead já viu o trabalho e quer saber quem fez.
-            </p>
           </div>
           <Button type="button" variant="outline" onClick={() => setOpen(true)}>
             <Pencil className="size-3.5" />
@@ -91,7 +84,7 @@ export function PortfolioSiteSettingsEditor({
                   href={whatsappPreview}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-[var(--insyt-primary)] hover:underline"
+                  className="inline-flex items-center gap-1 text-[var(--insyt-primary-dark)] hover:underline"
                 >
                   <MessageCircle className="size-3" />
                   Testar o botão de WhatsApp

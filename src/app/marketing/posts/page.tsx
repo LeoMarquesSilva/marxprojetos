@@ -43,11 +43,10 @@ export default async function MarketingPostsPage() {
 
   return (
     <AdminShell userEmail={user.email}>
-      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-1000 ease-fluid">
+      <div className="space-y-6">
         <AdminPageHeader
           icon={Send}
           title="Posts"
-          description="Monte, agende e publique no Instagram da INSYT sem sair do sistema."
           activeHref="/marketing/posts"
           quickLinks={marketingQuickLinks}
           actions={<MarketingPostComposer />}
@@ -138,7 +137,7 @@ function PostRow({ post }: { post: MarketingPost }) {
           <img src={cover.url} alt="" loading="lazy" className="size-full object-cover" />
         ) : null}
         {post.media.length > 1 ? (
-          <span className="absolute bottom-1 right-1 rounded-full bg-black/60 px-1.5 text-[10px] font-semibold text-white">
+          <span className="absolute bottom-1 right-1 rounded-full bg-black/60 px-1.5 text-[11px] font-semibold text-white">
             {post.media.length}
           </span>
         ) : null}

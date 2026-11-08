@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-08T20:00:00-03:00",
+  "title": "Design System: INSYT, sistema interno",
+  "extensions": {
+    "colorMeta": {
+      "primary": { "role": "primary", "displayName": "Laranja INSYT", "canonical": "#f74211", "tonalRamp": ["#fff1ea", "#ffe3d6", "#fdc7b3", "#f74211", "#bf3616"] },
+      "canvas": { "role": "neutral", "displayName": "Creme quente", "canonical": "#faf6f1", "tonalRamp": ["#ffffff", "#faf6f1", "#f3ece4", "#ece4db", "#e2d8cd"] },
+      "ink": { "role": "neutral", "displayName": "Tinta quente", "canonical": "#1d1512", "tonalRamp": ["#766a62", "#5c514a", "#1d1512"] }
+    },
+    "typographyMeta": {
+      "page-title": { "displayName": "Título da tela", "purpose": "Um por tela, em Cabinet Grotesk." },
+      "section-title": { "displayName": "Título de bloco", "purpose": "Cabeçalho de cada cartão." },
+      "figure": { "displayName": "Número", "purpose": "Valores grandes dos cartões, com algarismos proporcionais." },
+      "body": { "displayName": "Texto", "purpose": "Interface, em Poppins." },
+      "table": { "displayName": "Tabela", "purpose": "Linhas densas e prazos." },
+      "caption": { "displayName": "Legenda", "purpose": "Eixos, chips e detalhes." },
+      "figure-compact": { "displayName": "Número compacto", "purpose": "Números da faixa em telas de 1280 a 1535 px." },
+      "label": { "displayName": "Rótulo", "purpose": "Cabeçalho de coluna e legenda, em caixa normal." }
+    },
+    "shadows": [
+      { "name": "card", "value": "0 1px 2px rgb(60 35 20 / 0.05), 0 10px 28px -18px rgb(60 35 20 / 0.18)", "purpose": "Cartão branco sobre o chão creme, sem borda." },
+      { "name": "nav-active", "value": "0 8px 18px -10px rgba(247, 66, 17, 0.9)", "purpose": "Item ativo do menu escuro." }
+    ],
+    "motion": [
+      { "name": "state", "value": "150ms ease", "purpose": "Só cor e estado. Sem animação de entrada de página." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" },
+      { "name": "table-client-column", "value": "@4xl (896px de cartão)" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Botão principal",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Ação principal da tela. No máximo um por bloco.",
+      "html": "<button class=\"ds-btn-primary\">Novo briefing</button>",
+      "css": ".ds-btn-primary { background: #f74211; color: #fff; height: 40px; padding: 0 24px; border: none; border-radius: 9999px; font: 500 14px Poppins, sans-serif; box-shadow: 0 10px 15px -3px rgb(247 66 17 / .2); transition: background .15s; } .ds-btn-primary:hover { background: #bf3616; } .ds-btn-primary:focus-visible { outline: 3px solid rgb(247 66 17 / .5); outline-offset: 2px; }"
+    },
+    {
+      "name": "Cartão de número",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Valor, rótulo e dica, com bloco de ícone em pêssego.",
+      "html": "<div class=\"ds-kpi\"><span class=\"ds-kpi-tile\"></span><span><b class=\"ds-kpi-value\">R$ 806,88</b><span class=\"ds-kpi-label\">Receitas do mês</span></span></div>",
+      "css": ".ds-kpi { display: flex; gap: 14px; padding: 16px; background: #fff; border-radius: 18px; box-shadow: 0 1px 2px rgb(60 35 20 / .05), 0 10px 28px -18px rgb(60 35 20 / .18); transition: background .15s; } .ds-kpi:hover { background: #fff1ea; } .ds-kpi-tile { width: 44px; height: 44px; border-radius: 14px; background: #fff1ea; } .ds-kpi-value { display: block; font: 700 26px 'Cabinet Grotesk', sans-serif; color: #1d1512; } .ds-kpi-label { font: 400 13px Poppins, sans-serif; color: #5c514a; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "A central de trabalho da INSYT",
+    "overview": "Tela de trabalho de uma pessoa só, usada todo dia. Chão creme, menu escuro fixo e um único laranja para ação, seleção e dado principal.",
+    "keyCharacteristics": ["Estado real do negócio em primeiro lugar", "Realizado sólido e previsto claro", "Resolver na própria linha"],
+    "rules": [
+      { "name": "Só o que é real", "body": "Número e botão só aparecem com dado ou ação de verdade por trás.", "section": "colors" },
+      { "name": "Um jeito de selecionar", "body": "Filtro selecionado usa primary-dark com texto branco, igual ao item ativo do menu. Tinta escura fica para a barra de ações em lote e os passos numerados.", "section": "colors" }
+    ],
+    "dos": ["Colocar atraso e vencimento antes de tudo", "Usar tabular-nums em colunas de valores"],
+    "donts": ["Animação de entrada de página", "Caixa alta com espaçamento em rótulos", "Laranja em estado inativo"]
+  }
+}

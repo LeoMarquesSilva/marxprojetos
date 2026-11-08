@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Loader2, Search, Sparkles } from "lucide-react";
+import { ChevronDown, Loader2, Search, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,7 +26,7 @@ import { PROSPECT_SEGMENTS, findSegment } from "@/lib/prospecting/segments";
 import { cn } from "@/lib/utils";
 
 const PROVIDERS: { value: SearchProvider; label: string; env: string | null }[] = [
-  { value: "maps", label: "Google Maps — robô próprio (grátis)", env: null },
+  { value: "maps", label: "Google Maps, robô próprio", env: null },
   { value: "google", label: "Google Places API (oficial)", env: "GOOGLE_PLACES_API_KEY" },
   { value: "apify", label: "Apify (robô pago)", env: "APIFY_TOKEN" },
   { value: "localprospects", label: "LocalProspects", env: "LOCALPROSPECTS_API_KEY" },
@@ -38,16 +38,9 @@ const MODES: { value: SearchMode; label: string }[] = [
   { value: "varredura", label: "Varredura — cidade inteira em quadrantes" },
 ];
 
+/** Só as fontes pagas precisam avisar de custo; o robô próprio não cobra nada. */
 function costHint(provider: SearchProvider, mode: SearchMode) {
-  if (provider === "maps") {
-    const reach =
-      mode === "varredura"
-        ? "Varre a cidade em 9 quadrantes (~3 min) e passa do limite da lista única do Maps."
-        : mode === "ampla"
-          ? "Busca até 4 termos do nicho, ~30s cada."
-          : "Até ~120 empresas, em cerca de 30s.";
-    return `O robô abre o Google Maps no seu computador, rola a lista e lê cada empresa — sem API e sem custo. ${reach} Depois ele mesmo analisa os sites e verifica o WhatsApp.`;
-  }
+  if (provider === "maps") return null;
   if (provider === "google") {
     if (mode === "varredura") {
       return "Divide a cidade em 9 áreas e busca até 60 em cada — centenas de leads, ~28 requisições.";
@@ -68,11 +61,14 @@ export function ProspectingSearchPanel({
   workerOnline,
   onSearched,
   onQueued,
+  defaultOpen = false,
 }: {
   status: ProspectingStatus;
   workerOnline: boolean;
   onSearched: (newIds: string[]) => void;
   onQueued: () => void;
+  /** Sem nenhum lead, a busca é o que resta fazer na tela. */
+  defaultOpen?: boolean;
 }) {
   const [provider, setProvider] = useState<SearchProvider>("maps");
   const [mode, setMode] = useState<SearchMode>("padrao");
@@ -84,6 +80,8 @@ export function ProspectingSearchPanel({
 
   const selectedSegment = findSegment(segmentId);
   const providerReady = status.providers[provider];
+  const robotOff = provider === "maps" && !workerOnline;
+  const hint = providerReady ? costHint(provider, mode) : null;
 
   function pickSegment(id: string) {
     const segment = findSegment(id);
@@ -153,9 +151,22 @@ export function ProspectingSearchPanel({
   }
 
   return (
-    <div className="insyt-card space-y-5 p-6">
+    <details className="insyt-card group/busca" open={defaultOpen}>
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-[inherit] px-4 py-4 sm:px-6 [&::-webkit-details-marker]:hidden">
+        <span className="flex items-center gap-2.5 whitespace-nowrap text-sm font-semibold text-[var(--insyt-black)]">
+          <Search className="size-4 text-[var(--insyt-primary)]" />
+          Buscar novos leads
+        </span>
+        <span className="flex items-center gap-3">
+          {robotOff ? (
+            <span className="whitespace-nowrap text-xs font-medium text-amber-700">Robô desligado</span>
+          ) : null}
+          <ChevronDown className="size-4 text-[var(--insyt-muted)] transition-transform duration-150 group-open/busca:rotate-180" />
+        </span>
+      </summary>
+      <div className="space-y-5 border-t border-[var(--insyt-border)] p-6">
       <div className="space-y-2">
-        <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--insyt-muted)]">
+        <p className="flex items-center gap-1.5 text-xs font-semibold text-[var(--insyt-muted)]">
           <Sparkles className="size-3.5 text-[var(--insyt-primary)]" />
           Nichos em que já temos case
         </p>
@@ -263,9 +274,10 @@ export function ProspectingSearchPanel({
         </Button>
       </div>
 
+      {!providerReady || hint || robotOff ? (
       <p className="text-xs text-[var(--insyt-muted)]">
         {providerReady ? (
-          costHint(provider, mode)
+          hint
         ) : (
           <>
             Fonte não configurada: defina{" "}
@@ -275,14 +287,16 @@ export function ProspectingSearchPanel({
             no .env e na Vercel — ou use o robô próprio, que não precisa de chave.
           </>
         )}
-        {provider === "maps" && !workerOnline ? (
-          <span className="mt-1 block font-medium text-amber-700">
+        {robotOff ? (
+          <span className="block font-medium text-amber-700">
             O robô está desligado. No computador, rode{" "}
             <code className="rounded bg-[var(--insyt-canvas-alt)] px-1">npm run maps:robo</code> —
             a busca espera na fila até ele ligar.
           </span>
         ) : null}
       </p>
-    </div>
+      ) : null}
+      </div>
+    </details>
   );
 }

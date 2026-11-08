@@ -9,14 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { updateCrmClient } from "@/app/actions/crm";
 import type { CrmClient } from "@/types/crm";
 
@@ -61,113 +59,114 @@ export function CrmEditClientSheet({ client }: { client: CrmClient }) {
   }
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger
-        render={
-          <Button type="button" variant="outline" size="sm">
-            <Pencil className="size-4" />
-            Editar
-          </Button>
-        }
-      />
-      <SheetContent side="right" className="sm:max-w-lg">
-        <SheetHeader>
-          <SheetTitle>Editar cliente</SheetTitle>
-          <SheetDescription>Atualize os dados de {client.name}.</SheetDescription>
-        </SheetHeader>
+    <>
+      <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
+        <Pencil className="size-4" />
+        Editar
+      </Button>
 
-        <div className="flex-1 space-y-8 overflow-y-auto px-4 pb-4">
-          <div className="space-y-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--insyt-muted)]">
-              Sobre o cliente
-            </p>
-            <div className="space-y-2">
-              <Label htmlFor="crm-edit-name">Nome *</Label>
-              <Input id="crm-edit-name" value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="crm-edit-company">Empresa</Label>
-                <Input
-                  id="crm-edit-company"
-                  value={company}
-                  onChange={(e) => setCompany(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="crm-edit-email">E-mail</Label>
-                <Input
-                  id="crm-edit-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="crm-edit-phone">Telefone</Label>
-              <Input
-                id="crm-edit-phone"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-              />
-            </div>
-          </div>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden rounded-3xl bg-white p-0 sm:max-w-lg">
+          <DialogHeader className="border-b border-[var(--insyt-border)] px-6 py-5 pr-12">
+            <DialogTitle className="text-2xl font-bold text-[var(--insyt-black)]">
+              Editar cliente
+            </DialogTitle>
+            <DialogDescription>Atualize os dados de {client.name}.</DialogDescription>
+          </DialogHeader>
 
-          <div className="space-y-4 border-t border-[var(--insyt-border)] pt-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--insyt-muted)]">
-              Negócio
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="crm-edit-source">Origem</Label>
-                <Input
-                  id="crm-edit-source"
-                  placeholder="WhatsApp, indicação..."
-                  value={source}
-                  onChange={(e) => setSource(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="crm-edit-value">Valor estimado (R$)</Label>
-                <Input
-                  id="crm-edit-value"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={value}
-                  onChange={(e) => setValue(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-
-          {client.stage === "perdido" ? (
-            <div className="space-y-4 border-t border-[var(--insyt-border)] pt-6">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--insyt-muted)]">
-                Perda
+          <div className="min-h-0 flex-1 space-y-8 overflow-y-auto px-6 py-6">
+            <div className="space-y-4">
+              <p className="text-xs font-semibold text-[var(--insyt-muted)]">
+                Sobre o cliente
               </p>
               <div className="space-y-2">
-                <Label htmlFor="crm-edit-lost-reason">Motivo da perda</Label>
-                <Textarea
-                  id="crm-edit-lost-reason"
-                  placeholder="Ex: preço, prazo, escolheu outro escritório..."
-                  rows={3}
-                  value={lostReason}
-                  onChange={(e) => setLostReason(e.target.value)}
+                <Label htmlFor="crm-edit-name">Nome *</Label>
+                <Input id="crm-edit-name" value={name} onChange={(e) => setName(e.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="crm-edit-company">Empresa</Label>
+                  <Input
+                    id="crm-edit-company"
+                    value={company}
+                    onChange={(e) => setCompany(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="crm-edit-email">E-mail</Label>
+                  <Input
+                    id="crm-edit-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="crm-edit-phone">Telefone</Label>
+                <Input
+                  id="crm-edit-phone"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
                 />
               </div>
             </div>
-          ) : null}
-        </div>
 
-        <SheetFooter>
-          <Button type="button" onClick={handleSubmit} disabled={isPending}>
-            {isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-            Salvar
-          </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+            <div className="space-y-4 border-t border-[var(--insyt-border)] pt-6">
+              <p className="text-xs font-semibold text-[var(--insyt-muted)]">
+                Negócio
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="crm-edit-source">Origem</Label>
+                  <Input
+                    id="crm-edit-source"
+                    placeholder="WhatsApp, indicação..."
+                    value={source}
+                    onChange={(e) => setSource(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="crm-edit-value">Valor estimado (R$)</Label>
+                  <Input
+                    id="crm-edit-value"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={value}
+                    onChange={(e) => setValue(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {client.stage === "perdido" ? (
+              <div className="space-y-4 border-t border-[var(--insyt-border)] pt-6">
+                <p className="text-xs font-semibold text-[var(--insyt-muted)]">
+                  Perda
+                </p>
+                <div className="space-y-2">
+                  <Label htmlFor="crm-edit-lost-reason">Motivo da perda</Label>
+                  <Textarea
+                    id="crm-edit-lost-reason"
+                    placeholder="Ex: preço, prazo, escolheu outro escritório..."
+                    rows={3}
+                    value={lostReason}
+                    onChange={(e) => setLostReason(e.target.value)}
+                  />
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="border-t border-[var(--insyt-border)] px-6 py-4">
+            <Button type="button" className="w-full" onClick={handleSubmit} disabled={isPending}>
+              {isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+              Salvar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

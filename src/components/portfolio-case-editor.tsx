@@ -48,16 +48,9 @@ export function PortfolioCaseEditor({
     <>
       <section className="insyt-card overflow-hidden">
         <div className="border-b border-[var(--insyt-border)] px-6 py-6 sm:px-8">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--insyt-primary)]">
-            Cases
-          </p>
-          <h2 className="mt-2 text-2xl font-bold text-[var(--insyt-black)]">
+          <h2 className="text-[17px] font-bold text-[var(--insyt-black)]">
             Clientes com mais de um projeto
           </h2>
-          <p className="mt-2 max-w-lg text-sm leading-relaxed text-[var(--insyt-muted)]">
-            O case agrupa projetos do mesmo cliente num bloco de destaque no
-            topo da página pública.
-          </p>
         </div>
 
         <div className="divide-y divide-[var(--insyt-border)]">

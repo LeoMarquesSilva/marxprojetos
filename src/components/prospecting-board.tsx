@@ -588,6 +588,7 @@ export function ProspectingBoard({
         workerOnline={workerOnline}
         onSearched={handleSearched}
         onQueued={() => setQueuePoke((value) => value + 1)}
+        defaultOpen={prospects.length === 0}
       />
 
       <ProspectingMapsQueue
@@ -697,8 +698,8 @@ export function ProspectingBoard({
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative w-full sm:w-64">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative w-full sm:w-48">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--insyt-muted)]" />
           <Input
             placeholder="Buscar na lista"
@@ -711,7 +712,7 @@ export function ProspectingBoard({
           />
         </div>
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v ?? "todos")}>
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-44 whitespace-nowrap">
             <SelectValue>
               {(value: string | null) =>
                 value === "todos" || !value
@@ -730,7 +731,7 @@ export function ProspectingBoard({
           </SelectContent>
         </Select>
         <Select value={segmentFilter} onValueChange={(v) => setSegmentFilter(v ?? "todos")}>
-          <SelectTrigger className="w-56">
+          <SelectTrigger className="w-48 whitespace-nowrap [&_[data-slot=select-value]]:block [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:truncate">
             <SelectValue>
               {(value: string | null) =>
                 value === "fora"
@@ -750,7 +751,7 @@ export function ProspectingBoard({
           </SelectContent>
         </Select>
         <Select value={sort} onValueChange={(v) => setSort((v as SortKey) ?? "prioridade")}>
-          <SelectTrigger className="w-44">
+          <SelectTrigger className="w-44 whitespace-nowrap">
             <SelectValue>
               {(value: string | null) =>
                 value === "recentes"
@@ -858,7 +859,6 @@ export function ProspectingBoard({
                   <TableHead>Negócio</TableHead>
                   <TableHead>Contato</TableHead>
                   <TableHead>Site</TableHead>
-                  <TableHead>Avaliação</TableHead>
                   <TableHead>Prioridade</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="w-10 pr-6" />
@@ -878,7 +878,7 @@ export function ProspectingBoard({
                         aria-label={`Selecionar ${p.name}`}
                       />
                     </TableCell>
-                    <TableCell className="max-w-[320px] py-4 align-top">
+                    <TableCell className="max-w-[260px] py-4 align-top">
                       <p className="flex items-center gap-1.5 truncate font-semibold text-[var(--insyt-black)]">
                         <span className="truncate">{p.name}</span>
                         {p.google_maps_uri ? (
@@ -896,30 +896,33 @@ export function ProspectingBoard({
                       <p className="truncate text-xs text-[var(--insyt-muted)]">
                         {p.category ?? p.niche} · {p.city}
                       </p>
-                      {score.segment ? (
-                        <span className="mt-1 inline-block rounded-full bg-[var(--insyt-canvas-alt)] px-2 py-0.5 text-[10px] font-semibold text-[var(--insyt-slate)]">
-                          {score.segment.label}
-                        </span>
+                      {score.segment || p.rating ? (
+                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                          {score.segment ? (
+                            <span className="max-w-full truncate rounded-full bg-[var(--insyt-canvas-alt)] px-2 py-0.5 text-[11px] font-semibold text-[var(--insyt-slate)]">
+                              {score.segment.label}
+                            </span>
+                          ) : null}
+                          {p.rating ? (
+                            <span
+                              title="Avaliação no Google"
+                              className="flex items-center gap-1 text-xs text-[var(--insyt-black)]"
+                            >
+                              <Star className="size-3 fill-amber-400 text-amber-400" />
+                              {p.rating}
+                              <span className="text-[var(--insyt-muted)]">
+                                ({p.rating_count ?? 0})
+                              </span>
+                            </span>
+                          ) : null}
+                        </div>
                       ) : null}
                     </TableCell>
-                    <TableCell className="py-4 align-top">
+                    <TableCell className="max-w-[180px] py-4 align-top">
                       <ContactCell p={p} />
                     </TableCell>
-                    <TableCell className="max-w-[220px] py-4 align-top">
+                    <TableCell className="max-w-[170px] py-4 align-top">
                       <SiteCell p={p} />
-                    </TableCell>
-                    <TableCell className="py-4 align-top">
-                      {p.rating ? (
-                        <span className="flex items-center gap-1 text-sm text-[var(--insyt-black)]">
-                          <Star className="size-3.5 fill-amber-400 text-amber-400" />
-                          {p.rating}
-                          <span className="text-xs text-[var(--insyt-muted)]">
-                            ({p.rating_count ?? 0})
-                          </span>
-                        </span>
-                      ) : (
-                        <span className="text-sm text-[var(--insyt-muted)]">—</span>
-                      )}
                     </TableCell>
                     <TableCell className="py-4 align-top">
                       <span
@@ -940,7 +943,7 @@ export function ProspectingBoard({
                           if (v) handleStatusChange(p, v as ProspectStatus);
                         }}
                       >
-                        <SelectTrigger className="h-8 w-36">
+                        <SelectTrigger className="h-8 w-32 px-3">
                           <SelectValue>
                             {(value: ProspectStatus | null) => (
                               <span className="flex items-center gap-2">
@@ -981,9 +984,11 @@ export function ProspectingBoard({
                             variant="outline"
                             disabled={!p.phone_e164}
                             onClick={() => setMessageTarget({ p, kind: "followup" })}
+                            title="Enviar follow-up"
+                            aria-label={`Enviar follow-up para ${p.name}`}
                           >
                             <Repeat2 className="size-4" />
-                            <span className="hidden sm:inline">Follow-up</span>
+                            <span className="hidden 2xl:inline">Follow-up</span>
                           </Button>
                         ) : p.status === "novo" ? (
                           <Button
@@ -994,13 +999,14 @@ export function ProspectingBoard({
                             }
                             onClick={() => handleQuickSend(p)}
                             title="Enviar a mensagem do modelo pelo WhatsApp da INSYT"
+                            aria-label={`Enviar mensagem para ${p.name}`}
                           >
                             {sendingId === p.id ? (
                               <Loader2 className="size-4 animate-spin" />
                             ) : (
                               <MessageCircle className="size-4" />
                             )}
-                            <span className="hidden sm:inline">Enviar</span>
+                            <span className="hidden 2xl:inline">Enviar</span>
                           </Button>
                         ) : null}
                         <DropdownMenu>
@@ -1201,7 +1207,7 @@ function ContactCell({ p }: { p: Prospect }) {
       {p.email ? (
         <p className="flex items-center gap-1 text-xs text-[var(--insyt-muted)]">
           <Mail className="size-3" />
-          <a href={`mailto:${p.email}`} className="max-w-[180px] truncate hover:underline">
+          <a href={`mailto:${p.email}`} className="max-w-[150px] truncate hover:underline">
             {p.email}
           </a>
         </p>
@@ -1214,7 +1220,7 @@ function ContactCell({ p }: { p: Prospect }) {
           className="flex items-center gap-1 text-xs text-[var(--insyt-muted)] hover:text-[var(--insyt-primary)]"
         >
           <AtSign className="size-3" />
-          <span className="max-w-[160px] truncate">
+          <span className="max-w-[150px] truncate">
             {p.instagram.replace(/^https?:\/\/(www\.)?instagram\.com\//, "")}
           </span>
         </a>
@@ -1240,22 +1246,22 @@ function SiteCell({ p }: { p: Prospect }) {
         href={p.website}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center gap-1 text-sm text-[var(--insyt-primary)] hover:underline"
+        className="flex w-fit items-center gap-1 text-sm text-[var(--insyt-primary-dark)] hover:underline"
       >
         <Globe className="size-3.5" />
         Ver site
         <ExternalLink className="size-3" />
       </a>
       {p.site_status === "offline" || p.site_status === "social" ? (
-        <Badge className="bg-[#fff4f0] font-semibold text-[var(--insyt-primary-dark)]">
+        <p className="line-clamp-2 whitespace-normal text-xs font-semibold text-[var(--insyt-primary-dark)]">
           {issues[0] ?? "Fora do ar"}
-        </Badge>
+        </p>
       ) : issues.length > 0 ? (
-        <p className="text-xs text-amber-700" title={issues.join("\n")}>
+        <p className="line-clamp-2 whitespace-normal text-xs text-amber-700" title={issues.join("\n")}>
           {siteScore !== null ? (
             <span
               className={cn(
-                "mr-1.5 inline-block rounded-full px-1.5 py-px text-[10px] font-bold",
+                "mr-1.5 inline-block rounded-full px-1.5 py-px text-[11px] font-bold",
                 siteScore < 40
                   ? "bg-rose-50 text-rose-700"
                   : siteScore < 70
@@ -1294,7 +1300,7 @@ function FilterChip({
       className={cn(
         "rounded-full border px-3 py-1.5 text-sm transition-colors",
         active
-          ? "border-[var(--insyt-black)] bg-[var(--insyt-black)] text-white"
+          ? "border-[var(--insyt-primary-dark)] bg-[var(--insyt-primary-dark)] text-white"
           : "border-[var(--insyt-border)] bg-white text-[var(--insyt-slate)] hover:border-[var(--insyt-slate)]",
       )}
     >
@@ -1316,7 +1322,7 @@ function StatPill({
 }) {
   const content = (
     <>
-      <p className="text-xs font-medium uppercase tracking-wider text-[var(--insyt-muted)]">
+      <p className="text-xs font-medium text-[var(--insyt-muted)]">
         {label}
       </p>
       <p

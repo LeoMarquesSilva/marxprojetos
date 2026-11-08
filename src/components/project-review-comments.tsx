@@ -63,7 +63,7 @@ export function ProjectReviewComments({
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               {c.width_pct > 0 && c.height_pct > 0 ? (
-                <Badge variant="secondary" className="text-[10px]">
+                <Badge variant="secondary" className="text-[11px]">
                   Área
                 </Badge>
               ) : null}

@@ -8,14 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { createCrmClient } from "@/app/actions/crm";
 import type { CrmStage } from "@/types/crm";
 
@@ -69,97 +67,98 @@ export function CrmNewClientSheet({ defaultStage }: { defaultStage?: CrmStage })
   }
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger
-        render={
-          <Button type="button">
-            <Plus className="size-4" />
-            Novo cliente
-          </Button>
-        }
-      />
-      <SheetContent side="right" className="sm:max-w-lg">
-        <SheetHeader>
-          <SheetTitle>Novo cliente</SheetTitle>
-          <SheetDescription>
-            Cadastre um lead ou cliente, mesmo antes de enviar um briefing.
-          </SheetDescription>
-        </SheetHeader>
+    <>
+      <Button type="button" onClick={() => setOpen(true)}>
+        <Plus className="size-4" />
+        Novo cliente
+      </Button>
 
-        <div className="flex-1 space-y-8 overflow-y-auto px-4 pb-4">
-          <div className="space-y-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--insyt-muted)]">
-              Sobre o cliente
-            </p>
-            <div className="space-y-2">
-              <Label htmlFor="crm-name">Nome *</Label>
-              <Input id="crm-name" value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden rounded-3xl bg-white p-0 sm:max-w-lg">
+          <DialogHeader className="border-b border-[var(--insyt-border)] px-6 py-5 pr-12">
+            <DialogTitle className="text-2xl font-bold text-[var(--insyt-black)]">
+              Novo cliente
+            </DialogTitle>
+            <DialogDescription>
+              Cadastre um lead ou cliente, mesmo antes de enviar um briefing.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="min-h-0 flex-1 space-y-8 overflow-y-auto px-6 py-6">
+            <div className="space-y-4">
+              <p className="text-xs font-semibold text-[var(--insyt-muted)]">
+                Sobre o cliente
+              </p>
               <div className="space-y-2">
-                <Label htmlFor="crm-company">Empresa</Label>
-                <Input
-                  id="crm-company"
-                  value={company}
-                  onChange={(e) => setCompany(e.target.value)}
-                />
+                <Label htmlFor="crm-name">Nome *</Label>
+                <Input id="crm-name" value={name} onChange={(e) => setName(e.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="crm-company">Empresa</Label>
+                  <Input
+                    id="crm-company"
+                    value={company}
+                    onChange={(e) => setCompany(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="crm-email">E-mail</Label>
+                  <Input
+                    id="crm-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="crm-email">E-mail</Label>
+                <Label htmlFor="crm-phone">Telefone</Label>
                 <Input
-                  id="crm-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  id="crm-phone"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="crm-phone">Telefone</Label>
-              <Input
-                id="crm-phone"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-              />
+
+            <div className="space-y-4 border-t border-[var(--insyt-border)] pt-6">
+              <p className="text-xs font-semibold text-[var(--insyt-muted)]">
+                Negócio
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="crm-source">Origem</Label>
+                  <Input
+                    id="crm-source"
+                    placeholder="WhatsApp, indicação..."
+                    value={source}
+                    onChange={(e) => setSource(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="crm-value">Valor estimado (R$)</Label>
+                  <Input
+                    id="crm-value"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={value}
+                    onChange={(e) => setValue(e.target.value)}
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="space-y-4 border-t border-[var(--insyt-border)] pt-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--insyt-muted)]">
-              Negócio
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="crm-source">Origem</Label>
-                <Input
-                  id="crm-source"
-                  placeholder="WhatsApp, indicação..."
-                  value={source}
-                  onChange={(e) => setSource(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="crm-value">Valor estimado (R$)</Label>
-                <Input
-                  id="crm-value"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={value}
-                  onChange={(e) => setValue(e.target.value)}
-                />
-              </div>
-            </div>
+          <div className="border-t border-[var(--insyt-border)] px-6 py-4">
+            <Button type="button" className="w-full" onClick={handleSubmit} disabled={isPending}>
+              {isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+              Adicionar
+            </Button>
           </div>
-        </div>
-
-        <SheetFooter>
-          <Button type="button" onClick={handleSubmit} disabled={isPending}>
-            {isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-            Adicionar
-          </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

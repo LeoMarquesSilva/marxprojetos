@@ -52,12 +52,12 @@ export default async function SiteDetailPage({
             Voltar para Sites
           </Link>
           <div>
-            <h1 className="text-4xl font-bold tracking-tight text-[var(--insyt-black)]">
+            <h1 className="text-2xl font-bold sm:text-[1.75rem] sm:leading-9 tracking-tight text-[var(--insyt-black)]">
               {project.title}
             </h1>
             <Link
               href={`/projects/${project.id}`}
-              className="mt-1 inline-flex items-center gap-1.5 text-sm text-[var(--insyt-primary)] hover:underline"
+              className="mt-1 inline-flex items-center gap-1.5 text-sm text-[var(--insyt-primary-dark)] hover:underline"
             >
               <FileText className="size-3.5" />
               Ver briefing e respostas do cliente

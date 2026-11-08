@@ -28,11 +28,10 @@ export default async function ProspectingPage() {
 
   return (
     <AdminShell userEmail={user?.email} wide>
-      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-1000 ease-fluid">
+      <div className="space-y-6">
         <AdminPageHeader
           icon={Radar}
           title="Prospecção"
-          description="Encontre no Google Maps negócios dos nichos em que já temos case, veja quem está sem site ou com site ruim e aborde direto no WhatsApp."
           activeHref="/prospeccao"
         />
 
