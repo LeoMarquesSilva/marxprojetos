@@ -341,8 +341,10 @@ export type ForecastTiming = "atrasado" | "a_vencer" | "futuro";
 export type ForecastCharge = {
   id: string;
   subscriptionId: string;
-  /** Repasse de projeto em sociedade (sem assinatura). */
+  /** Repasse de projeto em sociedade ou parcela de projeto (sem assinatura). */
   projectId?: string;
+  /** Parcela com data de um projeto comum (ver project-schedule.ts). */
+  parcela?: { projectTitle: string; name: string };
   /** Linha de baixo no lugar de "vence dd/mm" (ex.: o cliente já pagou). */
   note?: string;
   clientName: string;

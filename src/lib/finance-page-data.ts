@@ -26,6 +26,12 @@ import {
   partnershipSettlement,
 } from "@/lib/project-partnership";
 import {
+  installmentStates,
+  parsePaymentSchedule,
+  scheduleForecast,
+  type InstallmentState,
+} from "@/lib/project-schedule";
+import {
   getBillingState,
   isBillableMonth,
   monthStartOf,
@@ -78,7 +84,21 @@ export const loadFinanceData = cache(async () => {
     contractAmount: project.contract_amount === null ? null : toAmount(project.contract_amount),
     received: receivedByProject.get(project.id) ?? 0,
     receivedBefore: toAmount(project.received_before),
+    schedule: parsePaymentSchedule(project.payment_schedule),
   }));
+
+  // Parcelas com data dos projetos só meus: o que falta de cada uma vai para a
+  // previsão. O recebido antes de Finanças também abate, como no saldo do projeto.
+  const scheduleByProject = new Map<string, InstallmentState[]>();
+  for (const project of ownProjects) {
+    const schedule = parsePaymentSchedule(project.payment_schedule);
+    if (schedule.length === 0) continue;
+    const received = receivedByProject.get(project.id) ?? toAmount(project.received_before);
+    scheduleByProject.set(project.id, installmentStates(schedule, received, today));
+  }
+  const scheduleCharges = ownProjects.flatMap((project) =>
+    scheduleForecast(project, scheduleByProject.get(project.id) ?? []),
+  );
   const partnershipViews: PartnershipView[] = partnerships.map(({ project, plan }) => {
     const settlement = partnershipSettlement(plan, entriesOf(project.id), today);
     const elapsed = monthsBetween(plan.installments.firstMonth, currentMonth);
@@ -113,6 +133,16 @@ export const loadFinanceData = cache(async () => {
   const projectTitle = new Map(projects.map((project) => [project.id, project.title]));
   const projectReceivable = round(
     balances.reduce((sum, item) => sum + (item.remaining ?? 0), 0),
+  );
+  // Só o que está sem data fica fora da projeção de caixa.
+  const undatedReceivable = round(
+    balances.reduce((sum, item) => {
+      const scheduled = (scheduleByProject.get(item.id) ?? []).reduce(
+        (total, state) => total + state.open,
+        0,
+      );
+      return sum + Math.max(0, (item.remaining ?? 0) - scheduled);
+    }, 0),
   );
 
   const clientBySubscription = new Map(
@@ -153,6 +183,7 @@ export const loadFinanceData = cache(async () => {
   const charges = [
     ...forecastCharges(subscriptions, payments, today, FORECAST_HORIZON),
     ...partnershipForecasts.flatMap((forecast) => forecast.charges),
+    ...scheduleCharges,
   ].sort(byDueDate);
   const bills = [
     ...forecastBills(recurringExpenses, entries, today, FORECAST_HORIZON),
@@ -225,6 +256,8 @@ export const loadFinanceData = cache(async () => {
     partnershipViews,
     projectOptions,
     projectReceivable,
+    undatedReceivable,
+    scheduleByProject,
     clientBySubscription,
     ledger,
     charges,

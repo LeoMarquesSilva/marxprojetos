@@ -3,7 +3,7 @@ import { loadFinanceData } from "@/lib/finance-page-data";
 import { toAmount } from "@/lib/subscription-billing";
 
 export default async function FinanceProjecaoPage() {
-  const { today, settings, startingCash, charges, bills, overdueIncome, projectReceivable } =
+  const { today, settings, startingCash, charges, bills, overdueIncome, undatedReceivable } =
     await loadFinanceData();
 
   return (
@@ -16,7 +16,7 @@ export default async function FinanceProjecaoPage() {
       charges={charges}
       bills={bills}
       overdueIncome={overdueIncome}
-      projectReceivable={projectReceivable}
+      undatedReceivable={undatedReceivable}
     />
   );
 }

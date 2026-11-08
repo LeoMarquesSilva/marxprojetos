@@ -4,7 +4,11 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2, MoreHorizontal, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { deleteFinanceEntry, payRecurringExpense } from "@/app/actions/finance";
+import {
+  createFinanceEntry,
+  deleteFinanceEntry,
+  payRecurringExpense,
+} from "@/app/actions/finance";
 import {
   deleteSubscriptionPayment,
   registerSubscriptionPayment,
@@ -135,6 +139,51 @@ export function BillSettle({
       const entryId = result.id;
       toastWithUndo(
         `${description}: ${formatBrl(amount)} de ${formatMonthLabel(month)}, pago hoje.`,
+        () => deleteFinanceEntry(entryId),
+        () => router.refresh(),
+      );
+      router.refresh();
+    });
+  }
+
+  return <SettleButton label={label} isPending={isPending} onClick={settle} />;
+}
+
+/** Lança a parcela do projeto como entrada de hoje, no valor que falta dela. */
+export function InstallmentSettle({
+  projectId,
+  projectTitle,
+  name,
+  amount,
+  label = "Recebi",
+}: {
+  projectId: string;
+  projectTitle: string;
+  name: string;
+  amount: number;
+  label?: string;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  function settle() {
+    startTransition(async () => {
+      const result = await createFinanceEntry({
+        kind: "entrada",
+        amount,
+        occurredOn: todayInBrasilia(),
+        category: "Projeto",
+        projectId,
+        description: `${projectTitle} — ${name}`,
+        notes: "",
+      });
+      if (result.error || !result.id) {
+        toast.error(result.error ?? "Não deu para registrar o recebimento.");
+        return;
+      }
+      const entryId = result.id;
+      toastWithUndo(
+        `${projectTitle}: ${formatBrl(amount)} (${name}), recebido hoje.`,
         () => deleteFinanceEntry(entryId),
         () => router.refresh(),
       );

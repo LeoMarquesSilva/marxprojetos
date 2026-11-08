@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDownLeft, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowDownLeft, Loader2, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   createFinanceEntry,
@@ -67,13 +67,18 @@ export function FinanceEntrySheet({
   projects,
   receiveProject,
   defaultAmount,
+  defaultDescription,
   triggerLabel,
+  iconOnly = false,
 }: {
   entry?: FinanceEntry;
   projects: FinanceProjectOption[];
   receiveProject?: FinanceProjectOption;
   defaultAmount?: number;
+  defaultDescription?: string;
   triggerLabel?: string;
+  /** Botão "⋯" ao lado do Recebi: para outro valor ou outra data. */
+  iconOnly?: boolean;
 }) {
   const router = useRouter();
   const editing = Boolean(entry);
@@ -122,10 +127,11 @@ export function FinanceEntrySheet({
       setCategory("Projeto");
       setProjectId(receiveProject.id);
       setDescription(
-        `${receiveProject.title} — ${
-          receiveProject.receiveLabel ??
-          (receiveProject.received > 0 ? "restante" : "parcela")
-        }`,
+        defaultDescription ??
+          `${receiveProject.title} — ${
+            receiveProject.receiveLabel ??
+            (receiveProject.received > 0 ? "restante" : "parcela")
+          }`,
       );
       setNotes("");
     } else {
@@ -204,6 +210,17 @@ export function FinanceEntrySheet({
           onClick={openSheet}
         >
           <Pencil className="size-3.5" />
+        </Button>
+      ) : iconOnly ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          title="Outro valor ou data"
+          aria-label={`Outro valor ou data: ${defaultDescription ?? receiveProject?.title ?? "lançamento"}`}
+          onClick={openSheet}
+        >
+          <MoreHorizontal className="size-4" />
         </Button>
       ) : receiveProject ? (
         <Button type="button" variant="outline" size="sm" onClick={openSheet}>

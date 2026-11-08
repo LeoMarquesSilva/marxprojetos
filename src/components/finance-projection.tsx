@@ -33,7 +33,7 @@ export function FinanceProjection({
   charges,
   bills,
   overdueIncome,
-  projectReceivable,
+  undatedReceivable,
 }: {
   today: string;
   startingCash: number;
@@ -43,8 +43,8 @@ export function FinanceProjection({
   charges: ForecastCharge[];
   bills: ForecastBill[];
   overdueIncome: number;
-  /** Restante de projetos com valor fechado: sem data, fica fora das contas. */
-  projectReceivable: number;
+  /** O que falta receber de projetos sem parcela com data: fica fora das contas. */
+  undatedReceivable: number;
 }) {
   const [horizon, setHorizon] = useState<(typeof HORIZONS)[number]>(6);
   const [drawInput, setDrawInput] = useState("");
@@ -77,10 +77,10 @@ export function FinanceProjection({
         <div className="min-w-0 flex-1 basis-80">
           <h2 className="font-bold text-[var(--insyt-black)]">Projeção de caixa</h2>
           <p className="mt-1 text-xs text-[var(--insyt-muted)]">
-            Saldo em conta hoje + recorrência − gastos fixos, mês a mês.
-            {projectReceivable > 0
-              ? ` Os ${formatBrl(projectReceivable)} que faltam receber de projetos não entram: não têm data.`
-              : " Parcelas de projeto entram quando forem lançadas."}
+            Saldo em conta hoje + recorrência e parcelas de projeto − gastos fixos, mês a mês.
+            {undatedReceivable > 0
+              ? ` ${formatBrl(undatedReceivable)} de projetos ficam de fora: não têm parcela com data.`
+              : ""}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -353,7 +353,7 @@ export function FinanceProjection({
             onChange={(event) => setIncludeOverdue(event.target.checked)}
             className="size-3.5 accent-[var(--insyt-primary)]"
           />
-          Contar mensalidades atrasadas como recebidas este mês
+          Contar o que está atrasado como recebido este mês
           {overdueIncome > 0 ? ` (${formatBrl(overdueIncome)})` : ""}
         </label>
         <span>

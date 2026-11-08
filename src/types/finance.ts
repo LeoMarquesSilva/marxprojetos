@@ -1,3 +1,5 @@
+import type { ScheduledInstallment } from "@/lib/project-schedule";
+
 export type FinanceKind = "entrada" | "saida";
 
 export const FINANCE_INCOME_CATEGORIES = ["Projeto", "Avulso", "Outros"] as const;
@@ -44,6 +46,8 @@ export type FinanceProjectOption = {
   received: number;
   /** Recebido antes de Finanças: abate o que falta, não entra no caixa. */
   receivedBefore: number;
+  /** Parcelas com data combinadas com o cliente. */
+  schedule?: ScheduledInstallment[];
   /**
    * Projeto em sociedade: "fechado" e "recebido" são a minha parte, e o
    * lançamento sugerido se chama assim (ex.: "repasse do Samuel").

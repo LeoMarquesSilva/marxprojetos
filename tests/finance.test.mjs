@@ -20,6 +20,12 @@ import {
   paymentTrail,
   sortByUrgency,
 } from "../src/lib/subscription-billing.ts";
+import {
+  installmentStates,
+  nextInstallmentDate,
+  parsePaymentSchedule,
+  scheduleForecast,
+} from "../src/lib/project-schedule.ts";
 
 const outeiral = {
   id: "outeiral",
@@ -346,4 +352,106 @@ test("o histórico curto mostra só meses cobrados, com pago, atrasado e em aber
     { month: "2026-10-01", status: "atrasado", paidOn: null },
     { month: "2026-11-01", status: "aberto", paidOn: null },
   ]);
+});
+
+const camilaSchedule = parsePaymentSchedule([
+  { dueOn: "2026-12-10", amount: 750 },
+  { dueOn: "2026-11-10", amount: 1500, label: "entrada" },
+  { dueOn: "2027-01-10", amount: "750.00" },
+  { dueOn: "2027-02-10", amount: 750 },
+  { dueOn: "2027-03-10", amount: 750 },
+]);
+
+test("o plano de parcelas ignora item inválido e fica em ordem de data", () => {
+  assert.deepEqual(parsePaymentSchedule(null), []);
+  assert.deepEqual(parsePaymentSchedule({ dueOn: "2026-11-10" }), []);
+  assert.deepEqual(
+    parsePaymentSchedule([
+      { dueOn: "10/11/2026", amount: 100 },
+      { dueOn: "2026-11-10", amount: 0 },
+      null,
+      { dueOn: "2026-11-10", amount: 100, label: "  " },
+    ]),
+    [{ dueOn: "2026-11-10", amount: 100, label: null }],
+  );
+  assert.deepEqual(
+    camilaSchedule.map((item) => item.dueOn),
+    ["2026-11-10", "2026-12-10", "2027-01-10", "2027-02-10", "2027-03-10"],
+  );
+});
+
+test("sem nada recebido, a entrada vence no mês e as outras ficam numeradas", () => {
+  const states = installmentStates(camilaSchedule, 0, "2026-11-08");
+  assert.deepEqual(
+    states.map(({ name, open, status }) => [name, open, status]),
+    [
+      ["entrada", 1500, "a_vencer"],
+      ["parcela 1 de 4", 750, "futuro"],
+      ["parcela 2 de 4", 750, "futuro"],
+      ["parcela 3 de 4", 750, "futuro"],
+      ["parcela 4 de 4", 750, "futuro"],
+    ],
+  );
+});
+
+test("o recebido abate da parcela mais antiga e o resto continua em aberto", () => {
+  const states = installmentStates(camilaSchedule, "1700.00", "2026-12-15");
+  assert.deepEqual(
+    states.slice(0, 3).map(({ paid, open, status }) => [paid, open, status]),
+    [
+      [1500, 0, "pago"],
+      [200, 550, "atrasado"],
+      [0, 750, "futuro"],
+    ],
+  );
+
+  const quitado = installmentStates(camilaSchedule, 4500, "2026-11-08");
+  assert.equal(quitado.every((state) => state.status === "pago"), true);
+});
+
+test("parcela em aberto entra na previsão e na projeção de caixa", () => {
+  const today = "2026-11-08";
+  const charges = scheduleForecast(
+    { id: "camila", title: "Site Camila Gracioli" },
+    installmentStates(camilaSchedule, 0, today),
+  );
+
+  assert.equal(charges.length, 5);
+  assert.deepEqual(charges[0], {
+    id: "parcela:camila:0",
+    subscriptionId: "",
+    projectId: "camila",
+    parcela: { projectTitle: "Site Camila Gracioli", name: "entrada" },
+    clientName: "Site Camila Gracioli · entrada",
+    amount: 1500,
+    dueOn: "2026-11-10",
+    month: "2026-11-01",
+    timing: "a_vencer",
+  });
+
+  const [novembro, dezembro] = projectCash({
+    startingCash: 1000,
+    today,
+    charges,
+    bills: [],
+    months: 2,
+  });
+  assert.equal(novembro.income, 1500);
+  assert.equal(novembro.closing, 2500);
+  assert.equal(dezembro.income, 750);
+  assert.equal(dezembro.closing, 3250);
+
+  const pago = scheduleForecast(
+    { id: "camila", title: "Site Camila Gracioli" },
+    installmentStates(camilaSchedule, 1500, today),
+  );
+  assert.equal(pago.length, 4);
+  assert.equal(pago[0].clientName, "Site Camila Gracioli · parcela 1 de 4");
+});
+
+test("a próxima parcela cai no mesmo dia, ou no último dia do mês mais curto", () => {
+  assert.equal(nextInstallmentDate("2026-11-10"), "2026-12-10");
+  assert.equal(nextInstallmentDate("2026-12-10"), "2027-01-10");
+  assert.equal(nextInstallmentDate("2027-01-31"), "2027-02-28");
+  assert.equal(nextInstallmentDate("2028-01-31"), "2028-02-29");
 });

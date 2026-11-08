@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAuthenticatedUser } from "@/lib/supabase/require-authenticated-user";
 import { parsePartnership, withClientPayment } from "@/lib/project-partnership";
+import type { ScheduledInstallment } from "@/lib/project-schedule";
 import { addMonths, monthStartOf } from "@/lib/subscription-billing";
 import {
   FINANCE_EXPENSE_CATEGORIES,
@@ -139,13 +140,15 @@ export type FinanceProjectRow = {
   received_before: number | string;
   /** Plano do projeto em sociedade (jsonb); null nos projetos só meus. */
   partnership: unknown;
+  /** Parcelas com data combinadas com o cliente (jsonb). */
+  payment_schedule: unknown;
 };
 
 export async function getFinanceProjects(): Promise<FinanceProjectRow[]> {
   const { supabase } = await requireAuthenticatedUser();
   const { data, error } = await supabase
     .from("projects")
-    .select("id, title, contract_amount, received_before, partnership")
+    .select("id, title, contract_amount, received_before, partnership, payment_schedule")
     .order("created_at", { ascending: false });
 
   if (error) throw new Error(error.message);
@@ -228,6 +231,7 @@ export async function setProjectContractAmount(
   projectId: string,
   amount: number | null,
   receivedBefore = 0,
+  schedule: ScheduledInstallment[] = [],
 ) {
   const { supabase } = await requireAuthenticatedUser();
   if (amount !== null && (!Number.isFinite(amount) || amount < 0)) {
@@ -239,12 +243,29 @@ export async function setProjectContractAmount(
   if (amount !== null && receivedBefore > amount) {
     return { error: "O já recebido passa do valor fechado." };
   }
+  const invalidInstallment = schedule.some(
+    (item) => !DATE_PATTERN.test(item.dueOn) || !Number.isFinite(item.amount) || item.amount <= 0,
+  );
+  if (invalidInstallment) {
+    return { error: "Confira as parcelas: cada uma precisa de data e valor maior que zero." };
+  }
+
+  // Sem valor fechado o projeto sai da lista, e as parcelas saem junto.
+  const paymentSchedule =
+    amount === null || schedule.length === 0
+      ? null
+      : schedule.map(({ dueOn, amount: value, label }) => ({
+          dueOn,
+          amount: Math.round(value * 100) / 100,
+          ...(label ? { label } : {}),
+        }));
 
   const { error } = await supabase
     .from("projects")
     .update({
       contract_amount: amount === null ? null : Math.round(amount * 100) / 100,
       received_before: amount === null ? 0 : Math.round(receivedBefore * 100) / 100,
+      payment_schedule: paymentSchedule,
     })
     .eq("id", projectId);
 
@@ -296,14 +317,16 @@ export async function createFinanceEntry(input: FinanceEntryInput) {
   const built = buildEntryFields(input);
   if ("error" in built) return { error: built.error };
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("finance_entries")
-    .insert({ owner_id: user.id, ...built.fields });
+    .insert({ owner_id: user.id, ...built.fields })
+    .select("id")
+    .single();
 
   if (error) return { error: error.message };
 
   revalidatePath("/financas", "layout");
-  return { success: true };
+  return { success: true, id: data.id as string };
 }
 
 export async function updateFinanceEntry(id: string, input: FinanceEntryInput) {

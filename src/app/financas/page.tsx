@@ -7,6 +7,7 @@ import {
   BillSettleOptions,
   ChargeSettle,
   FinancePaymentDelete,
+  InstallmentSettle,
 } from "@/components/finance-settle";
 import {
   FinanceEmpty,
@@ -267,7 +268,7 @@ export default async function FinancasMesPage({
             ) : isPast ? (
               `em aberto de ${monthName}`
             ) : (
-              `recorrência e repasses de ${monthName}`
+              `mensalidades, parcelas e repasses de ${monthName}`
             )
           }
           action={<ListTotal value={toReceive} />}
@@ -396,6 +397,10 @@ function ChargeRow({ charge, data }: { charge: ForecastCharge; data: FinanceData
   const partnership = charge.projectId
     ? partnershipViews.find((view) => view.id === charge.projectId)
     : undefined;
+  const parcela = charge.parcela;
+  const parcelaProject = parcela
+    ? projectOptions.find((option) => option.id === charge.projectId)
+    : undefined;
 
   return (
     <li className="flex flex-wrap items-center gap-x-3 gap-y-2 px-5 py-3.5 sm:px-6">
@@ -422,7 +427,25 @@ function ChargeRow({ charge, data }: { charge: ForecastCharge; data: FinanceData
         {formatBrl(charge.amount)}
       </p>
       <span className="ml-auto flex shrink-0 items-center gap-1">
-        {partnership ? (
+        {parcela && parcelaProject ? (
+          <>
+            {canSettle ? (
+              <InstallmentSettle
+                projectId={parcelaProject.id}
+                projectTitle={parcela.projectTitle}
+                name={parcela.name}
+                amount={charge.amount}
+              />
+            ) : null}
+            <FinanceEntrySheet
+              projects={projectOptions}
+              receiveProject={parcelaProject}
+              defaultAmount={charge.amount}
+              defaultDescription={`${parcela.projectTitle} — ${parcela.name}`}
+              iconOnly
+            />
+          </>
+        ) : partnership ? (
           canSettle ? (
             <FinanceEntrySheet
               projects={projectOptions}

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Pencil, Plus } from "lucide-react";
+import { Loader2, Pencil, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { setProjectContractAmount } from "@/app/actions/finance";
 import { financeSelectClassName } from "@/components/finance-entry-sheet";
@@ -16,14 +16,21 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { parseBrlAmount } from "@/lib/subscription-billing";
+import { nextInstallmentDate, type ScheduledInstallment } from "@/lib/project-schedule";
+import { formatBrl, parseBrlAmount, todayInBrasilia } from "@/lib/subscription-billing";
 import type { FinanceProjectOption } from "@/types/finance";
+
+type ScheduleRow = { key: number; dueOn: string; amount: string; label: string | null };
 
 function formatInput(value: number | null | undefined) {
   return value ? value.toFixed(2).replace(".", ",") : "";
 }
 
-/** Define o valor fechado de um projeto. Com `project`, já abre nele. */
+function round(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+/** Define o valor fechado e as parcelas de um projeto. Com `project`, já abre nele. */
 export function FinanceProjectValueDialog({
   projects,
   project,
@@ -36,17 +43,50 @@ export function FinanceProjectValueDialog({
   const [projectId, setProjectId] = useState("");
   const [amount, setAmount] = useState("");
   const [receivedBefore, setReceivedBefore] = useState("");
+  const [rows, setRows] = useState<ScheduleRow[]>([]);
+  const nextKey = useRef(0);
   const [isPending, startTransition] = useTransition();
+
+  const contract = parseBrlAmount(amount);
+  const scheduledTotal = round(
+    rows.reduce((sum, row) => sum + (parseBrlAmount(row.amount) ?? 0), 0),
+  );
+  const difference = contract === null ? 0 : round(contract - scheduledTotal);
 
   function fill(item: FinanceProjectOption | undefined) {
     setProjectId(item?.id ?? "");
     setAmount(formatInput(item?.contractAmount));
     setReceivedBefore(formatInput(item?.receivedBefore));
+    setRows(
+      (item?.schedule ?? []).map((installment) => ({
+        key: nextKey.current++,
+        dueOn: installment.dueOn,
+        amount: formatInput(installment.amount),
+        label: installment.label,
+      })),
+    );
   }
 
   function openDialog() {
     fill(project ?? projects.find((item) => item.contractAmount === null) ?? projects[0]);
     setOpen(true);
+  }
+
+  function addRow() {
+    const last = rows.at(-1);
+    setRows([
+      ...rows,
+      {
+        key: nextKey.current++,
+        dueOn: last ? nextInstallmentDate(last.dueOn) : todayInBrasilia(),
+        amount: difference > 0 ? formatInput(difference) : (last?.amount ?? ""),
+        label: null,
+      },
+    ]);
+  }
+
+  function updateRow(key: number, patch: Partial<ScheduleRow>) {
+    setRows(rows.map((row) => (row.key === key ? { ...row, ...patch } : row)));
   }
 
   function save() {
@@ -64,14 +104,23 @@ export function FinanceProjectValueDialog({
       toast.error("Informe um valor recebido válido.");
       return;
     }
+    const schedule: ScheduledInstallment[] = [];
+    for (const row of rows) {
+      const value = parseBrlAmount(row.amount);
+      if (!row.dueOn || value === null || value <= 0) {
+        toast.error("Confira as parcelas: cada uma precisa de data e valor maior que zero.");
+        return;
+      }
+      schedule.push({ dueOn: row.dueOn, amount: value, label: row.label });
+    }
 
     startTransition(async () => {
-      const result = await setProjectContractAmount(projectId, parsed, parsedBefore);
+      const result = await setProjectContractAmount(projectId, parsed, parsedBefore, schedule);
       if (result.error) {
         toast.error(result.error);
         return;
       }
-      toast.success(parsed === null ? "Valor removido." : "Valor do projeto salvo.");
+      toast.success(parsed === null ? "Valor removido." : "Valor e parcelas salvos.");
       setOpen(false);
       router.refresh();
     });
@@ -84,7 +133,8 @@ export function FinanceProjectValueDialog({
           type="button"
           variant="ghost"
           size="icon-sm"
-          title="Editar valor fechado"
+          title="Editar valor e parcelas"
+          aria-label={`Editar valor e parcelas: ${project.title}`}
           onClick={openDialog}
         >
           <Pencil className="size-3.5" />
@@ -100,11 +150,10 @@ export function FinanceProjectValueDialog({
         <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden rounded-3xl bg-white p-0 sm:max-w-md">
           <DialogHeader className="border-b border-[var(--insyt-border)] px-6 py-5 pr-12">
             <DialogTitle className="text-2xl font-bold text-[var(--insyt-black)]">
-              Valor fechado
+              Valor e parcelas
             </DialogTitle>
             <DialogDescription>
-              Quanto foi combinado pelo desenvolvimento. As parcelas lançadas com o
-              projeto vão abatendo até zerar.
+              Quanto foi combinado pelo desenvolvimento e quando cada parcela entra.
             </DialogDescription>
           </DialogHeader>
 
@@ -151,10 +200,79 @@ export function FinanceProjectValueDialog({
               </div>
             </div>
             <p className="text-xs text-[var(--insyt-muted)]">
-              “Já recebido antes” é o que entrou antes de você usar Finanças: abate o
-              que falta, mas não aparece no caixa. Deixe o valor fechado vazio para
-              tirar o projeto da lista.
+              “Já recebido antes” é o que entrou antes de você usar Finanças: abate o que falta,
+              mas não aparece no caixa. Deixe o valor fechado vazio para tirar o projeto da lista.
             </p>
+
+            <section className="space-y-3 border-t border-[var(--insyt-border)] pt-5">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="font-bold text-[var(--insyt-black)]">Parcelas</h3>
+                <Button type="button" variant="outline" size="sm" onClick={addRow}>
+                  <Plus className="size-3.5" />
+                  Adicionar
+                </Button>
+              </div>
+
+              {rows.length === 0 ? (
+                <p className="text-xs text-[var(--insyt-muted)]">
+                  Sem parcelas, o que falta fica sem data e não entra em A receber nem na
+                  Projeção.
+                </p>
+              ) : (
+                <>
+                  <ul className="space-y-2">
+                    {rows.map((row, index) => (
+                      <li key={row.key} className="flex items-center gap-2">
+                        <Input
+                          type="date"
+                          aria-label={`Vencimento da parcela ${index + 1}`}
+                          value={row.dueOn}
+                          onChange={(event) => updateRow(row.key, { dueOn: event.target.value })}
+                          className="min-w-0 flex-1"
+                        />
+                        <Input
+                          inputMode="decimal"
+                          aria-label={`Valor da parcela ${index + 1}`}
+                          value={row.amount}
+                          onChange={(event) => updateRow(row.key, { amount: event.target.value })}
+                          placeholder="750,00"
+                          className="w-28 shrink-0"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          title="Tirar esta parcela"
+                          aria-label={`Tirar a parcela ${index + 1}`}
+                          onClick={() => setRows(rows.filter((item) => item.key !== row.key))}
+                        >
+                          <X className="size-3.5" />
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-xs text-[var(--insyt-muted)]">
+                    Soma {formatBrl(scheduledTotal)}
+                    {contract === null || contract === 0 ? (
+                      ""
+                    ) : difference === 0 ? (
+                      " · bate com o valor fechado"
+                    ) : difference > 0 ? (
+                      <span className="font-semibold text-amber-800">
+                        {" "}
+                        · faltam {formatBrl(difference)} para o valor fechado
+                      </span>
+                    ) : (
+                      <span className="font-semibold text-amber-800">
+                        {" "}
+                        · passa {formatBrl(-difference)} do valor fechado
+                      </span>
+                    )}
+                    . O que entrar no projeto abate da parcela mais antiga para a mais nova.
+                  </p>
+                </>
+              )}
+            </section>
           </div>
 
           <div className="border-t border-[var(--insyt-border)] px-6 py-4">
