@@ -1,26 +1,12 @@
 import { FinanceEntrySheet } from "@/components/finance-entry-sheet";
+import { FinanceInstallmentChips } from "@/components/finance-installments";
 import { FinancePartnershipCard } from "@/components/finance-partnership";
 import { FinanceProjectValueDialog } from "@/components/finance-project-value";
 import { InstallmentSettle } from "@/components/finance-settle";
 import { FinanceEmpty, FinanceSection } from "@/components/finance-ui";
 import { loadFinanceData } from "@/lib/finance-page-data";
-import type { InstallmentState } from "@/lib/project-schedule";
 import { dueLabel, formatBrl } from "@/lib/subscription-billing";
 import { cn } from "@/lib/utils";
-
-const INSTALLMENT_TONES: Record<InstallmentState["status"], string> = {
-  pago: "bg-emerald-100 text-emerald-800",
-  atrasado: "bg-red-100 text-red-700",
-  a_vencer: "bg-[#fff1ec] text-[var(--insyt-primary-dark)]",
-  futuro: "bg-[var(--insyt-canvas-alt)] text-[var(--insyt-slate)]",
-};
-
-const INSTALLMENT_LABELS: Record<InstallmentState["status"], string> = {
-  pago: "recebida",
-  atrasado: "atrasada",
-  a_vencer: "vence este mês",
-  futuro: "prevista",
-};
 
 export default async function FinanceProjetosPage() {
   const {
@@ -111,12 +97,15 @@ export default async function FinanceProjetosPage() {
                   <span className="ml-auto flex items-center gap-1">
                     {next && option ? (
                       <>
-                        <InstallmentSettle
-                          projectId={balance.id}
-                          projectTitle={balance.title}
-                          name={next.name}
-                          amount={next.open}
-                        />
+                        {/* Parcela de um mês à frente só pelo "⋯", como nas mensalidades. */}
+                        {next.status !== "futuro" ? (
+                          <InstallmentSettle
+                            projectId={balance.id}
+                            projectTitle={balance.title}
+                            name={next.name}
+                            amount={next.open}
+                          />
+                        ) : null}
                         <FinanceEntrySheet
                           projects={projectOptions}
                           receiveProject={option}
@@ -147,30 +136,7 @@ export default async function FinanceProjetosPage() {
                           </span>
                         </p>
                       ) : null}
-                      <ol className="flex flex-wrap gap-1" aria-label="Parcelas">
-                        {states.map((state) => {
-                          const date = `${state.dueOn.slice(8, 10)}/${state.dueOn.slice(5, 7)}`;
-                          const partial = state.open > 0 && state.paid > 0;
-                          const label = `${state.name}, ${date}: ${formatBrl(state.amount)}, ${
-                            partial
-                              ? `falta ${formatBrl(state.open)}`
-                              : INSTALLMENT_LABELS[state.status]
-                          }`;
-                          return (
-                            <li
-                              key={`${state.dueOn}:${state.name}`}
-                              title={label}
-                              aria-label={label}
-                              className={cn(
-                                "rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums",
-                                INSTALLMENT_TONES[state.status],
-                              )}
-                            >
-                              {date} · {formatBrl(state.open > 0 ? state.open : state.amount)}
-                            </li>
-                          );
-                        })}
-                      </ol>
+                      <FinanceInstallmentChips states={states} />
                     </div>
                   ) : null}
                 </li>

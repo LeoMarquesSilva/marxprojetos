@@ -1,7 +1,14 @@
 import Link from "next/link";
 import { ChevronRight, Globe } from "lucide-react";
+import { FinanceEntrySheet } from "@/components/finance-entry-sheet";
+import { FinanceInstallmentChips } from "@/components/finance-installments";
 import { FinanceRecurringSheet } from "@/components/finance-recurring-sheet";
-import { BillSettle, BillSettleOptions, ChargeSettle } from "@/components/finance-settle";
+import {
+  BillSettle,
+  BillSettleOptions,
+  ChargeSettle,
+  InstallmentSettle,
+} from "@/components/finance-settle";
 import {
   FinanceChip,
   FinanceEmpty,
@@ -13,8 +20,14 @@ import { SubscriptionFormSheet } from "@/components/subscription-form-sheet";
 import { SubscriptionPaymentSheet } from "@/components/subscription-payment-sheet";
 import { SubscriptionPlansSheet } from "@/components/subscription-plans-sheet";
 import { getSubscriptionFormData } from "@/app/actions/subscriptions";
-import { isRecurringExpenseActive, type ForecastBill } from "@/lib/finance";
+import {
+  isRecurringExpenseActive,
+  openItemsForMonth,
+  sumCharges,
+  type ForecastBill,
+} from "@/lib/finance";
 import { loadFinanceData, type SubscriptionRow } from "@/lib/finance-page-data";
+import type { InstallmentState } from "@/lib/project-schedule";
 import {
   dueDateFor,
   dueLabel,
@@ -32,7 +45,7 @@ import {
   formatShortMonth,
 } from "@/lib/subscription-format";
 import { cn } from "@/lib/utils";
-import type { FinanceRecurringExpense } from "@/types/finance";
+import type { FinanceProjectOption, FinanceRecurringExpense } from "@/types/finance";
 import {
   PAYMENT_METHODS,
   SUBSCRIPTION_STATUS_LABELS,
@@ -67,11 +80,34 @@ export default async function RecorrenciaPage() {
     fixedIncome,
     fixedExpense,
     bills,
+    charges,
     clientBySubscription,
     shareBySubscription,
+    ownOptions,
+    projectOptions,
+    scheduleByProject,
   } = data;
 
   const monthName = formatMonthLabel(currentMonth).split(" de ")[0];
+
+  // Implantações parceladas: têm fim, então ficam em bloco próprio e não somam
+  // em "Entra por mês" nem na sobra fixa, para esses números seguirem valendo.
+  const installmentProjects = ownOptions.flatMap((project) => {
+    const states = scheduleByProject.get(project.id) ?? [];
+    const next = states.find((state) => state.open > 0);
+    return next ? [{ project, states, next }] : [];
+  });
+  const installmentsOpen = installmentProjects.reduce(
+    (total, { states }) => total + states.reduce((sum, state) => sum + state.open, 0),
+    0,
+  );
+  const installmentsThisMonth = sumCharges(
+    openItemsForMonth(
+      charges.filter((charge) => charge.parcela),
+      currentMonth,
+      currentMonth,
+    ),
+  );
   const summary = summarizeRecurrence(
     subscriptionRows.map(({ subscription, payments }) => ({ subscription, payments })),
     today,
@@ -111,9 +147,14 @@ export default async function RecorrenciaPage() {
             label="Entra por mês"
             value={formatBrl(fixedIncome)}
             hint={
-              notBilledYet.length > 0
-                ? `${activeSubscriptions.length} ativas · ${notBilledYet.length} começa${notBilledYet.length === 1 ? "" : "m"} depois`
-                : `${activeSubscriptions.length} ${activeSubscriptions.length === 1 ? "assinatura ativa" : "assinaturas ativas"}`
+              <>
+                {notBilledYet.length > 0
+                  ? `${activeSubscriptions.length} ativas · ${notBilledYet.length} começa${notBilledYet.length === 1 ? "" : "m"} depois`
+                  : `${activeSubscriptions.length} ${activeSubscriptions.length === 1 ? "assinatura ativa" : "assinaturas ativas"}`}
+                {installmentsThisMonth > 0
+                  ? ` · + ${formatBrl(installmentsThisMonth)} de parcelas em ${monthName}`
+                  : ""}
+              </>
             }
           />
           <FinanceKpi
@@ -135,8 +176,8 @@ export default async function RecorrenciaPage() {
               summary.overdueTotal > 0
                 ? `${formatBrl(summary.overdueTotal)} em atraso · ${summary.overdueClients} ${summary.overdueClients === 1 ? "cliente" : "clientes"}`
                 : summary.toReceiveThisMonth > 0
-                  ? `falta ${formatBrl(summary.toReceiveThisMonth)} · ninguém atrasado`
-                  : "tudo recebido"
+                  ? `falta ${formatBrl(summary.toReceiveThisMonth)} de mensalidades · ninguém atrasado`
+                  : "todas as mensalidades recebidas"
             }
           />
         </FinanceKpiGrid>
@@ -193,6 +234,31 @@ export default async function RecorrenciaPage() {
         ) : null}
       </FinanceSection>
 
+      {installmentProjects.length > 0 ? (
+        <FinanceSection
+          title="Entra por um tempo"
+          subtitle="Implantações parceladas. Têm fim, então não somam em Entra por mês nem na Sobra fixa."
+          action={
+            <span className="text-sm font-bold tabular-nums text-[var(--insyt-black)]">
+              {formatBrl(installmentsOpen)}
+            </span>
+          }
+        >
+          <ul className="divide-y divide-[var(--insyt-border)]">
+            {installmentProjects.map(({ project, states, next }) => (
+              <InstallmentItem
+                key={project.id}
+                project={project}
+                states={states}
+                next={next}
+                today={today}
+                projectOptions={projectOptions}
+              />
+            ))}
+          </ul>
+        </FinanceSection>
+      ) : null}
+
       <FinanceSection
         title="Sai todo mês"
         subtitle="Imposto, repasses e ferramentas. Cada mês fica em aberto até você marcar como pago."
@@ -245,6 +311,74 @@ export default async function RecorrenciaPage() {
         ) : null}
       </FinanceSection>
     </div>
+  );
+}
+
+function InstallmentItem({
+  project,
+  states,
+  next,
+  today,
+  projectOptions,
+}: {
+  project: FinanceProjectOption;
+  states: InstallmentState[];
+  next: InstallmentState;
+  today: string;
+  projectOptions: FinanceProjectOption[];
+}) {
+  const due = dueLabel(next.dueOn, today);
+  const late = next.status === "atrasado";
+
+  return (
+    <li className="flex flex-wrap items-center gap-x-5 gap-y-3 px-5 py-4 sm:px-6">
+      <div className="min-w-0 flex-1 basis-64">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="truncate font-semibold text-[var(--insyt-black)]">{project.title}</span>
+          {late ? (
+            <FinanceChip tone="late">Atrasada</FinanceChip>
+          ) : next.status === "a_vencer" ? (
+            <FinanceChip tone="open">A vencer</FinanceChip>
+          ) : (
+            <FinanceChip tone="neutral">Próxima</FinanceChip>
+          )}
+        </div>
+        <p className="mt-1 text-xs text-[var(--insyt-muted)]">
+          {next.name} ·{" "}
+          <span className={cn(late && "font-semibold text-red-700")}>{due.text}</span>
+        </p>
+        <div className="mt-2">
+          <FinanceInstallmentChips states={states} />
+        </div>
+      </div>
+
+      <p
+        className={cn(
+          "shrink-0 font-bold tabular-nums tracking-tight",
+          late ? "text-red-700" : "text-[var(--insyt-black)]",
+        )}
+      >
+        {formatBrl(next.open)}
+      </p>
+
+      <span className="ml-auto flex shrink-0 items-center gap-1">
+        {next.status !== "futuro" ? (
+          <InstallmentSettle
+            projectId={project.id}
+            projectTitle={project.title}
+            name={next.name}
+            amount={next.open}
+          />
+        ) : null}
+        <FinanceEntrySheet
+          projects={projectOptions}
+          receiveProject={project}
+          defaultAmount={next.open}
+          defaultDescription={`${project.title} — ${next.name}`}
+          iconOnly
+        />
+      </span>
+    </li>
   );
 }
 
@@ -503,7 +637,7 @@ function PaymentTrail({ trail }: { trail: TrailMonth[] }) {
             title={label}
             aria-label={label}
             className={cn(
-              "flex h-6 min-w-8 items-center justify-center rounded-md px-1 text-[10px] font-semibold capitalize tabular-nums",
+              "flex h-6 min-w-8 items-center justify-center rounded-md px-1 text-[11px] font-semibold capitalize tabular-nums",
               TRAIL_TONES[item.status],
             )}
           >
